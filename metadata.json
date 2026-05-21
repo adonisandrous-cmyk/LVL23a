@@ -1,0 +1,11 @@
+{
+  "name": "Level 23 Legal",
+  "description": "An AI-powered Legal Practice Management System with client and matter tracking, intelligent case analytics, automated document drafting, and smart legal assistants.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
