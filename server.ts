@@ -70,7 +70,7 @@ app.post("/api/gemini/analyze-intake", async (req: Request, res: Response) => {
     Format your response as a standard, high-quality Markdown document with logical headers (e.g., Executive Summary, Key Claims, Legal Risk Areas, Recommended Actions, Recommended Evidence/Documents to Collect).`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
     });
 
@@ -111,7 +111,7 @@ app.post("/api/gemini/ocr-parse", async (req: Request, res: Response) => {
     };
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: [imagePart, { text: extractionPrompt }],
       config: {
         responseMimeType: "application/json"
@@ -154,7 +154,7 @@ app.post("/api/gemini/generate-document", async (req: Request, res: Response) =>
     - Focus heavily on court-quality syntax, formal formatting structure, and precise legal phrasing. Make it look exceptionally polished.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
     });
 
@@ -169,7 +169,7 @@ app.post("/api/gemini/generate-document", async (req: Request, res: Response) =>
 function getSimulatedOfflineReply(userInput: string, agentRole: string): string {
   const normalized = (userInput || "").toLowerCase();
   
-  if (agentRole.includes("Litigation") || agentRole.includes("Phoenix") || agentRole.includes("Alexandra")) {
+  if (agentRole.includes("Legal") || agentRole.includes("Litigation") || agentRole.includes("Phoenix")) {
     if (normalized.includes("fact") || normalized.includes("extract")) {
       return `### FACT DIRECTIVE SUMMARY (Simulated Offline Mode)
 Pursuant to Civil Procedure Code § 425.10, I have summarized the core actionable facts:
@@ -189,7 +189,7 @@ Under standard litigation practice rules, we must establish a clear timeline of 
 - Formulate a formal demand notice to set a 15-day response threshold.
 - Run complete conflict checkout protocols immediately.
 - Draft preliminary pleading briefs targeting material non-disclosures in preparation for trial court filings.`;
-  } else if (agentRole.includes("Maintenance") || agentRole.includes("Sentry") || agentRole.includes("Insolvency") || agentRole.includes("Miranda")) {
+  } else if (agentRole.includes("Maintenance") || agentRole.includes("Diagnostics") || agentRole.includes("Sentry")) {
     if (normalized.includes("status") || normalized.includes("health") || normalized.includes("audit") || normalized.includes("maintain") || normalized.includes("sentry")) {
       return `### APPLICATION DIAGNOSTIC STATUS (Simulated Offline Mode)
 As Sentry, your App Maintenance Overseer, I have performed a continuous validation dry run:
@@ -231,7 +231,14 @@ app.post("/api/gemini/agent-chat", async (req: Request, res: Response) => {
 
   try {
     const ai = getAiClient();
-    const systemIns = `${agentInstruction || "You are a professional legal expert."} Keep your advice structured, informative, professional, and clear. Mention relevant legal risks or procedures where helpful.`;
+    const systemIns = `${agentInstruction || "You are a professional legal expert."}
+
+Phoenix 23 operating rules:
+- Phoenix handles legal drafting, client and matter context, research, forms, deadlines, and practice-management decisions.
+- Sentry handles app diagnostics, API routing, Drive/OCR/deployment failures, and evidence-based maintenance.
+- Alure handles intake momentum, office workflow, client experience, growth, and business review.
+
+Keep your advice structured, informative, professional, and clear. Mention relevant legal risks or procedures where helpful.`;
 
     // Map message thread into GoogleGenAI chat structures
     const contents = messages.map((m: any) => ({
@@ -245,7 +252,7 @@ app.post("/api/gemini/agent-chat", async (req: Request, res: Response) => {
     try {
       // First try: Attempt with Google Search Grounding tools enabled
       response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-2.5-flash",
         contents: contents,
         config: {
           systemInstruction: systemIns,
@@ -265,7 +272,7 @@ app.post("/api/gemini/agent-chat", async (req: Request, res: Response) => {
       
       // Second try: Retry without googleSearch tool to bypass specific Grounding quota (Code 429)
       response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-2.5-flash",
         contents: contents,
         config: {
           systemInstruction: systemIns
@@ -309,7 +316,7 @@ app.post("/api/gemini/analyze-matter", async (req: Request, res: Response) => {
     const ai = getAiClient();
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: `Perform an automated litigation planning setup for a legal matter with the following specifications:
       Title: ${title || "Untitled Matter"}
       Practice Area: ${practiceArea || "General Civil"}
@@ -378,7 +385,7 @@ app.post("/api/gemini/tts", async (req: Request, res: Response) => {
     const voiceSelected = voiceName || "Zephyr";
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-tts-preview",
+      model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text: `Say this beautifully: ${text}` }] }],
       config: {
         responseModalities: ["AUDIO"],
