@@ -17,7 +17,8 @@ import {
   Video,
   FolderSync,
   Laptop,
-  Keyboard
+  Keyboard,
+  Scale
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -30,6 +31,7 @@ interface SidebarProps {
   isDesktopMode?: boolean;
   setIsDesktopMode?: (val: boolean) => void;
   onOpenShortcuts?: () => void;
+  onOpenResearch?: () => void;
 }
 
 export default function Sidebar({
@@ -41,14 +43,15 @@ export default function Sidebar({
   utcTime,
   isDesktopMode = false,
   setIsDesktopMode,
-  onOpenShortcuts
+  onOpenShortcuts,
+  onOpenResearch
 }: SidebarProps) {
   const sidebarItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'clients', label: 'Clients', icon: Users },
     { id: 'matters', label: 'Matters', icon: Briefcase },
     { id: 'documents', label: 'Documents', icon: FileText },
-    { id: 'staff', label: 'Phoenix Staff', icon: BrainCircuit, badge: 'Level 23' },
+    { id: 'staff', label: 'Legal Staff', icon: BrainCircuit, badge: 'Level 23' },
     { id: 'voice', label: 'AI Voice', icon: Volume2 },
     { id: 'consult', label: 'Video Meet', icon: Video, badge: 'Live' },
     { id: 'backups', label: 'Cloud Sync', icon: FolderSync },
@@ -57,25 +60,65 @@ export default function Sidebar({
 
   return (
     <aside id="sidebar-container" className="w-64 bg-[#090d16] border-r border-[#1e293b] flex flex-col justify-between select-none">
-      {/* Sidebar Header Brand */}
-      <div className="p-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-gradient-to-tr from-teal-500 to-emerald-400 rounded-xl shadow-[0_0_12px_rgba(20,184,166,0.3)] animate-pulse">
-            <span className="text-[#090d16] font-bold text-lg font-heading tracking-wider">L23</span>
+      {/* Sidebar Header Brand with Custom Level 23 Geometric Badge */}
+      <div className="p-5 border-b border-[#1e293b]/60 bg-[#070b13]/80">
+        <div className="flex flex-col items-center text-center space-y-2.5">
+          {/* Level 23 Geometric Shield Logo */}
+          <div className="relative w-20 h-20 flex items-center justify-center">
+            {/* Background ambient lighting */}
+            <div className="absolute inset-0 bg-radial-gradient from-[#dfb76c]/10 via-[#b38627]/5 to-transparent rounded-full animate-pulse filter blur-md"></div>
+            
+            <svg id="level-23-logo-svg" viewBox="0 0 120 120" className="w-16 h-16 relative z-10 filter drop-shadow-[0_3px_12px_rgba(223,183,108,0.45)]">
+              <defs>
+                <linearGradient id="brandGold" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#fce093" />
+                  <stop offset="50%" stopColor="#dfb76c" />
+                  <stop offset="100%" stopColor="#b38627" />
+                </linearGradient>
+                <linearGradient id="goldAccent" x1="0%" y1="100%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#dfb76c" />
+                  <stop offset="100%" stopColor="#fce093" />
+                </linearGradient>
+              </defs>
+              {/* Outer Golden Hexagonal Border */}
+              <polygon points="60,10 105,35 105,85 60,110 15,85 15,35" fill="none" stroke="url(#brandGold)" strokeWidth="4" strokeLinejoin="round" />
+              {/* Inner Hexagon Container */}
+              <polygon points="60,18 97,40 97,80 60,102 23,80 23,40" fill="#020203" stroke="rgba(223,183,108,0.25)" strokeWidth="2" strokeLinejoin="round" opacity="0.95" />
+              {/* Modern Slab L-23 Styled Elements */}
+              <g fill="url(#brandGold)">
+                <text x="32" y="74" fontSize="35" fontWeight="900" fontFamily='"Americana BT", "Cinzel", "Playfair Display", Georgia, serif' fill="url(#brandGold)" letterSpacing="-2">L</text>
+                <text x="56" y="74" fontSize="35" fontWeight="900" fontFamily='"Americana BT", "Cinzel", "Playfair Display", Georgia, serif' fill="url(#goldAccent)" letterSpacing="-2">23</text>
+              </g>
+              {/* Scales under structural level */}
+              <path d="M 45,85 L 75,85 M 60,81 L 60,89" stroke="url(#brandGold)" strokeWidth="2" strokeLinecap="round" />
+            </svg>
           </div>
-          <div>
-            <h1 className="text-lg font-bold font-heading tracking-tight text-white flex items-center gap-1.5 leading-none">
-              Level 23
-            </h1>
-            <span className="text-[10px] text-teal-400 uppercase tracking-widest font-mono">Legal Management</span>
+
+          <div className="space-y-1">
+            {/* Level 23 Brand Name */}
+            <div className="text-[17px] font-black tracking-[0.2em] text-transparent bg-clip-text bg-gradient-to-r from-[#fce093] via-[#dfb76c] to-[#b38627] font-heading uppercase leading-none select-none">
+              LEVEL 23
+            </div>
+            
+            {/* Sub branding labels */}
+            <div className="space-y-0.5 leading-none">
+              <h2 className="text-[11px] font-bold tracking-[0.15em] text-[#fae093] uppercase font-mono">
+                LEGAL DESK
+              </h2>
+              <span className="text-[8.5px] font-medium tracking-[0.1em] text-[#dfb76c]/75 uppercase font-sans block">
+                PRACTICE PORTAL
+              </span>
+            </div>
+            
+            <div className="h-[1px] w-16 mx-auto bg-gradient-to-r from-transparent via-[#dfb76c]/40 to-transparent mt-1.5" />
           </div>
         </div>
 
-        {/* Live Active Tag */}
-        <div className="mt-5 flex items-center gap-2 px-3 py-1.5 bg-[#0f172a] rounded-lg border border-[#1e293b] text-[11px]">
+        {/* Live Active Status Tag */}
+        <div className="mt-3.5 flex items-center justify-center gap-2 px-3 py-1.5 bg-[#0a101d] rounded-xl border border-[#1e293b]/80 text-[10px]">
           <span className={`w-2 h-2 rounded-full ${systemConnected ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]' : 'bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.5)] animate-ping'}`}></span>
-          <span className="text-slate-400 font-mono">
-            {systemConnected ? '● Google Agents Active' : '○ Standalone Offline'}
+          <span className="text-slate-400 font-mono font-bold tracking-wide">
+            {systemConnected ? '● Level 23 Active' : '○ Standalone Local'}
           </span>
         </div>
       </div>
@@ -123,6 +166,29 @@ export default function Sidebar({
             </button>
           );
         })}
+
+        {/* Dedicated Gold Judicial Research Panel Trigger */}
+        {onOpenResearch && (
+          <button
+            type="button"
+            onClick={onOpenResearch}
+            className="w-full relative overflow-hidden group flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 text-slate-300 hover:text-[#fce093] hover:bg-[#dfb76c]/5 border border-dashed border-slate-800 hover:border-[#dfb76c]/30 mt-3 cursor-pointer"
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-[#dfb76c]/5 to-[#b38627]/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            
+            <Scale
+              className="w-4.5 h-4.5 text-[#dfb76c]/80 relative z-10 group-hover:text-[#dfb76c] transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6"
+            />
+
+            <span className="relative z-10 font-sans tracking-wide text-[13px] font-bold">
+              Research Desk
+            </span>
+
+            <span className="ml-auto relative z-10 bg-[#dfb76c]/10 border border-[#dfb76c]/20 text-[9px] text-[#dfb76c] font-mono px-1.5 py-0.25 rounded-md leading-none uppercase">
+              TABS
+            </span>
+          </button>
+        )}
       </nav>
 
       {/* Sidebar Footer Section */}

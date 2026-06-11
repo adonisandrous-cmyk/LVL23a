@@ -26,7 +26,7 @@ import {
   Cpu
 } from 'lucide-react';
 
-import { Client, Matter, ActivityLog, GeneratedDocument, LegalMessage, AgentProgress, ConsultationSession } from './types';
+import { Client, Matter, ActivityLog, GeneratedDocument, LegalMessage, AgentProgress, ConsultationSession, EvidenceFile } from './types';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import ClientsTab from './components/ClientsTab';
@@ -37,11 +37,14 @@ import VoiceEngineTab from './components/VoiceEngineTab';
 import SystemHealthTab from './components/SystemHealthTab';
 import ConsultationsTab from './components/ConsultationsTab';
 import BackupsTab, { ImportedState } from './components/BackupsTab';
+import ResearchPortalDrawer from './components/ResearchPortalDrawer';
+import { Scale, BookOpen } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [systemConnected, setSystemConnected] = useState<boolean>(false);
   const [utcTime, setUtcTime] = useState<string>('');
+  const [showResearchDrawer, setShowResearchDrawer] = useState<boolean>(false);
 
   // Native desktop app simulation states
   const [isDesktopMode, setIsDesktopMode] = useState<boolean>(false);
@@ -145,6 +148,76 @@ export default function App() {
   // Master legal AI messages thread
   const [chatThread, setChatThread] = useState<LegalMessage[]>([]);
 
+  // Master client evidence files lists
+  const [evidenceFiles, setEvidenceFiles] = useState<EvidenceFile[]>([
+    {
+      id: 'ev-1',
+      name: 'CreditCard_Liabilities_SamuelMiller.pdf',
+      size: '2.4 MB',
+      mimeType: 'application/pdf',
+      uploadedAt: '2026-05-18T11:20:00Z',
+      clientId: 'c-3',
+      clientName: 'Samuel Miller',
+      matterId: 'm-1',
+      matterTitle: 'Miller Chapter 7 Liquidation Petition Filing',
+      fileCategory: 'Bankruptcy Assets & Debt Ledger',
+      extractedClientName: 'Samuel Miller',
+      duressLevel: 'Medium',
+      summary: 'Comprehensive unsecured liabilities statement listing consumer credit cards and emergency hospital medical debt obligations.',
+      extractedFacts: [
+        'Total sum of unsecured claims is $85,320 across 4 distinct creditors.',
+        'Emergency surgical treatment bills account for over 60% of outstanding debt.',
+        'A $4,500 active loan lien operates against petitioner’s personal light truck.',
+        'Household income evaluated is $3,140 net, placing client under bankruptcy state median limits.'
+      ],
+      rawTextSimulated: `ORANGE COUNTY BANKRUPTCY EVIDENCE AUDIT SHEET\n\nDebtor Applicant: Samuel Miller\nCase Filing Type: Chapter 13 vs Chapter 7 Liquidation Petition\n\nCREDITOR DEBT INDICES:\n1. APEX CREDIT REVOLVER - DEBT OUTSTANDING: $24,500\n2. EMER SURG RECONSTRUCTION (ORANGE COUNTY GENERAL HOSPITAL) - BAL: $51,120\n3. PERSONAL TRANSPORT UTILITY TRUCK - LIEN BALANCE VERIFIED: $4,500\n4. UNSECURED CONSUMER LINE CARDS (CHASE VISA CARD) - BAL: $9,700\n\nESTIMATED MONTHLY HOUSEHOLD NET INCOME: $3,140\n\nThis material lists unsecured obligations, household income details, and high-priority emergency surgeon bills which constitute materials of debt. Evaluated net income is placed safely under state median limits.`,
+      status: 'scanned'
+    },
+    {
+      id: 'ev-2',
+      name: 'Cartel_Threat_Warning_MateoRodriguez.txt',
+      size: '420 KB',
+      mimeType: 'text/plain',
+      uploadedAt: '2026-04-15T10:15:00Z',
+      clientId: 'c-2',
+      clientName: 'Mateo Rodriguez',
+      matterId: 'm-2',
+      matterTitle: 'I-589 Asylum Briefing representing Rodriguez',
+      fileCategory: 'Immigration Persecution Warning',
+      extractedClientName: 'Mateo Rodriguez',
+      duressLevel: 'High',
+      summary: 'Digitized document text depicting direct written extortion and physical safety warnings issued under cartel authority at his local bread depot.',
+      extractedFacts: [
+        'Primary extortion threat warning note received on April 4, 2024.',
+        'Refusal to comply risks forced trade closure, physical intimidation or extreme direct harm.',
+        'Claimant listed as active political baking guild organizer, establishing membership in a targeted social group.',
+        'Local police response registered but explicitly lacked resources for physical protective watch.'
+      ],
+      rawTextSimulated: `TRANSCRIPTION OF EXTORTION THREAT DIRECTIVE RECOVERED ON APRIL 4, 2024\n\nRecipient: Mateo Rodriguez, Local Baker Union Organizer\nLocation of recovery: Regional bread product distribution deck\n\nTRANSCRIBED WARNING NOTATION:\n"This note serves as final notice: you must pay a monthly safety quota of $800 to our regional operations team. If you refuse to comply, we will shut down your bakery depot, and take immediate severe actions against your workplace. Do not contact any authorities."\n\nLAW ENFORCEMENT SYNOPSIS:\nClient petition was registered under municipal file #E-9482 on April 5, 2024. Local police officers issued a formal incident report acknowledging the extortion notes, but explicitly confirmed they lack standard protective guard assets or resources to schedule on-site patrols.`,
+      status: 'scanned'
+    },
+    {
+      id: 'ev-3',
+      name: 'Marital_Home_Deed_OrangeCounty.docx',
+      size: '4.8 MB',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      uploadedAt: '2026-04-10T14:30:00Z',
+      clientId: 'c-1',
+      clientName: 'Eleanor Vance',
+      fileCategory: 'Property Title Deed',
+      extractedClientName: 'Eleanor Vance',
+      duressLevel: 'Low',
+      summary: 'Certified Orange County residential deed outlining communal property share and separate inheritance allocations of Eleanor Vance and Bradley Vance.',
+      extractedFacts: [
+        'Townhouse title registered under joint names as community property in March 2018.',
+        'Purchase supported by joint savings accounts, establishing marital assets guidelines CA Civ. Code.',
+        'Separate account holdings portfolio established solely via personal family bequest, verified as separate property asset.'
+      ],
+      rawTextSimulated: `ORANGE COUNTY CLERK AND RECORDER APARTMENT LAND PROPERTY DEED EXCERPT\n\nRecording Date: March 14, 2018\nRecorded Book: CA-1829-948\n\nDECLARATION OF LAND TRANSFERS AND TITLES:\nMarital residence situated in Orange County is hereby registered as a community property estate under the joint legal names of Eleanor Vance and Bradley Vance.\n\nFINANCING MEMORANDUM DATA:\n- The purchase transaction of the apartment property was executed utilizing joint savings certificate accounts.\n- Personal portfolio holdings, municipal bonds, and the separate liquid reserve account are confirmed to be personal family bequests granted solely to Eleanor Vance. They operate as separate property assets and separate holdings portfolios.`,
+      status: 'scanned'
+    }
+  ]);
+
   // 1. Progressive AI Agent Stance / Relationship HUD Metrics
   const [agentProgressList, setAgentProgressList] = useState<AgentProgress[]>([
     {
@@ -173,6 +246,15 @@ export default function App() {
       unlockedCapabilities: ['Pleadings Fact Extraction', 'Jurisdictional Audit Scope'],
       caseFamiliarity: 35,
       prosecutorialAggression: 60
+    },
+    {
+      agentId: 'ap-4',
+      rapportScore: 40,
+      personalityState: 'Trusting',
+      interactionCount: 0,
+      unlockedCapabilities: ['Pleadings Fact Extraction', 'Jurisdictional Audit Scope'],
+      caseFamiliarity: 50,
+      prosecutorialAggression: 35
     }
   ]);
 
@@ -292,6 +374,11 @@ export default function App() {
     addLog('document', `AI automation drafted standard file: "${doc.title}" for Client ${doc.clientName}.`);
   };
 
+  const handleAddEvidenceFile = (file: EvidenceFile) => {
+    setEvidenceFiles(prev => [...prev, file]);
+    addLog('document', `New client evidence file compiled & OCR scanned: "${file.name}" for Client ${file.clientName}.`);
+  };
+
   const handleAddMessage = (msg: LegalMessage) => {
     setChatThread(prev => [...prev, msg]);
     if (msg.sender === 'user') {
@@ -404,6 +491,10 @@ export default function App() {
               isDesktopMode={isDesktopMode}
               setIsDesktopMode={setIsDesktopMode}
               onOpenShortcuts={() => setShowShortcutsGuide(true)}
+              onOpenResearch={() => {
+                setShowResearchDrawer(true);
+                addLog('system', 'Judicial research portal triggered from sidebar navigation hub.');
+              }}
               onQuickIntake={() => {
                 setActiveTab('clients');
                 addLog('system', 'Quick client intake modal requested from toolbar.');
@@ -448,6 +539,19 @@ export default function App() {
                 
                 {/* Header Tray status tags */}
                 <div className="flex items-center gap-4">
+                  <button 
+                    onClick={() => {
+                      setShowResearchDrawer(true);
+                      addLog('system', 'Judicial research desk triggered from header tray.');
+                    }}
+                    className="flex items-center gap-2 bg-gradient-to-r from-[#dfb76c]/15 to-[#b38627]/5 hover:from-[#dfb76c]/25 hover:to-[#b38627]/10 border border-[#dfb76c]/35 hover:border-[#dfb76c]/55 rounded-xl px-3.5 py-1.5 text-xs text-[#fae093] hover:text-[#fce093] transition-all font-sans cursor-pointer group shadow-[0_2px_8px_rgba(223,183,108,0.1)]"
+                    title="Open California Forms, CourtListener, Google Scholar, Justia, FindLaw"
+                  >
+                    <Scale className="w-3.5 h-3.5 text-[#dfb76c] group-hover:rotate-12 transition-transform" />
+                    <span>Judicial Desk</span>
+                    <span className="hidden md:inline bg-[#fae093]/10 border border-[#fae093]/20 text-[9px] text-[#fae093] font-mono px-1 rounded uppercase">Research</span>
+                  </button>
+
                   <button 
                     onClick={() => setShowCommandPalette(true)}
                     className="flex items-center gap-2 bg-[#0a1019] hover:bg-[#101726]/60 border border-[#1e293b] rounded-xl px-3.5 py-1.5 text-xs text-slate-400 hover:text-slate-200 transition-all font-sans cursor-pointer group"
@@ -511,8 +615,11 @@ export default function App() {
                     <DocumentsTab
                       key="documents"
                       clients={clients}
+                      matters={matters}
                       generatedDocs={generatedDocs}
                       onAddGeneratedDoc={handleAddGeneratedDoc}
+                      evidenceFiles={evidenceFiles}
+                      onAddEvidenceFile={handleAddEvidenceFile}
                     />
                   )}
 
@@ -728,6 +835,13 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      <ResearchPortalDrawer
+        isOpen={showResearchDrawer}
+        onClose={() => setShowResearchDrawer(false)}
+        clients={clients}
+        matters={matters}
+      />
 
     </div>
   );

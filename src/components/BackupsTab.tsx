@@ -220,7 +220,7 @@ export default function BackupsTab({
 
         <span className="text-[10px] font-mono text-slate-400 bg-slate-900 px-3 py-1.5 border border-[#1e293b] rounded-xl flex items-center gap-1.5">
           <CloudLightning className="w-3.5 h-3.5 text-yellow-400 animate-bounce" />
-          Offline-First Backup
+          Secure Session Sync
         </span>
       </div>
 

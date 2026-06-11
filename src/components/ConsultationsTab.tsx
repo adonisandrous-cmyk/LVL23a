@@ -36,7 +36,7 @@ export default function ConsultationsTab({
 }: ConsultationsTabProps) {
   const [selectedClient, setSelectedClient] = useState<Client | null>(clients[0] || null);
   const [roomName, setRoomName] = useState(`Level23-${Math.random().toString(36).substring(2, 9).toUpperCase()}`);
-  const [meetingType, setMeetingType] = useState<'Consultation' | 'Deposition' | 'Simulation' | 'Hearing'>('Consultation');
+  const [meetingType, setMeetingType] = useState<'Consultation' | 'Deposition' | 'Mediation' | 'Hearing'>('Consultation');
   const [meetingNotes, setMeetingNotes] = useState('');
   
   // Active Jitsi Call State
@@ -140,7 +140,7 @@ export default function ConsultationsTab({
                   >
                     <option value="Consultation">Consultation</option>
                     <option value="Deposition">Secure Deposition</option>
-                    <option value="Simulation">Simulation Lab</option>
+                    <option value="Mediation">Mediation Lab</option>
                     <option value="Hearing">State Hearing</option>
                   </select>
                 </div>
@@ -354,7 +354,7 @@ export default function ConsultationsTab({
                   Secure Video Conference Center
                 </h4>
                 <p className="text-xs text-slate-400 leading-normal font-sans">
-                  Instantly open secure, lag-free client intake consultations, expert depositions, and federal hearing simulations powered by our high-performance Jitsi routing networks.
+                  Instantly open secure, lag-free client intake consultations, expert depositions, and federal hearing briefings powered by our high-performance Jitsi routing networks.
                 </p>
               </div>
 

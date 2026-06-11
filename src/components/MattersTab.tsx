@@ -34,6 +34,7 @@ export default function MattersTab({
 }: MattersTabProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'completed'>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
   const [selectedMatter, setSelectedMatter] = useState<Matter | null>(matters[0] || null);
 
   // New Matter Form state
@@ -57,7 +58,8 @@ export default function MattersTab({
                           m.caseNumber.toLowerCase().includes(search.toLowerCase()) ||
                           m.clientName.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'all' || m.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesType = typeFilter === 'all' || m.practiceArea === typeFilter;
+    return matchesSearch && matchesStatus && matchesType;
   });
 
   const handleCreate = (e: React.FormEvent) => {
@@ -244,6 +246,24 @@ export default function MattersTab({
                 }`}
               >
                 {status}
+              </button>
+            ))}
+          </div>
+
+          {/* Practice Area Type filter capsule */}
+          <div className="flex gap-1.5 items-center overflow-x-auto border-t border-[#1e293b]/40 pt-2 pb-0.5">
+            <span className="text-[9.5px] font-mono uppercase text-slate-500 shrink-0 font-bold">Type:</span>
+            {['all', 'Family Law', 'Immigration', 'Bankruptcy', 'General Practice'].map((area) => (
+              <button
+                key={area}
+                onClick={() => setTypeFilter(area)}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-mono whitespace-nowrap border cursor-pointer transition-all ${
+                  typeFilter === area
+                    ? 'bg-teal-400/10 text-teal-400 border-teal-400/30 font-semibold'
+                    : 'bg-transparent text-slate-500 border-transparent hover:text-slate-400'
+                }`}
+              >
+                {area === 'all' ? 'All Types' : area}
               </button>
             ))}
           </div>

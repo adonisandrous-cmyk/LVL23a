@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Volume2,
@@ -40,6 +40,18 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
   const audioContextRef = useRef<AudioContext | null>(null);
   const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
+  // Pre-load and warm up speech synthesis voices on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.getVoices();
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = () => {
+          window.speechSynthesis.getVoices();
+        };
+      }
+    }
+  }, []);
+
   const handleSynthesizeSpeak = async () => {
     if (!text.trim()) return;
 
@@ -52,6 +64,9 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
         activeSourceRef.current.stop();
       } catch {}
     }
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
 
     try {
       const response = await fetch('/api/gemini/tts', {
@@ -62,6 +77,10 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
           voiceName: selectedVoice
         })
       });
+
+      if (!response.ok) {
+        throw new Error(`TTS server returned status ${response.status}`);
+      }
 
       const data = await response.json();
       if (data.base64Audio) {
@@ -116,11 +135,56 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
 
         source.start(0);
       } else {
-        alert("The server-side TTS engine did not return a valid audio stream. Falling back.");
+        throw new Error("No base64 audio returned");
       }
     } catch (e: any) {
-      console.error("TTS Audio Playback error:", e);
-      alert("TTS Error: " + (e.message || "Failed to parse stream. Make sure Gemini key is valid."));
+      console.warn("TTS API connection or quota issue, falling back to local high-fidelity browser synthesis:", e);
+      
+      // Fallback to local high-fidelity browser speechSynthesis
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        const voices = window.speechSynthesis.getVoices();
+        let matchedVoice = null;
+
+        if (selectedVoice === 'Aoede') {
+          // Find British UK English female voice - Case insensitive and extremely robust
+          matchedVoice = voices.find(v => {
+            const l = v.lang.toLowerCase();
+            const n = v.name.toLowerCase();
+            return (l.includes('gb') || l.includes('uk') || n.includes('british') || n.includes('united kingdom') || n.includes('england')) && (n.includes('female') || n.includes('natural') || n.includes('google'));
+          })
+          || voices.find(v => {
+            const l = v.lang.toLowerCase();
+            const n = v.name.toLowerCase();
+            return (l.includes('gb') || l.includes('uk') || n.includes('british') || n.includes('united kingdom') || n.includes('england'));
+          })
+          || voices.find(v => v.lang.toLowerCase().startsWith('en') && v.name.toLowerCase().includes('google'));
+        } else if (selectedVoice === 'Zephyr') {
+          matchedVoice = voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('zira'))
+                      || voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('female'))
+                      || voices.find(v => v.lang.toLowerCase().startsWith('en'));
+        } else {
+          matchedVoice = voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('samantha'))
+                      || voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('female'))
+                      || voices.find(v => v.lang.toLowerCase().startsWith('en'));
+        }
+
+        if (matchedVoice) utterance.voice = matchedVoice;
+        utterance.pitch = 1.05;
+        utterance.rate = 1.0;
+
+        utterance.onstart = () => {
+          setIsPlaying(true);
+        };
+        utterance.onend = () => {
+          setIsPlaying(false);
+        };
+        utterance.onerror = () => {
+          setIsPlaying(false);
+        };
+
+        window.speechSynthesis.speak(utterance);
+      }
     } finally {
       setIsSynthesizing(false);
     }

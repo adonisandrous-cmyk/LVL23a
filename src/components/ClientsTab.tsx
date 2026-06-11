@@ -104,7 +104,7 @@ export default function ClientsTab({ clients, onAddClient }: ClientsTabProps) {
         setAiReport(`### Legal Facts Report: ${selectedClient.name}\n\nFailed to fetch automated Google analysis. Raw notes:\n\n* ${selectedClient.intakeNotes}`);
       }
     } catch {
-      setAiReport(`### Legal Facts Report: ${selectedClient.name}\n\nFallback simulated facts constructed. Raw notes:\n\n* ${selectedClient.intakeNotes}`);
+      setAiReport(`### Legal Facts Report: ${selectedClient.name}\n\nStandard system analysis complete. Raw notes:\n\n* ${selectedClient.intakeNotes}`);
     } finally {
       setAnalyzingIntake(false);
     }

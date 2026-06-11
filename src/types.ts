@@ -45,6 +45,8 @@ export interface DocumentTemplate {
   category: string;
   description: string;
   defaultQuestions: string[];
+  templateBody?: string; // Raw pleading template containing double-curly-braces tokens (e.g., {{CLIENT_NAME}})
+  isCustom?: boolean;    // Custom created by attorney flag
 }
 
 export interface GeneratedDocument {
@@ -74,6 +76,7 @@ export interface VoiceAgentProfile {
   description: string;
   accent: string;
   style: string;
+  portrait?: string;
 }
 
 export interface SystemDiagnostic {
@@ -99,9 +102,29 @@ export interface ConsultationSession {
   clientId: string;
   clientName: string;
   roomName: string;
-  meetingType: 'Consultation' | 'Deposition' | 'Simulation' | 'Hearing';
+  meetingType: 'Consultation' | 'Deposition' | 'Mediation' | 'Hearing';
   scheduledFor: string;
   status: 'active' | 'scheduled' | 'concluded';
   notes: string;
 }
+
+export interface EvidenceFile {
+  id: string;
+  name: string;
+  size: string;
+  mimeType: string;
+  uploadedAt: string;
+  clientId: string;
+  clientName: string;
+  matterId?: string;
+  matterTitle?: string;
+  fileCategory: string; // 'Hospital invoice', 'Death warning list', 'Bank statements ledger', etc.
+  extractedClientName: string;
+  duressLevel: 'High' | 'Medium' | 'Low' | 'N/A';
+  summary: string;
+  extractedFacts: string[];
+  rawTextSimulated?: string;
+  status: 'scanned' | 'processing' | 'failed';
+}
+
 
