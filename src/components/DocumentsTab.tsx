@@ -29,9 +29,15 @@ import {
   Sliders,
   File,
   Check,
-  CheckSquare
+  CheckSquare,
+  HardDrive,
+  RefreshCw,
+  FolderOpen,
+  ExternalLink,
+  Terminal
 } from 'lucide-react';
 import { Client, DocumentTemplate, GeneratedDocument, Matter, EvidenceFile } from '../types';
+import { initAuth, googleSignIn, logout, getAccessToken } from '../lib/driveAuth';
 
 interface DocumentsTabProps {
   clients: Client[];
@@ -76,7 +82,20 @@ export default function DocumentsTab({
   const smallSharp3D = "rounded-none border border-slate-700 bg-slate-900 text-slate-300 font-mono text-[10px] font-bold uppercase py-1.5 px-2.5 shadow-[2.5px_2.5px_0px_#475569] hover:translate-x-[-0.5px] hover:translate-y-[-0.5px] hover:shadow-[3.5px_3.5px_0px_#475569] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all cursor-pointer";
 
   // 1. Three Primary Workspace Screens
-  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'synthesis' | 'evidence_room' | 'judicial_mapper' | 'template_builder'>('synthesis');
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'synthesis' | 'evidence_room' | 'judicial_mapper' | 'template_builder' | 'drive_portal'>('synthesis');
+  const [draftingModel, setDraftingModel] = useState<string>('default');
+
+  // Google Drive Integration States
+  const [googleUser, setGoogleUser] = useState<any>(null);
+  const [googleToken, setGoogleToken] = useState<string | null>(null);
+  const [googleFiles, setGoogleFiles] = useState<any[]>([]);
+  const [isLoadingDriveFiles, setIsLoadingDriveFiles] = useState<boolean>(false);
+  const [selectedDriveFile, setSelectedDriveFile] = useState<any | null>(null);
+  const [driveFileContent, setDriveFileContent] = useState<string>('');
+  const [driveFileName, setDriveFileName] = useState<string>('');
+  const [isSavingToDrive, setIsSavingToDrive] = useState<boolean>(false);
+  const [driveSaveFormat, setDriveSaveFormat] = useState<'docx' | 'pdf' | 'text'>('docx');
+  const [driveError, setDriveError] = useState<string | null>(null);
 
   // Level 23 Custom Symbolic Viewer Format States & Methods (User-Established Brand Identity)
   const [aiFormatMode, setAiFormatMode] = useState<'SYMBOLIC' | 'ALPHANUMERIC'>('SYMBOLIC');
@@ -254,6 +273,280 @@ Law governance: Governed by the rules of California state, County of San Francis
   const [formAnswers, setFormAnswers] = useState<Record<string, string>>({});
   const [isCompiling, setIsCompiling] = useState(false);
   const [compiledText, setCompiledText] = useState<string | null>(null);
+  const [isExportingToBridge, setIsExportingToBridge] = useState(false);
+
+  // Active On-Premises File Retrieval & Synchronization States
+  const [localFiles, setLocalFiles] = useState<string[]>([]);
+  const [localFolder, setLocalFolder] = useState<string>('');
+  const [localStatus, setLocalStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
+  const [driveSyncMsg, setDriveSyncMsg] = useState<string>('');
+  const [isLocalExplorerOpen, setIsLocalExplorerOpen] = useState(false);
+
+  const loadLocalFiles = async () => {
+    setLocalStatus('checking');
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
+      const res = await fetch('http://localhost:4321/api/local-files', { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success) {
+          setLocalFiles(data.files || []);
+          setLocalFolder(data.folder || 'C:\\Users\\Administrator\\iiiamadex');
+          setLocalStatus('connected');
+          if (data.syncStatus && data.syncStatus.synced) {
+            setDriveSyncMsg(`Drive synced: ${data.syncStatus.filesSyncedCount || 0} active files mirrored`);
+          } else if (data.syncStatus && data.syncStatus.reason) {
+            setDriveSyncMsg(data.syncStatus.reason);
+          } else {
+            setDriveSyncMsg('Local files monitored');
+          }
+        } else {
+          setLocalStatus('disconnected');
+        }
+      } else {
+        setLocalStatus('disconnected');
+      }
+    } catch {
+      setLocalStatus('disconnected');
+    }
+  };
+
+  const openLocalFile = async (fileName: string) => {
+    try {
+      const res = await fetch(`http://localhost:4321/api/local-file?name=${encodeURIComponent(fileName)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success) {
+          // Set to viewingDoc mockup so it renders beautifully in the viewer
+          setViewingDoc({
+            id: `local-${fileName}`,
+            title: fileName,
+            clientId: 'local-client',
+            content: data.content || '',
+            clientName: 'Local Active File',
+            generatedAt: new Date().toISOString(),
+            templateId: 'local'
+          });
+          setCompiledText(null);
+        } else {
+          alert(`Failed to load file: ${data.error || 'Unknown error'}`);
+        }
+      } else {
+        alert(`Server error: HTTP ${res.status}`);
+      }
+    } catch (err: any) {
+      alert(`Could not connect to local editor bridge on 4321: ${err.message}\nMake sure Command Prompt is running your node bridge.js`);
+    }
+  };
+
+  React.useEffect(() => {
+    loadLocalFiles();
+    // Establish periodic interval polling to keep desktop documents list perfectly synchronized
+    const interval = setInterval(() => {
+      loadLocalFiles();
+    }, 8000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Initialize Google OAuth state on mount
+  React.useEffect(() => {
+    const unsubscribe = initAuth(
+      (user, token) => {
+        setGoogleUser(user);
+        setGoogleToken(token);
+        fetchDriveFiles(token);
+      },
+      () => {
+        setGoogleUser(null);
+        setGoogleToken(null);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const fetchDriveFiles = async (token: string) => {
+    setIsLoadingDriveFiles(true);
+    setDriveError(null);
+    try {
+      const res = await fetch('/api/drive/list', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success) {
+          setGoogleFiles(data.files || []);
+        } else {
+          setDriveError(data.error || 'Failed to list Google Drive files');
+        }
+      } else {
+        setDriveError(`Server error listing files: HTTP ${res.status}`);
+      }
+    } catch (err: any) {
+      setDriveError(`Network failure listing files: ${err.message}`);
+    } finally {
+      setIsLoadingDriveFiles(false);
+    }
+  };
+
+  const fetchDriveFileContent = async (fileId: string) => {
+    const token = googleToken || getAccessToken();
+    if (!token) {
+      alert("Please sign in to Google first.");
+      return;
+    }
+    setIsLoadingDriveFiles(true);
+    setDriveError(null);
+    try {
+      const res = await fetch(`/api/drive/get?fileId=${encodeURIComponent(fileId)}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success) {
+          setSelectedDriveFile(data);
+          setDriveFileContent(data.content || '');
+          setDriveFileName(data.name || 'document');
+          // Guess save format from mimeType
+          if (data.mimeType?.includes('word') || data.name?.endsWith('.docx')) {
+            setDriveSaveFormat('docx');
+          } else if (data.mimeType?.includes('pdf') || data.name?.endsWith('.pdf')) {
+            setDriveSaveFormat('pdf');
+          } else {
+            setDriveSaveFormat('text');
+          }
+        } else {
+          setDriveError(data.error || 'Failed to download file content.');
+        }
+      } else {
+        setDriveError(`Server error downloading file: HTTP ${res.status}`);
+      }
+    } catch (err: any) {
+      setDriveError(`Network failure downloading file: ${err.message}`);
+    } finally {
+      setIsLoadingDriveFiles(false);
+    }
+  };
+
+  const saveFileToDrive = async () => {
+    const token = googleToken || getAccessToken();
+    if (!token) {
+      alert("Please sign in to Google first.");
+      return;
+    }
+    
+    // Strict Scope: Request explicit user confirmation before overwriting or saving!
+    const confirmSave = window.confirm(`Are you sure you want to save "${driveFileName}" to Google Drive as a ${driveSaveFormat.toUpperCase()} document?`);
+    if (!confirmSave) return;
+
+    setIsSavingToDrive(true);
+    try {
+      // Append correct file extension if missing
+      let finalName = driveFileName;
+      if (driveSaveFormat === 'docx' && !finalName.endsWith('.docx')) {
+        finalName = finalName.replace(/\.[^/.]+$/, "") + '.docx';
+      } else if (driveSaveFormat === 'pdf' && !finalName.endsWith('.pdf')) {
+        finalName = finalName.replace(/\.[^/.]+$/, "") + '.pdf';
+      } else if (driveSaveFormat === 'text' && !finalName.endsWith('.txt') && !finalName.endsWith('.md')) {
+        finalName = finalName.replace(/\.[^/.]+$/, "") + '.txt';
+      }
+
+      const res = await fetch('/api/drive/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          fileId: selectedDriveFile?.fileId,
+          name: finalName,
+          content: driveFileContent,
+          format: driveSaveFormat
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success) {
+          alert(`Successfully saved "${finalName}" to Google Drive!`);
+          fetchDriveFiles(token);
+          if (!selectedDriveFile?.fileId && data.file?.id) {
+            setSelectedDriveFile({
+              fileId: data.file.id,
+              name: data.file.name,
+              mimeType: data.file.mimeType,
+              content: driveFileContent
+            });
+          }
+        } else {
+          alert(`Failed to save: ${data.error || 'Unknown error'}`);
+        }
+      } else {
+        alert(`Server error saving: HTTP ${res.status}`);
+      }
+    } catch (err: any) {
+      alert(`Network error saving to Drive: ${err.message}`);
+    } finally {
+      setIsSavingToDrive(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      const result = await googleSignIn();
+      if (result) {
+        setGoogleUser(result.user);
+        setGoogleToken(result.accessToken);
+        fetchDriveFiles(result.accessToken);
+      }
+    } catch (err: any) {
+      alert(`Google sign-in failed: ${err.message}`);
+    }
+  };
+
+  const handleGoogleLogout = async () => {
+    try {
+      await logout();
+      setGoogleUser(null);
+      setGoogleToken(null);
+      setGoogleFiles([]);
+      setSelectedDriveFile(null);
+      setDriveFileContent('');
+      setDriveFileName('');
+    } catch (err: any) {
+      alert(`Sign-out failed: ${err.message}`);
+    }
+  };
+
+  const exportDocToDesktopBridge = async (title: string, content: string) => {
+    setIsExportingToBridge(true);
+    try {
+      const sanitizedName = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_brief.txt`;
+      const response = await fetch('http://localhost:4321/api/local-write', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: sanitizedName,
+          content: content
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        alert(`🎉 Direct Desktop sync successful!\n📍 File saved to your computer:\n${data.filePath || 'C:\\Users\\Administrator\\iiiamadex\\' + sanitizedName}`);
+      } else {
+        alert("Desktop Sync Status: Local bridge offline on port 4321.\nPlease copy the Node bridge script and run it in your computer's terminal (under 'Desktop & Sync' -> 'Copy Desktop Bridge JS script').");
+      }
+    } catch (err: any) {
+      alert(`Could not find an active local server at http://localhost:4321. First establish Node bridge in Command Prompt.\nError details: ${err.message}`);
+    } finally {
+      setIsExportingToBridge(false);
+    }
+  };
 
   const [viewingDoc, setViewingDoc] = useState<GeneratedDocument | null>(null);
 
@@ -915,7 +1208,8 @@ Law governance: Governed by the rules of California state, County of San Francis
         body: JSON.stringify({
           templateName: selectedTemplate.name,
           answers: formAnswers,
-          clientName: selectedClient.name
+          clientName: selectedClient.name,
+          model: draftingModel
         })
       });
 
@@ -1198,81 +1492,259 @@ Respectfully submitted,
       {/* ------------------------------------------------------------- */}
       {/* SHARP 3D WORKSPACE INTERACTION MODE BAR SWITCH */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex bg-[#0a101b] border-2 border-[#1e293b] p-1.5 justify-start gap-3 select-none flex-wrap">
+      <div className="flex bg-[#0a101b] border-2 border-[#1e293b] p-1.5 justify-between items-center gap-3 select-none flex-wrap">
         
-        <button
-          type="button"
-          onClick={() => {
-            setActiveWorkspaceTab('synthesis');
-            setViewingDoc(null);
-            setCompiledText(null);
-          }}
-          className={`px-4 py-2 text-xs font-mono font-extrabold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
-            activeWorkspaceTab === 'synthesis'
-              ? 'bg-teal-500 text-[#090d16] border border-teal-400 font-bold'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-[#0f1725] border border-transparent'
-          }`}
-        >
-          <ClipboardList className="w-4.5 h-4.5" />
-          <span>Intake Synthesis & OCR</span>
-        </button>
+        <div className="flex gap-3 flex-wrap">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveWorkspaceTab('synthesis');
+              setViewingDoc(null);
+              setCompiledText(null);
+            }}
+            className={`px-4 py-2 text-xs font-mono font-extrabold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeWorkspaceTab === 'synthesis'
+                ? 'bg-teal-500 text-[#090d16] border border-teal-400 font-bold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#0f1725] border border-transparent'
+            }`}
+          >
+            <ClipboardList className="w-4.5 h-4.5" />
+            <span>Intake Synthesis & OCR</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            setActiveWorkspaceTab('evidence_room');
-            setViewingDoc(null);
-            setCompiledText(null);
-          }}
-          className={`px-4 py-2 text-xs font-mono font-extrabold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
-            activeWorkspaceTab === 'evidence_room'
-              ? 'bg-teal-500 text-[#090d16] border border-teal-400 font-bold'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-[#0f1725] border border-transparent'
-          }`}
-        >
-          <Database className="w-4.5 h-4.5" />
-          <span>Client Evidence Room</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveWorkspaceTab('evidence_room');
+              setViewingDoc(null);
+              setCompiledText(null);
+            }}
+            className={`px-4 py-2 text-xs font-mono font-extrabold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeWorkspaceTab === 'evidence_room'
+                ? 'bg-teal-500 text-[#090d16] border border-teal-400 font-bold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#0f1725] border border-transparent'
+            }`}
+          >
+            <Database className="w-4.5 h-4.5" />
+            <span>Client Evidence Room</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            setActiveWorkspaceTab('judicial_mapper');
-            setViewingDoc(null);
-            setCompiledText(null);
-          }}
-          className={`px-4 py-2 text-xs font-mono font-extrabold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
-            activeWorkspaceTab === 'judicial_mapper'
-              ? 'bg-teal-500 text-[#090d16] border border-teal-400 font-bold'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-[#0f1725] border border-transparent'
-          }`}
-        >
-          <FileSignature className="w-4.5 h-4.5" />
-          <span>Judicial Court Forms & Mail Extractor</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveWorkspaceTab('judicial_mapper');
+              setViewingDoc(null);
+              setCompiledText(null);
+            }}
+            className={`px-4 py-2 text-xs font-mono font-extrabold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeWorkspaceTab === 'judicial_mapper'
+                ? 'bg-teal-500 text-[#090d16] border border-teal-400 font-bold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#0f1725] border border-transparent'
+            }`}
+          >
+            <FileSignature className="w-4.5 h-4.5" />
+            <span>Judicial Court Forms & Mail Extractor</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            setActiveWorkspaceTab('template_builder');
-            setViewingDoc(null);
-            setCompiledText(null);
-            // Default select template first to avoid null crash
-            if (templates.length > 0 && !selectedBuilderTemplate) {
-              setSelectedBuilderTemplate(templates[0]);
-            }
-          }}
-          className={`px-4 py-2 text-xs font-mono font-extrabold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
-            activeWorkspaceTab === 'template_builder'
-              ? 'bg-teal-500 text-[#090d16] border border-teal-400 font-bold animate-[pulse_3s_infinite]'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-[#0f1725] border border-transparent'
-          }`}
-        >
-          <Sliders className="w-4.5 h-4.5 text-teal-400" />
-          <span>Pleading Template Creator & AI Mapper</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveWorkspaceTab('template_builder');
+              setViewingDoc(null);
+              setCompiledText(null);
+              // Default select template first to avoid null crash
+              if (templates.length > 0 && !selectedBuilderTemplate) {
+                setSelectedBuilderTemplate(templates[0]);
+              }
+            }}
+            className={`px-4 py-2 text-xs font-mono font-extrabold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeWorkspaceTab === 'template_builder'
+                ? 'bg-teal-500 text-[#090d16] border border-teal-400 font-bold animate-[pulse_3s_infinite]'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-[#0f1725] border border-transparent'
+            }`}
+          >
+            <Sliders className="w-4.5 h-4.5 text-teal-400" />
+            <span>Pleading Template Creator & AI Mapper</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveWorkspaceTab('drive_portal');
+              setViewingDoc(null);
+              setCompiledText(null);
+            }}
+            className={`px-4 py-2 text-xs font-mono font-extrabold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeWorkspaceTab === 'drive_portal'
+                ? 'bg-amber-500 text-[#090d16] border border-amber-400 font-bold shadow-[0_0_12px_rgba(245,158,11,0.35)]'
+                : 'text-amber-500 hover:text-amber-400 hover:bg-amber-950/20 border border-transparent'
+            }`}
+          >
+            <FolderOpen className="w-4.5 h-4.5 text-amber-500 animate-pulse" />
+            <span>Google Drive Cloud Editor</span>
+          </button>
+        </div>
+
+        {/* Model Selector Dropdown for drafting / synthesis */}
+        <div className="flex items-center gap-2 px-3 py-1 bg-[#111926] border border-slate-700/60 rounded-none font-mono text-[11px] text-slate-300">
+          <span className="text-slate-400 font-extrabold uppercase text-[10px] tracking-wider">Drafting Co-Pilot:</span>
+          <select
+            value={draftingModel}
+            onChange={(e) => setDraftingModel(e.target.value)}
+            className="bg-[#070b13] border border-[#1e293b] rounded-none px-2 py-1 text-xs text-slate-200 focus:border-teal-400 outline-none transition-colors cursor-pointer"
+          >
+            <option value="default">Default AI Router</option>
+            <option value="openrouter-fusion">OpenRouter Fusion</option>
+            <option value="claude-3.7-sonnet">Claude 3.7 Sonnet</option>
+            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+          </select>
+        </div>
 
       </div>
+
+      {/* ----------------------------------------------------------------------------------- */}
+      {/* REAL-TIME ON-PREMISES DESKTOP CONNECTOR & GOOGLE DRIVE SYNC PORTAL */}
+      {/* ----------------------------------------------------------------------------------- */}
+      <div id="on-premises-sentry-ribbon" className="bg-[#0b1322] border-2 border-[#1e293b] p-4 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 select-none shrink-0 shadow-lg">
+        <div className="flex items-center gap-3.5">
+          <div className={`p-2.5 rounded-none border-2 flex items-center justify-center transition-all ${
+            localStatus === 'connected' 
+              ? 'bg-teal-500/10 border-teal-500 text-teal-400 shadow-[0_0_8px_rgba(20,184,166,0.2)]' 
+              : 'bg-amber-500/10 border-amber-500/40 text-amber-500 animate-pulse'
+          }`}>
+            <HardDrive className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono font-black uppercase tracking-wider text-white">iiiamadex On-Premises Connector</span>
+              <span className={`text-[9px] font-mono font-extrabold px-2 py-0.5 rounded-none border ${
+                localStatus === 'connected' 
+                  ? 'bg-emerald-505/10 text-emerald-400 border-emerald-550/30' 
+                  : 'bg-amber-505/10 text-amber-500 border-amber-550/20'
+              }`}>
+                {localStatus === 'connected' ? '● BRIDGE CONNECTED' : '○ STANDALONE MODE'}
+              </span>
+            </div>
+            <p className="text-[10.5px] text-slate-400 font-mono mt-0.5">
+              Target Folder: <span className="text-sky-400 font-bold">C:\Users\Administrator\iiiamadex</span> {localStatus === 'connected' ? `(${localFiles.length} client files monitored)` : '(Open Desktop tab to copy bridge proxy script)'}
+            </p>
+          </div>
+        </div>
+
+        {/* Sync message and actions bar */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          
+          {localStatus === 'connected' ? (
+            <button
+              type="button"
+              onClick={() => setIsLocalExplorerOpen(!isLocalExplorerOpen)}
+              className="px-3.5 py-2 bg-gradient-to-r from-sky-950/80 to-sky-900/60 border-2 border-sky-500/40 hover:border-sky-400 text-sky-400 hover:text-sky-300 font-mono text-[11px] font-bold uppercase rounded-none cursor-pointer flex items-center gap-2 transition-all shadow-[1px_1px_0px_rgba(0,0,0,0.5)]"
+            >
+              <FolderOpen className="w-4 h-4" />
+              <span>{isLocalExplorerOpen ? 'Hide Files Dropdown' : `Retrieve active client files (${localFiles.length})`}</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => alert("Local editor bridge not yet detected active on local port 4321. Click the '🔄 Sync Desktop, Ollama & Google Drive' tab at the bottom of the left sidebar to download setup instructions!")}
+              className="px-3.5 py-2 bg-amber-955/20 border-2 border-amber-500/20 hover:border-amber-500 text-amber-400 font-mono text-[11px] font-bold uppercase rounded-none cursor-pointer flex items-center gap-2 transition-all"
+            >
+              <Terminal className="w-4 h-4" />
+              <span>Launch Local Proxy Guide</span>
+            </button>
+          )}
+
+          {/* Direct link to custom Google Drive folder provided by Adonis */}
+          <a
+            href="https://drive.google.com/drive/folders/10sli3oVprhgacIRjH7wzze9wNSn4lxJk?usp=drive_link"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3.5 py-2 bg-[#dfb76c]/10 hover:bg-[#dfb76c]/20 border-2 border-[#dfb76c]/30 hover:border-[#dfb76c] text-[#dfb76c] font-mono text-[11px] font-bold uppercase rounded-none flex items-center gap-2 transition-all shadow-[1px_1px_0px_rgba(0,0,0,0.4)] cursor-pointer"
+            title="Open cloud Google Drive archive (adonisandrous@gmail.com)"
+          >
+            <ExternalLink className="w-4 h-4 text-[#dfb76c]" />
+            <span>Open Google Drive Drive Folder</span>
+          </a>
+
+          <button
+            type="button"
+            onClick={async () => {
+              await loadLocalFiles();
+              alert("Bidirectional synchronize cycle triggered between PC G:\\My Drive\\iiiamadex and C:\\Users\\Administrator\\iiiamadex!");
+            }}
+            className="p-2 bg-[#090d16] border-2 border-[#1e293b] hover:border-teal-500 text-slate-400 hover:text-teal-400 transition-colors cursor-pointer flex items-center justify-center"
+            title="Refresh active file lists & mirror to cloud Google drive"
+          >
+            <RefreshCw className="w-4 h-4 text-slate-400 hover:text-teal-400" />
+          </button>
+        </div>
+      </div>
+
+      {/* Slide-out active local filesystem explorer when toggled */}
+      <AnimatePresence>
+        {isLocalExplorerOpen && localStatus === 'connected' && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="bg-[#050912] border-2 border-t-0 border-[#1e293b] p-5 shrink-0 overflow-hidden"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-900 mb-4">
+              <span className="text-[11px] uppercase font-mono font-black text-sky-400 flex items-center gap-2">
+                <FolderOpen className="w-4 h-4 text-sky-400" />
+                On-Premises Directory: C:\Users\Administrator\iiiamadex
+              </span>
+              <span className="text-[10px] text-teal-400 font-mono tracking-wide">{driveSyncMsg}</span>
+            </div>
+
+            {localFiles.length === 0 ? (
+              <div className="py-8 text-center text-xs text-slate-500 font-mono italic">
+                Folder is empty! Save pleadings using templates to automatically write active files to your C:\Users\Administrator\iiiamadex folder.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {localFiles.map((file, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3.5 bg-[#090e18] border-2 border-slate-900 hover:border-sky-500/50 transition-all flex flex-col justify-between items-stretch text-left group"
+                  >
+                    <div>
+                      <span className="text-xs font-bold font-mono text-slate-300 block truncate leading-tight group-hover:text-sky-300 transition-colors">{file}</span>
+                      <span className="text-[9px] text-slate-500 font-mono block mt-1">Status: Synchronized with G-Drive</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-4 pt-2 border-t border-slate-900/60">
+                      <button
+                        type="button"
+                        onClick={() => openLocalFile(file)}
+                        className="flex-1 py-1.5 text-center bg-sky-950/60 hover:bg-sky-500 hover:text-slate-950 font-bold font-mono text-[9.5px] uppercase border border-sky-500/20 hover:border-transparent text-sky-400 transition-all cursor-pointer"
+                      >
+                        Read File
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          fetch(`http://localhost:4321/api/local-file?name=${encodeURIComponent(file)}`)
+                            .then(r => r.json())
+                            .then(data => {
+                              if (data && data.success) {
+                                navigator.clipboard.writeText(data.content || '');
+                                alert(`Copied file contents of "${file}" to clipboard! You can paste it into the questionnaire below for immediate AI form extraction.`);
+                              }
+                            });
+                        }}
+                        className="p-1 px-2 text-center bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-teal-400 text-slate-400 hover:text-teal-400 cursor-pointer"
+                        title="Copy content to clipboard"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence mode="wait">
         
@@ -1413,6 +1885,15 @@ Respectfully submitted,
                       </div>
                       <div className="flex gap-2">
                         <button
+                          onClick={() => exportDocToDesktopBridge(viewingDoc.title, viewingDoc.content)}
+                          disabled={isExportingToBridge}
+                          className="p-2 bg-sky-950/80 border border-sky-500/30 hover:border-sky-400 text-sky-400 rounded-none cursor-pointer flex items-center justify-center gap-1.5 text-xs font-mono disabled:opacity-40"
+                          title="Save directly to Windows C:\Users\Administrator\iiiamadex folder"
+                        >
+                          <HardDrive className="w-4 h-4 text-sky-405" />
+                          <span className="hidden sm:inline">Export to PC Folder</span>
+                        </button>
+                        <button
                           onClick={() => {
                             navigator.clipboard.writeText(viewingDoc.content);
                             alert('Document content copied.');
@@ -1468,6 +1949,14 @@ Respectfully submitted,
                         <p className="text-xs text-slate-400 font-mono">Template: {selectedTemplate.name}</p>
                       </div>
                       <div className="flex gap-2">
+                        <button
+                          onClick={() => exportDocToDesktopBridge(selectedTemplate.name, compiledText)}
+                          disabled={isExportingToBridge}
+                          className="px-3 py-1 bg-sky-950/80 border border-sky-500/30 hover:border-sky-400 text-sky-400 font-mono text-[11px] font-bold uppercase rounded-none cursor-pointer flex items-center gap-1.5 disabled:opacity-40"
+                        >
+                          <HardDrive className="w-3.5 h-3.5" />
+                          <span>Export to PC Folder</span>
+                        </button>
                         <button
                           onClick={() => {
                             navigator.clipboard.writeText(compiledText);
@@ -2875,6 +3364,247 @@ Respectfully submitted,
 
             </div>
 
+          </motion.div>
+        )}
+
+        {/* =================================================================================== */}
+        {/* TAB 5: GOOGLE DRIVE REAL-TIME DOCUMENT EDITOR & CLOUD INTEGRATION */}
+        {/* =================================================================================== */}
+        {activeWorkspaceTab === 'drive_portal' && (
+          <motion.div
+            key="google-drive-workspace"
+            id="google-drive-workspace"
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 min-h-0 select-none text-left"
+          >
+            {/* Left Col: Google Drive File Explorer */}
+            <div className="lg:col-span-4 bg-[#0a0f1d] rounded-none border-2 border-[#1e293b] flex flex-col overflow-hidden h-full shadow-lg">
+              <div className="p-4 bg-[#0d1525] border-b border-[#1e293b] flex justify-between items-center">
+                <div>
+                  <h3 className="text-xs font-mono font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <FolderOpen className="w-4.5 h-4.5 text-amber-500" />
+                    Google Drive Explorer
+                  </h3>
+                  <p className="text-[9.5px] text-slate-400 font-mono">
+                    {googleUser ? `Signed in as: ${googleUser.email}` : 'Sign in to access your documents'}
+                  </p>
+                </div>
+                
+                {googleUser && (
+                  <button
+                    type="button"
+                    onClick={handleGoogleLogout}
+                    className="px-2.5 py-1 bg-rose-950/40 border border-rose-500/30 hover:border-rose-400 text-rose-400 font-mono text-[9px] uppercase font-bold cursor-pointer"
+                  >
+                    Logout
+                  </button>
+                )}
+              </div>
+
+              {!googleUser ? (
+                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
+                  <FolderOpen className="w-12 h-12 text-amber-500/20" />
+                  <div className="space-y-1.5">
+                    <h4 className="text-xs font-bold text-white uppercase">Access Your Google Drive Files</h4>
+                    <p className="text-[10px] text-slate-400 font-mono max-w-xs leading-relaxed">
+                      Securely sign in with Google to browse and edit Word documents (.docx) and PDF files directly inside Phoenix.
+                    </p>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={handleGoogleLogin}
+                    className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-500 text-[#090d16] font-mono text-[11px] font-black uppercase rounded-none shadow-[3px_3px_0px_rgba(251,191,36,0.3)] hover:scale-[1.01] transition-transform flex items-center gap-2 cursor-pointer"
+                  >
+                    <FolderOpen className="w-4 h-4 text-[#090d16]" />
+                    <span>Sign in with Google</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col min-h-0">
+                  {/* File Search & Create New Button */}
+                  <div className="p-3 bg-[#080d16] border-b border-[#1e293b] flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDriveFile({
+                          fileId: null,
+                          name: 'New Document.docx',
+                          mimeType: 'text/plain',
+                          content: ''
+                        });
+                        setDriveFileName('New Document.docx');
+                        setDriveFileContent('// Type your document text here...\n\n');
+                        setDriveSaveFormat('docx');
+                      }}
+                      className="flex-1 py-1.5 bg-emerald-950/30 border border-emerald-500/40 hover:border-emerald-400 text-emerald-400 font-mono text-[10px] uppercase font-bold text-center flex justify-center items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Create New Doc</span>
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => fetchDriveFiles(googleToken || '')}
+                      disabled={isLoadingDriveFiles}
+                      className="p-1.5 bg-[#0e1726] border border-[#1e293b] hover:border-amber-400 text-slate-400 hover:text-amber-400 transition-colors cursor-pointer"
+                      title="Refresh files"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isLoadingDriveFiles ? 'animate-spin text-amber-400' : ''}`} />
+                    </button>
+                  </div>
+
+                  {/* Files List */}
+                  <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                    {isLoadingDriveFiles && googleFiles.length === 0 ? (
+                      <div className="py-12 text-center text-xs text-slate-500 font-mono italic flex flex-col items-center gap-2">
+                        <RefreshCw className="w-6 h-6 animate-spin text-amber-500/50" />
+                        <span>Connecting to Google Drive...</span>
+                      </div>
+                    ) : googleFiles.length === 0 ? (
+                      <div className="py-12 text-center text-xs text-slate-500 font-mono italic">
+                        No Word (.docx), PDF, or text files found in your Drive. Click "Create New Doc" to draft one!
+                      </div>
+                    ) : (
+                      googleFiles.map((file) => {
+                        const isDocx = file.mimeType?.includes('word') || file.name?.endsWith('.docx');
+                        const isPdf = file.mimeType?.includes('pdf') || file.name?.endsWith('.pdf');
+                        const isSelected = selectedDriveFile?.fileId === file.id;
+
+                        return (
+                          <button
+                            key={file.id}
+                            type="button"
+                            onClick={() => fetchDriveFileContent(file.id)}
+                            className={`w-full text-left p-3 border rounded-none transition-all flex flex-col justify-between group cursor-pointer ${
+                              isSelected
+                                ? 'bg-amber-950/20 border-amber-500'
+                                : 'bg-[#060912] border-slate-900 hover:border-amber-500/40'
+                            }`}
+                          >
+                            <div className="flex items-start gap-2.5 w-full">
+                              <span className={`p-1.5 rounded-none border text-xs shrink-0 mt-0.5 ${
+                                isDocx 
+                                  ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' 
+                                  : isPdf 
+                                    ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' 
+                                    : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                              }`}>
+                                <FileText className="w-3.5 h-3.5" />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <span className={`text-[11px] font-bold block truncate group-hover:text-amber-400 transition-colors ${
+                                  isSelected ? 'text-amber-400' : 'text-slate-300'
+                                }`}>
+                                  {file.name}
+                                </span>
+                                <span className="text-[9px] font-mono text-slate-500 block truncate mt-0.5">
+                                  Format: {isDocx ? 'Microsoft Word (.docx)' : isPdf ? 'PDF Document (.pdf)' : 'Plain Text/Doc'}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between w-full mt-2 pt-1.5 border-t border-slate-900/60 font-mono text-[8.5px] text-slate-500">
+                              <span>Modified: {file.modifiedTime ? new Date(file.modifiedTime).toLocaleDateString() : 'N/A'}</span>
+                              <span>{file.size ? `${(parseInt(file.size) / 1024).toFixed(1)} KB` : ''}</span>
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right Col: Google Drive Rich Document Editor */}
+            <div className="lg:col-span-8 bg-[#0a0f1d] rounded-none border-2 border-[#1e293b] flex flex-col overflow-hidden h-full shadow-lg">
+              {selectedDriveFile ? (
+                <div className="flex-1 flex flex-col min-h-0">
+                  {/* Editor Header */}
+                  <div className="p-4 bg-[#0d1525] border-b border-[#1e293b] flex flex-col sm:flex-row gap-3 justify-between items-stretch sm:items-center">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-none border border-amber-500/30 bg-amber-500/10 text-amber-400">
+                          Phoenix Document Editor
+                        </span>
+                        {selectedDriveFile.fileId ? (
+                          <span className="text-[9px] font-mono text-slate-500">ID: {selectedDriveFile.fileId.substring(0, 12)}...</span>
+                        ) : (
+                          <span className="text-[9px] font-mono text-emerald-400 uppercase font-black tracking-wider animate-pulse">Drafting New File</span>
+                        )}
+                      </div>
+                      
+                      <input
+                        type="text"
+                        value={driveFileName}
+                        onChange={(e) => setDriveFileName(e.target.value)}
+                        placeholder="document_name.docx"
+                        className="text-sm font-extrabold text-white bg-[#050811] border-b border-transparent focus:border-amber-500 px-1 py-0.5 outline-none font-sans uppercase tracking-wider w-full sm:w-[280px]"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 font-mono text-[10px] shrink-0">
+                        <span className="text-slate-400">Save as:</span>
+                        <select
+                          value={driveSaveFormat}
+                          onChange={(e: any) => setDriveSaveFormat(e.target.value)}
+                          className="bg-[#050811] border border-[#1e293b] text-amber-400 font-bold px-1.5 py-0.5 rounded-none focus:outline-none focus:border-amber-500"
+                        >
+                          <option value="docx">Word (.docx)</option>
+                          <option value="pdf">PDF (.pdf)</option>
+                          <option value="text">Plain Text (.txt)</option>
+                        </select>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={saveFileToDrive}
+                        disabled={isSavingToDrive}
+                        className="px-4 py-1.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-[#090d16] font-mono text-[10px] font-black uppercase rounded-none flex items-center gap-1.5 cursor-pointer disabled:opacity-40 shadow-[2px_2px_0px_rgba(16,185,129,0.3)]"
+                      >
+                        {isSavingToDrive ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Saving...</span>
+                          </>
+                        ) : (
+                          <>
+                            <HardDrive className="w-3.5 h-3.5" />
+                            <span>Save to Drive</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Editable Plain Text Editor Area */}
+                  <div className="flex-1 p-4 bg-[#050811] flex flex-col min-h-0">
+                    <div className="mb-2 flex items-center justify-between font-mono text-[9px] text-slate-500 select-none">
+                      <span>⚡ DIRECT EDITING ACTIVE ({driveFileContent?.length || 0} characters loaded)</span>
+                      <span>Line spacing, typography & headers auto-wrapped on export</span>
+                    </div>
+
+                    <textarea
+                      value={driveFileContent || ''}
+                      onChange={(e) => setDriveFileContent(e.target.value)}
+                      placeholder="Type legal drafting, notes, or client letters here..."
+                      className="flex-1 w-full bg-[#070b14] border-2 border-[#151f33] p-4 font-mono text-[11px] text-slate-300 focus:outline-none focus:border-amber-500/50 leading-relaxed font-sans select-all resize-none min-h-[300px]"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-slate-500">
+                  <FileText className="w-12 h-12 text-slate-800 mb-3" />
+                  <h4 className="text-xs font-bold text-slate-400 uppercase">No File Selected</h4>
+                  <p className="text-[10px] text-slate-600 font-mono max-w-sm mt-1 leading-relaxed">
+                    Select any file from the Google Drive explorer on the left or click "Create New Doc" to begin editing Word documents or PDF drafts inside Phoenix.
+                  </p>
+                </div>
+              )}
+            </div>
           </motion.div>
         )}
 

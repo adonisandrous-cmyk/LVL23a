@@ -19,7 +19,9 @@ import {
   Info,
   Layers,
   Sparkles,
-  Link2
+  Link2,
+  Trash2,
+  Copy
 } from 'lucide-react';
 import { Client, Matter } from '../types';
 
@@ -57,8 +59,32 @@ export default function ResearchPortalDrawer({
   const [prefilledData, setPrefilledData] = useState<any>(null);
   const [isPrefilling, setIsPrefilling] = useState(false);
   const [selectedClientForForm, setSelectedClientForForm] = useState<string>('');
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  const calCourtForms: CourtForm[] = [
+  // Persisted Custom Court Forms State
+  const [customForms, setCustomForms] = useState<CourtForm[]>(() => {
+    const saved = localStorage.getItem('l23_custom_court_forms');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {
+        console.error("Error loading custom forms from localStorage", e);
+      }
+    }
+    return [];
+  });
+
+  // Dynamic custom CA form addition input states
+  const [showAddCustomForm, setShowAddCustomForm] = useState(false);
+  const [newFormCode, setNewFormCode] = useState('');
+  const [newFormTitle, setNewFormTitle] = useState('');
+  const [newFormCategory, setNewFormCategory] = useState('Family Law');
+  const [newFormUrl, setNewFormUrl] = useState('');
+  const [newFormDescription, setNewFormDescription] = useState('');
+  const [newFormGuidelines, setNewFormGuidelines] = useState('');
+
+  const defaultCourtForms: CourtForm[] = [
     {
       code: "FL-100",
       title: "Petition for Dissolution of Marriage",
@@ -149,6 +175,9 @@ export default function ResearchPortalDrawer({
     }
   ];
 
+  // Combined calCourtForms containing defaults & custom loaded items
+  const calCourtForms: CourtForm[] = [...defaultCourtForms, ...customForms];
+
   // Filter forms
   const filteredForms = calCourtForms.filter(f => {
     const matchesSearch = f.code.toLowerCase().includes(formSearch.toLowerCase()) || 
@@ -157,6 +186,59 @@ export default function ResearchPortalDrawer({
     const matchesCategory = selectedCategory === 'All' || f.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  const handleAddCustomFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFormCode || !newFormTitle) return;
+
+    const codeUpper = newFormCode.trim().toUpperCase();
+
+    // Check if form with code already exists
+    if (calCourtForms.some(f => f.code.toUpperCase() === codeUpper)) {
+      alert(`A California court form with code "${codeUpper}" already exists!`);
+      return;
+    }
+
+    const guidelinesArray = newFormGuidelines
+      ? newFormGuidelines.split(/[\n,]+/).map(g => g.trim()).filter(Boolean)
+      : [
+          "Fill out all mandatory fields carefully.",
+          "Check local Superior Court jurisdictional instructions for filing.",
+          "Retain copies of filing receipts inside active user cases directory."
+        ];
+
+    const newForm: CourtForm = {
+      code: codeUpper,
+      title: newFormTitle.trim(),
+      category: newFormCategory,
+      pdfUrl: newFormUrl.trim() || "https://www.courts.ca.gov/forms.htm",
+      description: newFormDescription.trim() || "Custom registered California Judicial Council form template.",
+      guidelines: guidelinesArray
+    };
+
+    const updated = [...customForms, newForm];
+    setCustomForms(updated);
+    localStorage.setItem('l23_custom_court_forms', JSON.stringify(updated));
+
+    // Clear and toggle
+    setNewFormCode('');
+    setNewFormTitle('');
+    setNewFormUrl('');
+    setNewFormDescription('');
+    setNewFormGuidelines('');
+    setShowAddCustomForm(false);
+  };
+
+  const handleDeleteCustomForm = (code: string) => {
+    if (!confirm(`Are you sure you want to remove registered custom court form ${code}?`)) return;
+    const updated = customForms.filter(f => f.code !== code);
+    setCustomForms(updated);
+    localStorage.setItem('l23_custom_court_forms', JSON.stringify(updated));
+    if (selectedForm?.code === code) {
+      setSelectedForm(null);
+      setPrefilledData(null);
+    }
+  };
 
   const triggerAutofillSimulation = (form: CourtForm) => {
     if (!selectedClientForForm) return;
@@ -205,6 +287,12 @@ export default function ResearchPortalDrawer({
   const [clMessage, setClMessage] = useState('');
   const [isSimulatedData, setIsSimulatedData] = useState(true);
   const [selectedDocketDetail, setSelectedDocketDetail] = useState<any | null>(null);
+
+  // AI-powered smart query formulation states
+  const [aiSearchPrompt, setAiSearchPrompt] = useState('');
+  const [isAiSearching, setIsAiSearching] = useState(false);
+  const [aiFeedback, setAiFeedback] = useState<string | null>(null);
+  const [researchModel, setResearchModel] = useState<string>('default');
 
   // User manual token state
   const [customToken, setCustomToken] = useState(() => {
@@ -266,6 +354,78 @@ export default function ResearchPortalDrawer({
       setClMessage(`Search failed: ${err.message}. Showing local index backup.`);
     } finally {
       setIsLoadingCl(false);
+    }
+  };
+
+  const handleAiFormulateSearch = async () => {
+    if (!aiSearchPrompt.trim()) return;
+    setIsAiSearching(true);
+    setAiFeedback(null);
+    try {
+      const response = await fetch('/api/gemini/formulate-search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          naturalQuery: aiSearchPrompt,
+          currentCourt: clCourt,
+          model: researchModel
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        // Update states so user sees formulation in action!
+        setClQuery(data.query || '');
+        if (data.type === 'd' || data.type === 'f') {
+          setClType(data.type);
+        }
+        if (data.court === 'ca' || data.court === 'nv' || data.court === 'cand' || data.court === 'cacd' || data.court === 'ca9' || data.court === '') {
+          setClCourt(data.court);
+        }
+        setAiFeedback(data.explanation || 'Optimal search parameters selected and executed.');
+        
+        // Auto-run the search with formulated parameters!
+        setTimeout(() => {
+          const fetchFormulated = async () => {
+            setIsLoadingCl(true);
+            setClMessage('');
+            setSelectedDocketDetail(null);
+            try {
+              const headers: any = {};
+              const savedToken = localStorage.getItem('courtlistener_user_token');
+              if (savedToken) headers['x-courtlistener-token'] = savedToken;
+              const savedApifyToken = localStorage.getItem('apify_user_token');
+              if (savedApifyToken) headers['x-apify-token'] = savedApifyToken;
+
+              const clRes = await fetch(`/api/courtlistener/search?q=${encodeURIComponent(data.query || '')}&type=${data.type || 'd'}&court=${encodeURIComponent(data.court || '')}`, {
+                headers
+              });
+              if (clRes.ok) {
+                const searchData = await clRes.json();
+                setClResults(searchData.results || []);
+                setIsSimulatedData(searchData.simulated || false);
+                if (searchData.message) {
+                  setClMessage(searchData.message);
+                }
+              }
+            } catch (err: any) {
+              console.error(err);
+            } finally {
+              setIsLoadingCl(false);
+            }
+          };
+          fetchFormulated();
+        }, 150);
+
+      } else {
+        throw new Error('Server error formulating search query.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setAiFeedback(`Failed to connect to AI Search formulation. Error: ${err.message}`);
+    } finally {
+      setIsAiSearching(false);
     }
   };
 
@@ -494,6 +654,78 @@ export default function ResearchPortalDrawer({
                     </div>
                   </div>
 
+                  {/* AI Search Assistant Formulation Panel */}
+                  <div className="p-3.5 bg-[#0a101d] border border-slate-800/80 rounded-xl space-y-3 shadow-lg relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-1 bg-[#1a2c3a] border-l border-b border-slate-800 rounded-bl-lg">
+                      <span className="text-[8px] font-mono font-bold text-teal-400 uppercase tracking-widest px-1">Gemini Pro/Flash</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-[#dfb76c] animate-pulse" />
+                      <div>
+                        <h4 className="text-[11px] font-bold text-[#dfb76c] uppercase tracking-wider font-heading">AI Search Co-Counsel</h4>
+                        <p className="text-[9px] text-slate-400 font-sans mt-0.5">
+                          Formulate optimized legal queries, choose jurisdictions (e.g. Nevada State Courts), and automatic search on court database.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <textarea
+                        value={aiSearchPrompt}
+                        onChange={(e) => setAiSearchPrompt(e.target.value)}
+                        placeholder="e.g., 'Find active contract or breach disputes in Washoe County, Nevada' or 'bankruptcy cases in CA Central districts'"
+                        className="w-full bg-[#111928] border border-slate-800/80 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-slate-700 min-h-[50px] font-sans resize-none"
+                      />
+                      
+                      <div className="flex justify-between items-center gap-2 pt-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] text-slate-500 font-mono uppercase">Model:</span>
+                          <select
+                            value={researchModel}
+                            onChange={(e) => setResearchModel(e.target.value)}
+                            className="bg-[#070b13] border border-slate-800 rounded px-1.5 py-0.5 text-[9.5px] text-slate-300 font-mono focus:border-[#dfb76c] outline-none cursor-pointer"
+                          >
+                            <option value="default">Default Router</option>
+                            <option value="openrouter-fusion">OR Fusion</option>
+                            <option value="claude-3.7-sonnet">Claude 3.7</option>
+                            <option value="gemini-2.5-pro">Gemini Pro</option>
+                          </select>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleAiFormulateSearch}
+                          disabled={isAiSearching || !aiSearchPrompt.trim()}
+                          className="px-4 py-1.5 bg-gradient-to-r from-[#dfb76c] to-[#fce093] disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-[#070b12] font-heading font-black text-[10px] uppercase tracking-widest rounded-lg flex items-center gap-1.5 transition-all cursor-pointer border-none shadow-[0_2px_8px_rgba(223,183,108,0.1)] shrink-0"
+                        >
+                          {isAiSearching ? (
+                            <>
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Reasoning...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-3 h-3" />
+                              Advise & Search
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {aiFeedback && (
+                      <div className="p-2.5 bg-[#0d1624] border border-slate-800 rounded-lg space-y-1 mt-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#dfb76c]" />
+                          <span className="text-[9px] font-mono font-bold text-[#dfb76c] uppercase tracking-widest">AI Formulation Log</span>
+                        </div>
+                        <p className="text-[10px] text-slate-300 font-sans leading-normal">
+                          {aiFeedback}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Search inputs form */}
                   <form onSubmit={handleSearchCourtListener} className="p-4 bg-[#0c1422] border border-slate-800/50 rounded-xl space-y-3 shadow-md">
                     <div className="flex items-center justify-between">
@@ -695,11 +927,180 @@ export default function ResearchPortalDrawer({
                 </div>
               )}
 
-              {/* ------------------------------------------------------------- */}
-              {/* TAB: CALIFORNIA COURT FORMS */}
-              {/* ------------------------------------------------------------- */}
               {activeTab === 'forms' && (
                 <div id="tab-courtfoms-content" className="space-y-4">
+                  {/* CA Official Court Forms Link Banner */}
+                  <div className="p-4 bg-gradient-to-br from-[#0c1422] to-[#111c30] border border-slate-800 rounded-2xl space-y-3 shadow-md relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/5 rounded-full blur-2xl group-hover:bg-teal-500/10 transition-all duration-500" />
+                    <div className="space-y-1 relative z-10 font-sans">
+                      <h4 className="text-xs font-bold text-white font-mono uppercase tracking-wider flex items-center gap-1.5">
+                        <Globe className="w-4 h-4 text-[#dfb76c] shrink-0" />
+                        <span>Official CA Judicial Council Forms Hub</span>
+                      </h4>
+                      <p className="text-[10px] text-slate-400 font-sans leading-relaxed">
+                        Find and configure any official California Judicial Council form from the primary state court directory. Once selected or downloaded, register its details and PDF resource link below to integrate it permanently into this live interactive desk!
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 relative z-10 pt-1">
+                      <a
+                        href="https://www.courts.ca.gov/forms.htm"
+                        target="_blank"
+                        referrerPolicy="no-referrer"
+                        className="px-3 py-1.5 bg-[#dfb76c]/10 hover:bg-[#dfb76c]/20 border border-[#dfb76c]/30 text-[#fce093] rounded-lg font-mono text-[9px] font-black uppercase flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <ExternalLink className="w-3 h-3 text-[#dfb76c]" />
+                        <span> courts.ca.gov Forms index</span>
+                      </a>
+                      <a
+                        href="https://www.courts.ca.gov/formgroup.htm"
+                        target="_blank"
+                        referrerPolicy="no-referrer"
+                        className="px-3 py-1.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-205 rounded-lg font-mono text-[9px] font-bold uppercase flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <BookOpen className="w-3 h-3" />
+                        <span>Browse Groups</span>
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Register Custom CA Court Form Expander panel */}
+                  <div className="border border-slate-800 rounded-2xl overflow-hidden bg-slate-950/25">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddCustomForm(!showAddCustomForm)}
+                      className="w-full px-4 py-3 bg-[#0d1524]/60 hover:bg-[#111b2e]/60 flex items-center justify-between transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-teal-400" />
+                        <span className="text-[11px] font-bold font-mono text-white uppercase tracking-wider">
+                          {showAddCustomForm ? 'Collapse Registration Form' : 'Register Custom CA Court Form'}
+                        </span>
+                      </div>
+                      <span className="text-teal-400 font-mono text-[10px] font-bold">
+                        {showAddCustomForm ? '✕ Close' : '＋ Add Form Link'}
+                      </span>
+                    </button>
+
+                    <AnimatePresence>
+                      {showAddCustomForm && (
+                        <motion.form
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          onSubmit={handleAddCustomFormSubmit}
+                          className="p-4 bg-[#080d16] border-t border-slate-850 space-y-4 flex flex-col overflow-hidden"
+                        >
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[9.5px] font-mono uppercase text-slate-400 mb-1">
+                                Form Code Identifier *
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="e.g. CIV-100"
+                                value={newFormCode}
+                                onChange={(e) => setNewFormCode(e.target.value)}
+                                className="w-full bg-[#04060b] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-teal-400 font-mono"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9.5px] font-mono uppercase text-slate-400 mb-1">
+                                Category *
+                              </label>
+                              <select
+                                value={newFormCategory}
+                                onChange={(e) => setNewFormCategory(e.target.value)}
+                                className="w-full bg-[#04060b] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-teal-400 font-sans"
+                              >
+                                <option value="Family Law">Family Law</option>
+                                <option value="General Civil">General Civil</option>
+                                <option value="Real Property">Real Property</option>
+                                <option value="Federal / Immigration">Federal / Immigration</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-[9.5px] font-mono uppercase text-slate-400 mb-1">
+                              Official Document Title *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. Request for Entry of Default"
+                              value={newFormTitle}
+                              onChange={(e) => setNewFormTitle(e.target.value)}
+                              className="w-full bg-[#04060b] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-teal-400 font-sans"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9.5px] font-mono uppercase text-slate-400 mb-1">
+                              PDF Download Link / URL (Optional)
+                            </label>
+                            <input
+                              type="url"
+                              placeholder="https://www.courts.ca.gov/documents/civ100.pdf"
+                              value={newFormUrl}
+                              onChange={(e) => setNewFormUrl(e.target.value)}
+                              className="w-full bg-[#04060b] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-teal-400 font-mono"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9.5px] font-mono uppercase text-slate-400 mb-1">
+                              Form Description Purpose
+                            </label>
+                            <textarea
+                              rows={2}
+                              value={newFormDescription}
+                              onChange={(e) => setNewFormDescription(e.target.value)}
+                              placeholder="Describe are there special liabilities, procedural requirements or declarations this document drafts..."
+                              className="w-full bg-[#04060b] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-teal-400 font-sans resize-none"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9.5px] font-mono uppercase text-slate-400 mb-1">
+                              Filing Action Guidelines (Delimiter commas or newlines)
+                            </label>
+                            <textarea
+                              rows={2}
+                              value={newFormGuidelines}
+                              onChange={(e) => setNewFormGuidelines(e.target.value)}
+                              placeholder="Step 1: fill out basic case title, Step 2: request spousal support checks..."
+                              className="w-full bg-[#04060b] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-teal-400 font-sans resize-none"
+                            />
+                          </div>
+
+                          <div className="flex justify-end gap-2 pt-2 border-t border-slate-800/50">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowAddCustomForm(false);
+                                setNewFormCode('');
+                                setNewFormTitle('');
+                                setNewFormUrl('');
+                                setNewFormDescription('');
+                                setNewFormGuidelines('');
+                              }}
+                              className="px-3.5 py-1.5 bg-[#0e1625] hover:bg-slate-900 border border-slate-850 text-slate-400 hover:text-white rounded-lg text-[9.5px] font-mono font-bold cursor-pointer"
+                            >
+                              Reset
+                            </button>
+                            <button
+                              type="submit"
+                              className="px-4 py-1.5 bg-gradient-to-r from-teal-500 to-emerald-400 text-[#090d16] font-extrabold rounded-lg text-[9.5px] font-sans tracking-wide uppercase transition-all shadow-md cursor-pointer"
+                            >
+                              Register Form to Viewer
+                            </button>
+                          </div>
+                        </motion.form>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
                   {/* Category filters */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -725,52 +1126,92 @@ export default function ResearchPortalDrawer({
 
                   {/* Search and Selector Grid */}
                   <div className="space-y-2.5">
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={formSearch}
-                        onChange={(e) => setFormSearch(e.target.value)}
-                        placeholder="Search California court forms by identifier or code (e.g. FL-150)..."
-                        className="w-full bg-[#101726]/80 border border-slate-800 rounded-lg pl-8.5 pr-3 py-1.5 text-[11px] text-white font-mono placeholder:text-slate-600 focus:outline-none"
-                      />
-                      <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-500" />
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          value={formSearch}
+                          onChange={(e) => setFormSearch(e.target.value)}
+                          placeholder="Search California court forms by identifier or code (e.g. FL-150)..."
+                          className="w-full bg-[#101726]/80 border border-slate-800 rounded-lg pl-8.5 pr-3 py-1.5 text-[11px] text-white font-mono placeholder:text-slate-600 focus:outline-none"
+                        />
+                        <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-500" />
+                      </div>
+                      {selectedForm && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedForm(null);
+                            setPrefilledData(null);
+                          }}
+                          className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 rounded-lg font-mono text-[9.5px] font-bold uppercase cursor-pointer shrink-0 transition-colors"
+                        >
+                          ✕ Clear Viewer
+                        </button>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 gap-2.5">
-                      {filteredForms.map((form) => (
-                        <div
-                          key={form.code}
-                          className={`p-3 bg-slate-900/60 border rounded-xl transition-all flex flex-col justify-between ${
-                            selectedForm?.code === form.code
-                              ? 'border-[#dfb76c] bg-[#dfb76c]/5'
-                              : 'border-slate-800 hover:border-slate-700'
-                          }`}
-                        >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[11.5px] font-mono font-extrabold text-teal-400">{form.code}</span>
-                                <span className="text-[9px] font-mono bg-[#0c1322] border border-slate-850 px-1 py-0.25 text-slate-550 rounded uppercase font-bold">{form.category}</span>
+                      {filteredForms.map((form) => {
+                        const isCustomForm = customForms.some(cf => cf.code === form.code);
+                        return (
+                          <div
+                            key={form.code}
+                            className={`p-3 bg-slate-900/60 border rounded-xl transition-all flex flex-col justify-between ${
+                              selectedForm?.code === form.code
+                                ? 'border-[#dfb76c] bg-[#dfb76c]/5'
+                                : 'border-slate-800 hover:border-slate-700'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11.5px] font-mono font-extrabold text-teal-400">{form.code}</span>
+                                  <span className="text-[9px] font-mono bg-[#0c1322] border border-slate-850 px-1 py-0.25 text-slate-500 rounded uppercase font-bold">{form.category}</span>
+                                  {isCustomForm && (
+                                    <span className="text-[9.5px] font-mono bg-teal-500/10 border border-teal-500/25 text-teal-400 px-1.5 py-0.25 rounded font-extrabold leading-none uppercase">Custom Saved</span>
+                                  )}
+                                </div>
+                                <h5 className="text-[12px] font-bold text-white font-sans mt-1">
+                                  {form.title}
+                                </h5>
+                                <p className="text-[10px] text-slate-400 font-sans mt-1 leading-normal">
+                                  {form.description}
+                                </p>
                               </div>
-                              <h5 className="text-[12px] font-bold text-white font-sans mt-1">
-                                {form.title}
-                              </h5>
-                              <p className="text-[10px] text-slate-400 font-sans mt-1 leading-normal">
-                                {form.description}
-                              </p>
+                              
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (selectedForm?.code === form.code) {
+                                      setSelectedForm(null);
+                                      setPrefilledData(null);
+                                    } else {
+                                      setSelectedForm(form);
+                                      setPrefilledData(null);
+                                    }
+                                  }}
+                                  className={`px-2.5 py-1 border font-mono text-[9.5px] font-bold uppercase rounded-lg cursor-pointer transition-colors ${
+                                    selectedForm?.code === form.code
+                                      ? 'bg-rose-500/10 hover:bg-rose-500/20 border-rose-550 text-rose-400'
+                                      : 'bg-slate-950 hover:bg-slate-900 border-slate-800 text-[#dfb76c]'
+                                  }`}
+                                >
+                                  {selectedForm?.code === form.code ? '✕ Close' : 'Details & Prefill'}
+                                </button>
+                                {isCustomForm && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteCustomForm(form.code)}
+                                    className="p-1 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer border-none bg-transparent"
+                                    title="Delete Custom Form"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                            
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedForm(form);
-                                setPrefilledData(null);
-                              }}
-                              className="px-2.5 py-1 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-[#dfb76c] font-mono text-[9px] font-black uppercase rounded-lg shrink-0 cursor-pointer"
-                            >
-                              Details & Prefill
-                            </button>
-                          </div>
 
                           {selectedForm?.code === form.code && (
                             <motion.div
@@ -790,56 +1231,130 @@ export default function ResearchPortalDrawer({
                               </div>
 
                               {/* Automated prefill assistant */}
-                              <div className="p-3 bg-[#050911] border border-slate-850 rounded-lg space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <label className="text-[9.5px] font-mono text-slate-400 uppercase tracking-wide font-extrabold flex items-center gap-1">
-                                    <Sparkles className="w-3.5 h-3.5 text-[#dfb76c] animate-pulse" />
-                                    Leverage Local File Data (Prefill helper)
-                                  </label>
-                                  <span className="text-[8px] text-slate-500 font-mono">Select case model to bind</span>
+                              <div className="p-3.5 bg-[#050911] border border-slate-850 rounded-2xl space-y-3">
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between">
+                                    <label className="text-[10px] font-mono text-[#dfb76c] uppercase tracking-wide font-extrabold flex items-center gap-1.5">
+                                      <Sparkles className="w-3.5 h-3.5 text-[#dfb76c] animate-pulse" />
+                                      <span>Intelligent Court PDF prefill mapper</span>
+                                    </label>
+                                    <span className="text-[8px] text-teal-400 font-mono font-bold uppercase bg-teal-500/10 border border-teal-500/25 px-1.5 py-0.25 rounded">Active Binding</span>
+                                  </div>
+                                  <p className="text-[9.5px] text-slate-400 font-sans leading-normal">
+                                    Official CA Judicial Council PDFs are state-secured documents. To draft: select any client dossier below to extract matched variables, click <strong className="text-white">Draft prefill</strong>, then copy values instantly into your downloaded form!
+                                  </p>
                                 </div>
-                                <div className="flex gap-2">
-                                  <select
-                                    value={selectedClientForForm}
-                                    onChange={(e) => setSelectedClientForForm(e.target.value)}
-                                    className="flex-1 bg-[#101726]/80 border border-slate-800 rounded-lg px-2 text-[11px] text-slate-300 font-mono focus:outline-none"
-                                  >
-                                    <option value="">-- Choose Client File --</option>
-                                    {clients.map(c => (
-                                      <option key={c.id} value={c.id}>{c.name} ({c.practiceArea})</option>
-                                    ))}
-                                  </select>
-                                  <button
-                                    onClick={() => triggerAutofillSimulation(form)}
-                                    disabled={!selectedClientForForm || isPrefilling}
-                                    className="px-3.5 py-1 bg-[#dfb76c] hover:bg-[#fae093] disabled:opacity-40 disabled:hover:bg-[#dfb76c] text-[#070b13] font-black font-mono text-[9.5px] uppercase rounded-lg transition-all border-none cursor-pointer"
-                                  >
-                                    {isPrefilling ? 'Mapping...' : 'Draft prefill'}
-                                  </button>
+
+                                <div className="space-y-2">
+                                  <div className="flex gap-2">
+                                    <select
+                                      value={selectedClientForForm}
+                                      onChange={(e) => {
+                                        setSelectedClientForForm(e.target.value);
+                                        setPrefilledData(null); // reset when client changes
+                                      }}
+                                      className="flex-1 bg-[#101726]/80 border border-slate-800 rounded-lg px-2 text-[11px] text-slate-300 font-mono focus:outline-none"
+                                    >
+                                      <option value="">-- Click to Select Client --</option>
+                                      {clients.map(c => (
+                                        <option key={c.id} value={c.id}>{c.name} ({c.practiceArea})</option>
+                                      ))}
+                                    </select>
+                                    <button
+                                      onClick={() => triggerAutofillSimulation(form)}
+                                      disabled={!selectedClientForForm || isPrefilling}
+                                      className="px-4 py-1.5 bg-[#dfb76c] hover:bg-[#fae093] disabled:opacity-40 disabled:hover:bg-[#dfb76c] text-[#070b13] font-black font-mono text-[9.5px] uppercase rounded-lg transition-all border-none cursor-pointer flex items-center gap-1.5 shrink-0"
+                                    >
+                                      {isPrefilling ? (
+                                        <>
+                                          <Loader2 className="w-3 h-3 animate-spin" />
+                                          <span>Mapping...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Sparkles className="w-3 h-3" />
+                                          <span>Draft prefill</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+
+                                  {/* Step details helper to ensure complete clarity */}
+                                  {!prefilledData && !isPrefilling && (
+                                    <div className="p-2.5 bg-slate-950/40 rounded-lg border border-slate-900/60 flex items-center gap-2 text-[9px] text-slate-500 font-mono">
+                                      <Info className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                                      <span>Select target client above to synchronize file metadata with form {form.code}.</span>
+                                    </div>
+                                  )}
                                 </div>
 
                                 {prefilledData && (
                                   <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    className="p-2.5 bg-[#0e1625] border border-slate-800 rounded text-[10px] font-mono text-slate-300 space-y-1 leading-normal"
+                                    initial={{ opacity: 0, y: 4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="p-3 bg-[#0c1220] border border-slate-800/80 rounded-xl space-y-2.5 leading-normal"
                                   >
-                                    <h6 className="text-[9px] text-[#dfb76c] uppercase font-bold">Prefilled Case Bindings Completed:</h6>
-                                    <div><span className="text-slate-500">ATTORNEY REP:</span> Phoenix Desk (pro se assisting)</div>
-                                    <div><span className="text-slate-500">PETITIONER:</span> {prefilledData.clientName}</div>
-                                    <div><span className="text-slate-500">CONTACT INFO:</span> {prefilledData.clientPhone} • {prefilledData.clientEmail}</div>
-                                    {prefilledData.marriageDetails && (
-                                      <div><span className="text-slate-500">MARRIAGE TIMELINE:</span> {prefilledData.marriageDetails}</div>
-                                    )}
-                                    {prefilledData.disputedCosts && (
-                                      <div><span className="text-slate-500">INVOICE DURESS:</span> {prefilledData.disputedCosts}</div>
-                                    )}
-                                    {prefilledData.evidence && (
-                                      <div><span className="text-slate-500">EVIDENTIARY FILE:</span> {prefilledData.evidence}</div>
-                                    )}
-                                    <p className="text-[8.5px] text-teal-400 mt-1 leading-none italic">
-                                      ✨ Use the reference values below to fill fields on your official PDF form quickly!
-                                    </p>
+                                    <div className="flex items-center justify-between border-b border-slate-850 pb-1.5">
+                                      <h6 className="text-[9px] text-[#dfb76c] font-mono uppercase font-bold tracking-wider flex items-center gap-1">
+                                        <Check className="w-3.5 h-3.5 text-teal-400" />
+                                        <span>Synthesized Fields Map ({clients.find(c => c.id === selectedClientForForm)?.name})</span>
+                                      </h6>
+                                      <span className="text-[8px] text-slate-500 font-mono uppercase">{prefilledData.timestamp}</span>
+                                    </div>
+
+                                    {/* Copyable variables structure */}
+                                    <div className="space-y-2">
+                                      {[
+                                        { key: 'rep', label: 'ATTORNEY / REPRESENTATIVE', val: 'Phoenix Desk Pro Se Assistant' },
+                                        { key: 'petitioner', label: 'PETITIONER / PARTY NAME', val: prefilledData.clientName },
+                                        { key: 'contact', label: 'CONTACT INFO (Phone & Email)', val: `${prefilledData.clientPhone} | ${prefilledData.clientEmail}` },
+                                        prefilledData.marriageDetails ? { key: 'marriage', label: 'MARRIAGE DATE & TIMELINE (Div. 5)', val: prefilledData.marriageDetails } : null,
+                                        prefilledData.children ? { key: 'children', label: 'MINOR CHILDREN DETAILS (Div. 5.c)', val: prefilledData.children } : null,
+                                        prefilledData.communalAssets ? { key: 'assets', label: 'COMMUNITY PROPERTY DECLARATIONS', val: prefilledData.communalAssets } : null,
+                                        prefilledData.incomeEstimation ? { key: 'income', label: 'GROSS MONTHLY INCOME ESTIMATION', val: prefilledData.incomeEstimation } : null,
+                                        prefilledData.disputedCosts ? { key: 'duress', label: 'ITEMIZED LIABILITIES / EXPENSES', val: prefilledData.disputedCosts } : null,
+                                        prefilledData.originCountry ? { key: 'origin', label: 'COUNTRY OF ORIGINAL PERSECUTION', val: prefilledData.originCountry } : null,
+                                        prefilledData.evidence ? { key: 'evidence', label: 'SUPPORTING EXAMINED EVIDENCE FILE', val: prefilledData.evidence } : null,
+                                        prefilledData.generalCase ? { key: 'general', label: 'GENERAL COURT BRIEF REFERENTIAL', val: prefilledData.generalCase } : null,
+                                      ].filter(Boolean).map((field: any) => (
+                                        <div key={field.key} className="bg-[#050911]/80 rounded-lg p-2 border border-slate-900 flex justify-between items-start gap-3 group/field">
+                                          <div className="space-y-0.5 min-w-0">
+                                            <span className="text-[7.5px] font-mono text-slate-500 uppercase tracking-wider block font-bold">{field.label}</span>
+                                            <p className="text-[10px] text-slate-200 font-sans break-words">{field.val}</p>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              navigator.clipboard.writeText(field.val);
+                                              setCopiedField(field.key);
+                                              setTimeout(() => setCopiedField(null), 1800);
+                                            }}
+                                            className={`px-2 py-1 rounded border text-[8.5px] font-mono font-bold uppercase transition-all shrink-0 flex items-center gap-1 cursor-pointer select-none ${
+                                              copiedField === field.key
+                                                ? 'bg-teal-500/10 text-teal-400 border-teal-500/30'
+                                                : 'bg-slate-950 border-slate-850 text-[#dfb76c] hover:bg-slate-900 group-hover/field:border-[#dfb76c]/40'
+                                            }`}
+                                          >
+                                            {copiedField === field.key ? (
+                                              <>
+                                                <Check className="w-2.5 h-2.5 text-teal-400" />
+                                                <span>Copied</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Copy className="w-2.5 h-2.5" />
+                                                <span>Copy</span>
+                                              </>
+                                            )}
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    <div className="pt-1.5 border-t border-slate-850/60 flex items-center gap-1.5 text-[9px] text-[#dfb76c] font-sans">
+                                      <span className="animate-pulse">✨</span>
+                                      <span>Click <strong className="text-white">Copy</strong> on any variable, then paste directly into the respective field of your CA Court PDF form!</span>
+                                    </div>
                                   </motion.div>
                                 )}
                               </div>
@@ -850,16 +1365,17 @@ export default function ResearchPortalDrawer({
                                   href={form.pdfUrl}
                                   target="_blank"
                                   referrerPolicy="no-referrer"
-                                  className="flex-1 py-1.5 bg-slate-950 hover:bg-slate-900 border border-[#dfb76c]/30 text-[#dfb76c] rounded-lg font-mono text-[10px] font-bold text-center flex items-center justify-center gap-1.5"
+                                  className="flex-1 py-2 bg-gradient-to-r from-[#dfb76c]/10 to-[#dfb76c]/5 hover:from-[#dfb76c]/15 hover:to-[#dfb76c]/10 border border-[#dfb76c]/40 hover:border-[#dfb76c]/70 text-[#fbd890] rounded-xl font-mono text-[10px] font-black uppercase text-center flex items-center justify-center gap-2 group cursor-pointer transition-all duration-200"
                                 >
-                                  <Download className="w-3.5 h-3.5" />
-                                  <span>Download Official PDF Guide</span>
+                                  <Download className="w-3.5 h-3.5 group-hover:translate-y-0.5 transition-transform" />
+                                  <span>Download Official Form PDF Template</span>
                                 </a>
                               </div>
                             </motion.div>
                           )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>

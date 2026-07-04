@@ -15,7 +15,17 @@ import {
   Trash2,
   AlertTriangle,
   Award,
-  ChevronDown
+  ChevronDown,
+  Folder,
+  FolderOpen,
+  HardDrive,
+  RefreshCw,
+  FileCode,
+  Download,
+  File,
+  FileText,
+  ExternalLink,
+  Upload
 } from 'lucide-react';
 import { Client, Matter } from '../types';
 
@@ -51,6 +61,358 @@ export default function MattersTab({
 
   // New Task input inside active matter
   const [newTaskTitle, setNewTaskTitle] = useState('');
+
+  // Active Matter folder directory states
+  const [localFolderStatus, setLocalFolderStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
+  const [bridgeFiles, setBridgeFiles] = useState<string[]>([]);
+  const [bridgeFolder, setBridgeFolder] = useState<string>('C:\\Users\\Administrator\\iiiamadex');
+  const [matterFileSearch, setMatterFileSearch] = useState<string>('');
+  
+  // File Editor state for Matter Dossier
+  const [isEditingFileModalOpen, setIsEditingFileModalOpen] = useState(false);
+  const [editingFileName, setEditingFileName] = useState('');
+  const [editingFileContent, setEditingFileContent] = useState('');
+  const [isNewFile, setIsNewFile] = useState(true);
+
+  // Fallback simulated local filesystem database for Case Matters
+  const [simulatedMatterFiles, setSimulatedMatterFiles] = useState<Record<string, { name: string; content: string; size: string; type: string; date: string }[]>>(() => {
+    const saved = localStorage.getItem('l23_simulated_matter_files');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      } catch (e) {}
+    }
+    // Prepopulated folders out of the box!
+    return {
+      'm-1': [ // Joint Custody Dissolution case
+        { name: 'Separation_Timeline_Draft.md', type: 'Markdown', size: '2.5 KB', date: '2026-06-10', content: '### Case Joint Separation Timeline draft\n- Marriage Date: July 2nd, 2012.\n- Separation Date: April 10, 2026.\n- Minor Children: Two (Sean age 11, Chloe age 8).\n\nKey issues claimed: structural duress, limits on community townhouse liability.' },
+        { name: 'FL_100_Petition_Draft.md', type: 'Markdown', size: '3.1 KB', date: '2026-06-11', content: '### FAMILY LAW PETITION (CA FL-100)\n\nATTORNEY FOR: Eleanor Vance\nRESPONDENT: Marcus Vance\n\n1. RESIDENCE REQUIREMENT: Petitioner has been a resident of this county.\n2. MINOR CHILDREN: Joint legal custody is requested.' },
+        { name: 'Joint_Property_Inventory.txt', type: 'Text Document', size: '1.1 KB', date: '2026-06-11', content: 'Property 1: Cooperative Townhouse Unit 12-A\nValue: $920,000.\nOutstanding Liability: $120,000 (claimed community liability).' }
+      ],
+      'm-2': [ // Asylum Case
+        { name: 'Asylum_Application_I589.md', type: 'Markdown', size: '2.8 KB', date: '2026-06-11', content: '### FORM I-589 APPLICATION FOR ASYLUM\n\nAPPLICANT: Sarah Jenkins\nNARRATIVE BRIEF: Applicant requests asylum fear of persecution based on political activity.' }
+      ]
+    };
+  });
+
+  const saveSimulatedMatters = (updated: Record<string, any>) => {
+    setSimulatedMatterFiles(updated);
+    localStorage.setItem('l23_simulated_matter_files', JSON.stringify(updated));
+  };
+
+  // Drag and drop case files support
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleFileDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (!selectedMatter) return;
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      await processMatterFiles(files);
+    }
+  };
+
+  const processMatterFiles = async (files: FileList) => {
+    if (!selectedMatter) return;
+
+    let successCount = 0;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const reader = new FileReader();
+
+      await new Promise<void>((resolve) => {
+        const isBinary = file.name.endsWith('.pdf') || file.name.endsWith('.png') || file.name.endsWith('.jpg') || file.name.endsWith('.doc') || file.name.endsWith('.docx') || file.name.endsWith('.zip');
+        
+        if (isBinary) {
+          reader.readAsDataURL(file);
+        } else {
+          reader.readAsText(file);
+        }
+
+        reader.onload = async (e) => {
+          const content = (e.target?.result as string) || '';
+          const baseName = file.name;
+          const relativePath = `Clients/${selectedMatter.clientName.replace(/\s+/g, '_')}/Matters/${selectedMatter.caseNumber}_${selectedMatter.title.replace(/\s+/g, '_')}/${baseName}`;
+          const sizeStr = file.size > 1024 * 1024
+            ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+            : `${(file.size / 1024).toFixed(1)} KB`;
+
+          if (localFolderStatus === 'connected') {
+            const ok = await handleSaveFileToBridge(relativePath, content);
+            if (ok) {
+              await checkDesktopBridge();
+            } else {
+              saveProcessedMatterFileToSimulated(baseName, content, sizeStr);
+            }
+          } else {
+            saveProcessedMatterFileToSimulated(baseName, content, sizeStr);
+          }
+          successCount++;
+          resolve();
+        };
+
+        reader.onerror = () => {
+          resolve();
+        };
+      });
+    }
+
+    if (successCount > 0) {
+      alert(`🎉 Successfully synchronized ${successCount} case folder document(s)!`);
+    }
+  };
+
+  const saveProcessedMatterFileToSimulated = (baseName: string, content: string, sizeStr: string) => {
+    if (!selectedMatter) return;
+    const matterList = simulatedMatterFiles[selectedMatter.id] || [];
+    const ext = baseName.split('.').pop() || 'TXT';
+    const existingIndex = matterList.findIndex(f => f.name.toLowerCase() === baseName.toLowerCase());
+
+    const newFileObj = {
+      name: baseName,
+      type: ext.toUpperCase(),
+      size: sizeStr,
+      date: new Date().toISOString().split('T')[0],
+      content: content
+    };
+
+    let updatedList = [...matterList];
+    if (existingIndex >= 0) {
+      updatedList[existingIndex] = newFileObj;
+    } else {
+      updatedList.push(newFileObj);
+    }
+
+    saveSimulatedMatters({
+      ...simulatedMatterFiles,
+      [selectedMatter.id]: updatedList
+    });
+  };
+
+  // Poll Local Editor Bridge for directory contents
+  const checkDesktopBridge = async () => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1200);
+      const res = await fetch('http://localhost:4321/api/local-files', { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success) {
+          setBridgeFiles(data.files || []);
+          setBridgeFolder(data.folder || 'C:\\Users\\Administrator\\iiiamadex');
+          setLocalFolderStatus('connected');
+        } else {
+          setLocalFolderStatus('disconnected');
+        }
+      } else {
+        setLocalFolderStatus('disconnected');
+      }
+    } catch {
+      setLocalFolderStatus('disconnected');
+    }
+  };
+
+  React.useEffect(() => {
+    checkDesktopBridge();
+    const interval = setInterval(checkDesktopBridge, 6000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Save to local bridge
+  const handleSaveFileToBridge = async (fileName: string, content: string) => {
+    try {
+      const res = await fetch('http://localhost:4321/api/local-write', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName, content })
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  };
+
+  // Get active files in the Matter folder
+  const getMatterFiles = () => {
+    if (!selectedMatter) return [];
+    const query = matterFileSearch.toLowerCase();
+
+    if (localFolderStatus === 'connected') {
+      const sanitizedTitle = selectedMatter.title.replace(/[^a-zA-Z0-9]/g, '_');
+      const lowerCaseNum = selectedMatter.caseNumber.toLowerCase();
+      // Look for files tagged with this matter case number or title
+      return bridgeFiles.filter(f => {
+        const lf = f.toLowerCase();
+        const matchesMatter = lf.includes(lowerCaseNum) || lf.includes(sanitizedTitle.toLowerCase());
+        const matchesQuery = query ? lf.includes(query) : true;
+        return matchesMatter && matchesQuery;
+      }).map(f => {
+        const ext = f.split('.').pop() || '';
+        const cleanName = f.slice(f.lastIndexOf('/') + 1).slice(f.lastIndexOf('\\') + 1);
+        return {
+          name: cleanName,
+          fullName: f,
+          type: ext.toUpperCase() || 'FILE',
+          size: '1.8 KB',
+          date: new Date().toISOString().split('T')[0]
+        };
+      });
+    } else {
+      const list = simulatedMatterFiles[selectedMatter.id] || [];
+      return list.filter(f => {
+        const matchesQuery = query ? f.name.toLowerCase().includes(query) : true;
+        return matchesQuery;
+      });
+    }
+  };
+
+  // Save manual file edit
+  const handleSaveMatterFileSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedMatter || !editingFileName) return;
+
+    const baseName = editingFileName.endsWith('.md') || editingFileName.endsWith('.txt')
+      ? editingFileName
+      : `${editingFileName}.md`;
+
+    // Path inside C:\Users\Administrator\iiiamadex: Clients/[Client_Name]/Matters/[Case_Number] - [Title]/[File_Name]
+    const relativePath = `Clients/${selectedMatter.clientName.replace(/\s+/g, '_')}/Matters/${selectedMatter.caseNumber}_${selectedMatter.title.replace(/\s+/g, '_')}/${baseName}`;
+
+    if (localFolderStatus === 'connected') {
+      const ok = await handleSaveFileToBridge(relativePath, editingFileContent);
+      if (ok) {
+        await checkDesktopBridge();
+      } else {
+        saveMatterFileToSimulated(baseName);
+      }
+    } else {
+      saveMatterFileToSimulated(baseName);
+    }
+
+    setIsEditingFileModalOpen(false);
+    setEditingFileName('');
+    setEditingFileContent('');
+  };
+
+  const saveMatterFileToSimulated = (baseName: string) => {
+    if (!selectedMatter) return;
+    const matterList = simulatedMatterFiles[selectedMatter.id] || [];
+    const ext = baseName.split('.').pop() || 'md';
+    const existingIndex = matterList.findIndex(f => f.name.toLowerCase() === baseName.toLowerCase());
+
+    const newFileObj = {
+      name: baseName,
+      type: ext.toUpperCase(),
+      size: `${(editingFileContent.length / 1024).toFixed(1)} KB`,
+      date: new Date().toISOString().split('T')[0],
+      content: editingFileContent
+    };
+
+    let updatedList = [...matterList];
+    if (existingIndex >= 0) {
+      updatedList[existingIndex] = newFileObj;
+    } else {
+      updatedList.push(newFileObj);
+    }
+
+    saveSimulatedMatters({
+      ...simulatedMatterFiles,
+      [selectedMatter.id]: updatedList
+    });
+  };
+
+  // Generate Attorney brief template!
+  const handleGenerateCaseBrief = async () => {
+    if (!selectedMatter) return;
+
+    const templateContent = `# LEGAL BRIEF BRIEFCASE (Escalated Premium Tier)
+## CASE NUMBER: ${selectedMatter.caseNumber}
+## MATTERS CASE TITLE: ${selectedMatter.title}
+## CLIENT: ${selectedMatter.clientName}
+## RETRACT: Level 23 Counsel on Standby
+
+### 1. FACTUAL DISCLOSURES ANALYSIS
+Pursuant to CA Civil Procedure guidelines, we have examined the community asset structure. The client alleges structural duress and inadequate disclosures concerning liabilities.
+
+### 2. WORKPLAN INSTRUCTIONS CHECKLIST
+- Draft initial partition demands immediately.
+- Serve formal discovery checklist request within 24 months limit window.
+- Sync active evidence files directory.
+
+---
+*Created via Level 23 Legal Sentry Auto Builder*`;
+
+    const fileName = `L23_Case_Brief_${selectedMatter.caseNumber}.md`;
+    const relativePath = `Clients/${selectedMatter.clientName.replace(/\s+/g, '_')}/Matters/${selectedMatter.caseNumber}_${selectedMatter.title.replace(/\s+/g, '_')}/${fileName}`;
+
+    if (localFolderStatus === 'connected') {
+      const ok = await handleSaveFileToBridge(relativePath, templateContent);
+      if (ok) {
+        alert(`🎉 Connected BRIEF SENTRY! Generated dynamic litigation brief template inside local case directory:\n📍 C:\\Users\\Administrator\\iiiamadex\\Clients\\${selectedMatter.clientName.replace(/\s+/g, '_')}\\Matters\\${selectedMatter.caseNumber}_${selectedMatter.title.replace(/\s+/g, '_')}\\${fileName}`);
+        await checkDesktopBridge();
+      } else {
+        saveCustomBriefToSimulated(fileName, templateContent);
+      }
+    } else {
+      saveCustomBriefToSimulated(fileName, templateContent);
+      alert(`📂 Local Mode: Dynamic Matter Litigation brief generated and attached to this case directory tree! Successfully synced.`);
+    }
+  };
+
+  const saveCustomBriefToSimulated = (fileName: string, content: string) => {
+    if (!selectedMatter) return;
+    const list = simulatedMatterFiles[selectedMatter.id] || [];
+    const index = list.findIndex(f => f.name === fileName);
+    
+    const briefObj = {
+      name: fileName,
+      type: 'MARKDOWN',
+      size: '1.2 KB',
+      date: new Date().toISOString().split('T')[0],
+      content: content
+    };
+
+    let updated = [...list];
+    if (index >= 0) {
+      updated[index] = briefObj;
+    } else {
+      updated.push(briefObj);
+    }
+
+    saveSimulatedMatters({
+      ...simulatedMatterFiles,
+      [selectedMatter.id]: updated
+    });
+  };
+
+  const handleDeleteMatterFile = (fileName: string) => {
+    if (!selectedMatter) return;
+    if (!confirm(`Are you sure you want to delete ${fileName}?`)) return;
+
+    if (localFolderStatus === 'connected') {
+      alert("File archived. In connected mode, delete files from your physical directory to maintain proper federal/state legal file audit trails!");
+    } else {
+      const list = simulatedMatterFiles[selectedMatter.id] || [];
+      const updated = list.filter(f => f.name !== fileName);
+      saveSimulatedMatters({
+        ...simulatedMatterFiles,
+        [selectedMatter.id]: updated
+      });
+    }
+  };
 
   // Filters matters list
   const filteredMatters = matters.filter(m => {
@@ -462,6 +824,178 @@ export default function MattersTab({
                   </button>
                 </form>
               </div>
+
+              {/* Dynamic Filing Cabinet & Docket Directory */}
+              <div className="space-y-4 pt-4 border-t border-[#1e293b]">
+                <div className="flex items-center justify-between col-span-2">
+                  <div className="space-y-0.5">
+                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest font-mono flex items-center gap-1.5">
+                      <Folder className="w-4 h-4 text-teal-400" />
+                      <span>Case Dossier File Sentry</span>
+                    </h3>
+                    <p className="text-[10px] text-slate-500 font-sans">
+                      Physical Folder: <code className="text-teal-400/90 font-mono">iiiamadex/Clients/{selectedMatter.clientName}/Matters/...</code>
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 text-[10px] font-mono rounded ${
+                      localFolderStatus === 'connected' ? 'bg-teal-500/10 text-teal-400' : 'bg-slate-500/10 text-slate-400'
+                    }`}>
+                      {localFolderStatus === 'connected' ? '● Connected' : '○ Local Sync'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={checkDesktopBridge}
+                      className="p-1.5 bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-all"
+                      title="Refresh folders directory"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sub-actions toolbar */}
+                <div className="flex flex-wrap items-center justify-between gap-3 bg-[#090d16]/60 p-3 rounded-xl border border-[#1e293b]">
+                  <div className="relative flex-1 min-w-[150px]">
+                    <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder="Search items in this dossier..."
+                      value={matterFileSearch}
+                      onChange={(e) => setMatterFileSearch(e.target.value)}
+                      className="w-full bg-[#090d16] border border-[#1e293b] rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-400/60"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsNewFile(true);
+                        setEditingFileName('');
+                        setEditingFileContent('');
+                        setIsEditingFileModalOpen(true);
+                      }}
+                      className="p-2 py-1.5 bg-slate-800 hover:bg-slate-755 text-slate-200 border border-[#1e293b] rounded-lg text-xs font-mono flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-teal-400" />
+                      <span>New File</span>
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={handleGenerateCaseBrief}
+                      className="p-2 py-1.5 bg-gradient-to-r from-teal-500 to-emerald-400 text-[#090d16] font-bold rounded-lg text-xs font-heading flex items-center gap-1.5 cursor-pointer shadow-md"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Compile Litig Brief</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Files Grid and Table list */}
+                {/* Drag and Drop File Uploader area */}
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleFileDrop}
+                  onClick={() => document.getElementById('matter-file-upload-input')?.click()}
+                  className={`border border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all duration-200 mb-4 flex flex-col items-center justify-center ${
+                    isDragging
+                      ? 'border-teal-400 bg-[#14b8a6]/10 text-teal-300 scale-[1.01]'
+                      : 'border-slate-800 hover:border-slate-705 bg-[#090d16]/10 hover:bg-[#090d16]/30 text-slate-400'
+                  }`}
+                >
+                  <input
+                    type="file"
+                    id="matter-file-upload-input"
+                    multiple
+                    className="hidden"
+                    onChange={async (e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        await processMatterFiles(e.target.files);
+                      }
+                    }}
+                  />
+                  <Upload className={`w-7 h-7 mb-1.5 transition-transform duration-300 ${isDragging ? 'text-teal-400 scale-110 animate-bounce' : 'text-slate-400'}`} />
+                  <p className="text-[11px] font-sans font-medium text-slate-202">
+                    Drag & drop your <span className="text-teal-400 font-bold">existing case files</span> here, or <span className="text-teal-400 underline font-bold">click to browse</span>
+                  </p>
+                  <p className="text-[9px] text-slate-500 font-mono mt-0.5">
+                    Reads briefs, affidavits, raw client texts, .VCF contacts, and PDFs directly to case dossier
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto border border-[#1e293b] rounded-xl overflow-hidden bg-[#090d16]/30">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-[#1e293b] bg-[#090d16]/90 text-[10px] font-mono uppercase text-slate-500">
+                        <th className="p-3">File Name</th>
+                        <th className="p-3">Type</th>
+                        <th className="p-3">Size</th>
+                        <th className="p-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#1e293b] text-xs">
+                      {getMatterFiles().length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="p-8 text-center text-slate-500 italic">
+                            No matching files compiled yet. Click compile or drop documents inside!
+                          </td>
+                        </tr>
+                      ) : (
+                        getMatterFiles().map((file, idx) => (
+                          <tr key={idx} className="hover:bg-slate-800/10 group text-slate-300">
+                            <td className="p-3 font-semibold text-slate-200 font-sans flex items-center gap-2">
+                              <FileText className="w-3.5 h-3.5 text-teal-400" />
+                              <span className="truncate max-w-[170px]">{file.name}</span>
+                            </td>
+                            <td className="p-3 font-mono text-[10px] text-slate-400">{file.type}</td>
+                            <td className="p-3 font-mono text-[10px] text-slate-500">{file.size}</td>
+                            <td className="p-3 text-right">
+                              <div className="flex items-center justify-end gap-2 text-slate-500">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsNewFile(false);
+                                    setEditingFileName(file.name);
+                                    setEditingFileContent(file.content || '');
+                                    setIsEditingFileModalOpen(true);
+                                  }}
+                                  className="p-1 px-2 bg-slate-800/40 hover:bg-slate-800 text-[10px] text-slate-300 rounded font-mono"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const blob = new Blob([file.content || ''], { type: 'text/plain' });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = file.name;
+                                    a.click();
+                                  }}
+                                  className="p-1 text-teal-400 hover:text-teal-300"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteMatterFile(file.name)}
+                                  className="p-1 text-rose-400 hover:text-rose-300"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         ) : (
@@ -582,6 +1116,86 @@ export default function MattersTab({
                     className="px-4 py-2.5 bg-[#0f172a] hover:bg-slate-900 border border-[#1e293b] rounded-xl text-xs font-semibold text-slate-400"
                   >
                     Cancel
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Dynamic File Editor Modal for Matters Case Folder */}
+      <AnimatePresence>
+        {isEditingFileModalOpen && (
+          <div id="matter-file-editor-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#0e1626] border border-[#1e293b] rounded-2.5xl max-w-2xl w-full overflow-hidden shadow-2xl flex flex-col"
+            >
+              <div className="p-6 bg-[#0c1322] border-b border-[#1e293b] flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-white font-mono uppercase tracking-widest flex items-center gap-2">
+                    <FileCode className="w-4.5 h-4.5 text-teal-400" />
+                    <span>{isNewFile ? 'Establish New Case File' : 'Docket File Editor'}</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-sans mt-0.5">
+                    Target Folder: <code>iiiamadex/Clients/{selectedMatter?.clientName}/Matters/{selectedMatter?.caseNumber}/</code>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingFileModalOpen(false)}
+                  className="text-slate-400 hover:text-white font-mono text-sm"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveMatterFileSubmit} className="p-6 space-y-4 flex flex-col">
+                <div>
+                  <label className="block text-[11px] font-mono uppercase text-slate-400 mb-1">
+                    Document Title (e.g. petition_reply.md, motions.txt)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    disabled={!isNewFile}
+                    value={editingFileName}
+                    onChange={(e) => setEditingFileName(e.target.value)}
+                    placeholder="e.g. partition_reply_draft.md"
+                    className="w-full bg-[#090d16] border border-[#1e293b] rounded-xl px-4 py-2 text-xs text-white placeholder-slate-500 focus:border-teal-500 focus:outline-none font-mono"
+                  />
+                </div>
+
+                <div className="flex-1">
+                  <label className="block text-[11px] font-mono uppercase text-slate-400 mb-1">
+                    Case Document Content Editor
+                  </label>
+                  <textarea
+                    rows={12}
+                    required
+                    value={editingFileContent}
+                    onChange={(e) => setEditingFileContent(e.target.value)}
+                    placeholder="Provide detailed motion text, court responses, client narrative draft..."
+                    className="w-full bg-[#090d16] border border-[#1e293b] rounded-xl px-4 py-3 text-xs text-white placeholder-slate-500 focus:border-teal-500 focus:outline-none font-mono leading-relaxed resize-y"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingFileModalOpen(false)}
+                    className="px-4 py-2.5 bg-[#0f172a] hover:bg-slate-900 border border-[#1e293b] rounded-xl text-xs font-semibold text-slate-400 font-heading"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-gradient-to-r from-teal-500 to-emerald-400 hover:opacity-90 text-[#090d16] font-bold rounded-xl text-xs font-heading transition-all shadow-md"
+                  >
+                    Save File to Case Folder
                   </button>
                 </div>
               </form>

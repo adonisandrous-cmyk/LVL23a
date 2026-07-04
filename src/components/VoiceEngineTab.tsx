@@ -26,6 +26,7 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
   ];
 
   const prebuiltVoices = [
+    { name: 'Eve', gender: 'Female', tone: 'Energetic, efficient, US Receptionist' },
     { name: 'Aoede', gender: 'Female', tone: 'Professional, distinguished, British / UK accent' },
     { name: 'Kore', gender: 'Female', tone: 'Modern, clear, West Coast US' },
     { name: 'Zephyr', gender: 'Female', tone: 'Academic, concise, Mid-Atlantic' }
@@ -39,6 +40,7 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
   // Audio playback elements
   const audioContextRef = useRef<AudioContext | null>(null);
   const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   // Pre-load and warm up speech synthesis voices on mount
   useEffect(() => {
@@ -163,6 +165,11 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
           matchedVoice = voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('zira'))
                       || voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('female'))
                       || voices.find(v => v.lang.toLowerCase().startsWith('en'));
+        } else if (selectedVoice === 'Eve') {
+          matchedVoice = voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('google'))
+                      || voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('siri'))
+                      || voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('female'))
+                      || voices.find(v => v.lang.toLowerCase().startsWith('en'));
         } else {
           matchedVoice = voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('samantha'))
                       || voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('female'))
@@ -170,8 +177,8 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
         }
 
         if (matchedVoice) utterance.voice = matchedVoice;
-        utterance.pitch = 1.05;
-        utterance.rate = 1.0;
+        utterance.pitch = selectedVoice === 'Eve' ? 1.15 : 1.05;
+        utterance.rate = selectedVoice === 'Eve' ? 1.05 : 1.0;
 
         utterance.onstart = () => {
           setIsPlaying(true);
@@ -182,6 +189,12 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
         utterance.onerror = () => {
           setIsPlaying(false);
         };
+
+        // Pin reference to prevent garbage collection
+        activeUtteranceRef.current = utterance;
+        if (typeof window !== 'undefined') {
+          (window as any)._activeVoiceEngineUtterance = utterance;
+        }
 
         window.speechSynthesis.speak(utterance);
       }

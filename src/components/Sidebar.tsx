@@ -18,7 +18,8 @@ import {
   FolderSync,
   Laptop,
   Keyboard,
-  Scale
+  Scale,
+  Eye
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -54,12 +55,13 @@ export default function Sidebar({
     { id: 'staff', label: 'Legal Staff', icon: BrainCircuit, badge: 'Level 23' },
     { id: 'voice', label: 'AI Voice', icon: Volume2 },
     { id: 'consult', label: 'Video Meet', icon: Video, badge: 'Live' },
-    { id: 'backups', label: 'Cloud Sync', icon: FolderSync },
+    { id: 'backups', label: 'Desktop & Sync', icon: FolderSync, badge: 'Active' },
+    { id: 'client_portal', label: 'Client Portal', icon: Eye, badge: 'Portal' },
     { id: 'diagnostic', label: 'Diagnostics', icon: Activity }
   ];
 
   return (
-    <aside id="sidebar-container" className="w-64 bg-[#090d16] border-r border-[#1e293b] flex flex-col justify-between select-none">
+    <aside id="sidebar-container" className="w-64 h-full max-h-full min-h-0 overflow-hidden bg-[#090d16] border-r border-[#1e293b] flex flex-col justify-between select-none">
       {/* Sidebar Header Brand with Custom Level 23 Geometric Badge */}
       <div className="p-5 border-b border-[#1e293b]/60 bg-[#070b13]/80">
         <div className="flex flex-col items-center text-center space-y-2.5">

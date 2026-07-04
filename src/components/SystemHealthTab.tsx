@@ -36,15 +36,15 @@ export default function SystemHealthTab({ logs, onClearLogs }: SystemHealthTabPr
   // Level 23 Hybrid Router States
   const [routerConfig, setRouterConfig] = useState<any>({
     strategy: "DYNAMIC_LLM_EVALUATOR",
-    freeModel: "google/gemma-2-27b-it:free",
-    premiumModel: "google/gemini-pro",
+    freeModel: "google/gemma-4-31b-it:free",
+    premiumModel: "google/gemini-2.5-flash",
     evaluatorThreshold: 45,
     simulatedStats: {
       totalRouted: 24,
       freeTierCount: 16,
       premiumTierCount: 8,
       estimatedCostSaved: 23.40,
-      lastDecision: "Routed to Gemma 2 (27B) - standard client brief search index query parsed cost-effectively"
+      lastDecision: "Routed to Gemma 4 (31B) - standard client brief search index query parsed cost-effectively"
     }
   });
 
@@ -304,6 +304,7 @@ export default function SystemHealthTab({ logs, onClearLogs }: SystemHealthTabPr
                   className="w-full bg-[#070b13] border border-[#1e293b] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-teal-400 outline-none transition-colors"
                 >
                   <option value="DYNAMIC_LLM_EVALUATOR">Dynamic LLM Evaluator</option>
+                  <option value="OPENROUTER_FUSION">OpenRouter Fusion (Claude 3.7 + Gemini)</option>
                   <option value="DETERMINISTIC_BY_FEATURE">Deterministic Rules</option>
                   <option value="ALWAYS_PREMIUM">Always Premium (Gemini Pro)</option>
                   <option value="ALWAYS_FREE">Always Free (Open Weights)</option>
@@ -344,10 +345,10 @@ export default function SystemHealthTab({ logs, onClearLogs }: SystemHealthTabPr
                   onChange={(e) => updateRouterSettings({ freeModel: e.target.value })}
                   className="w-full bg-[#070b13] border border-[#1e293b] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-teal-400 outline-none transition-colors font-mono"
                 >
-                  <option value="google/gemma-2-27b-it:free">google/gemma-2-27b-it:free</option>
-                  <option value="google/gemma-2-9b-it:free">google/gemma-2-9b-it:free</option>
-                  <option value="meta-llama/llama-3.1-8b-instruct:free">meta-llama/llama-3.1-8b:free</option>
-                  <option value="mistralai/mistral-nemo:free">mistralai/mistral-nemo:free</option>
+                  <option value="google/gemma-4-31b-it:free">google/gemma-4-31b-it:free</option>
+                  <option value="google/gemma-4-26b-a4b-it:free">google/gemma-4-26b-it:free</option>
+                  <option value="openrouter/free">openrouter/free (Dynamic Free Router)</option>
+                  <option value="liquid/lfm-2.5-1.2b-thinking:free">liquid/lfm-2.5-1.2b-thinking:free</option>
                 </select>
                 <div className="flex items-center gap-1.5 pt-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
@@ -363,9 +364,9 @@ export default function SystemHealthTab({ logs, onClearLogs }: SystemHealthTabPr
                   onChange={(e) => updateRouterSettings({ premiumModel: e.target.value })}
                   className="w-full bg-[#070b13] border border-[#1e293b] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-teal-400 outline-none transition-colors font-mono"
                 >
-                  <option value="google/gemini-1.5-pro">google/gemini-1.5-pro (2M Context)</option>
-                  <option value="google/gemini-1.5-flash">google/gemini-1.5-flash (Fast intelligence)</option>
-                  <option value="google/gemini-pro">google/gemini-pro (Standard Core)</option>
+                  <option value="google/gemini-2.5-flash">google/gemini-2.5-flash (Active Premium)</option>
+                  <option value="google/gemini-2.5-pro">google/gemini-2.5-pro (Flagship - Paid Plan)</option>
+                  <option value="google/gemini-2.0-flash">google/gemini-2.0-flash (Experimental)</option>
                 </select>
                 <div className="flex items-center gap-1.5 pt-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-sky-400"></span>

@@ -38,13 +38,21 @@ import SystemHealthTab from './components/SystemHealthTab';
 import ConsultationsTab from './components/ConsultationsTab';
 import BackupsTab, { ImportedState } from './components/BackupsTab';
 import ResearchPortalDrawer from './components/ResearchPortalDrawer';
-import { Scale, BookOpen } from 'lucide-react';
+import ClientPortalTab from './components/ClientPortalTab';
+import { Scale, BookOpen, Database, CloudOff, CloudLightning } from 'lucide-react';
+
+import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { db, ensureAuthenticated, handleFirestoreError, OperationType } from './lib/firebase';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [systemConnected, setSystemConnected] = useState<boolean>(false);
   const [utcTime, setUtcTime] = useState<string>('');
   const [showResearchDrawer, setShowResearchDrawer] = useState<boolean>(false);
+
+  // Firestore synchronization states
+  const [dbSyncStatus, setDbSyncStatus] = useState<'offline' | 'connecting' | 'synced' | 'error'>('connecting');
+  const [syncMessage, setSyncMessage] = useState<string>('Connecting to persistent cloud memory...');
 
   // Native desktop app simulation states
   const [isDesktopMode, setIsDesktopMode] = useState<boolean>(false);
@@ -301,6 +309,129 @@ export default function App() {
     return () => clearInterval(inv);
   }, []);
 
+  // Persistent Storage and Sync Engine (Firestore)
+  useEffect(() => {
+    const syncFirestore = async () => {
+      setDbSyncStatus('connecting');
+      setSyncMessage('Connecting to persistent cloud memory...');
+      try {
+        await ensureAuthenticated();
+        
+        // Check if DB is already seeded by checking the 'clients' collection
+        const clientsSnap = await getDocs(collection(db, 'clients')).catch(err => {
+          handleFirestoreError(err, OperationType.LIST, 'clients');
+          throw err;
+        });
+        
+        if (clientsSnap.empty) {
+          // DATABASE IS EMPTY -> SEED INITIAL STAGES
+          setSyncMessage('Seeding cloud database with initial template records...');
+          
+          const batch = writeBatch(db);
+          
+          // Seed initial clients
+          clients.forEach(c => {
+            batch.set(doc(db, 'clients', c.id), c);
+          });
+          
+          // Seed initial matters
+          matters.forEach(m => {
+            batch.set(doc(db, 'matters', m.id), m);
+          });
+          
+          // Seed initial evidence files
+          evidenceFiles.forEach(f => {
+            batch.set(doc(db, 'evidenceFiles', f.id), f);
+          });
+          
+          // Seed initial agent progress milestones
+          agentProgressList.forEach(p => {
+            batch.set(doc(db, 'agentProgressList', p.agentId), p);
+          });
+          
+          // Seed initial consultations
+          consultations.forEach(s => {
+            batch.set(doc(db, 'consultations', s.id), s);
+          });
+          
+          await batch.commit();
+          addLog('system', 'First-time cloud run: Seeded Firestore persistent storage database.');
+        } else {
+          // DATABASE ALREADY HAS DATA -> HYDRATE LOCAL CACHE FROM THE CLOUD
+          setSyncMessage('Syncing data from persistent cloud memory...');
+          
+          // Hydrate Clients
+          const remoteClients: Client[] = [];
+          clientsSnap.forEach(snap => {
+            remoteClients.push(snap.data() as Client);
+          });
+          setClients(remoteClients);
+          
+          // Hydrate Matters
+          const mattersSnap = await getDocs(collection(db, 'matters'));
+          const remoteMatters: Matter[] = [];
+          mattersSnap.forEach(snap => {
+            remoteMatters.push(snap.data() as Matter);
+          });
+          setMatters(remoteMatters);
+          
+          // Hydrate Generated Documents
+          const docsSnap = await getDocs(collection(db, 'generatedDocs'));
+          const remoteDocs: GeneratedDocument[] = [];
+          docsSnap.forEach(snap => {
+            remoteDocs.push(snap.data() as GeneratedDocument);
+          });
+          setGeneratedDocs(remoteDocs);
+          
+          // Hydrate Evidence Files
+          const evidenceSnap = await getDocs(collection(db, 'evidenceFiles'));
+          const remoteEvidence: EvidenceFile[] = [];
+          evidenceSnap.forEach(snap => {
+            remoteEvidence.push(snap.data() as EvidenceFile);
+          });
+          setEvidenceFiles(remoteEvidence);
+          
+          // Hydrate Chat Thread
+          const chatSnap = await getDocs(collection(db, 'chatThread'));
+          const remoteChat: LegalMessage[] = [];
+          chatSnap.forEach(snap => {
+            remoteChat.push(snap.data() as LegalMessage);
+          });
+          setChatThread(remoteChat);
+          
+          // Hydrate Agent Progress
+          const progressSnap = await getDocs(collection(db, 'agentProgressList'));
+          const remoteProgress: AgentProgress[] = [];
+          progressSnap.forEach(snap => {
+            remoteProgress.push(snap.data() as AgentProgress);
+          });
+          if (remoteProgress.length > 0) {
+            setAgentProgressList(remoteProgress);
+          }
+          
+          // Hydrate Consultations
+          const consultSnap = await getDocs(collection(db, 'consultations'));
+          const remoteConsultations: ConsultationSession[] = [];
+          consultSnap.forEach(snap => {
+            remoteConsultations.push(snap.data() as ConsultationSession);
+          });
+          setConsultations(remoteConsultations);
+          
+          addLog('system', 'Workspace persistent storage synced with Firestore cloud database.');
+        }
+        setDbSyncStatus('synced');
+        setSyncMessage('Persistent memory synced live');
+      } catch (err: any) {
+        console.error("Firestore sync failed:", err);
+        setDbSyncStatus('error');
+        setSyncMessage('Sync offline. Local memory active.');
+        addLog('system', `Cloud Sync offline: operating in local fallback state (${err.message || 'database error'})`);
+      }
+    };
+    
+    syncFirestore();
+  }, []);
+
   // Register desktop hotkeys and key-listeners (Electron level integration)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -352,6 +483,9 @@ export default function App() {
     };
     setClients(prev => [...prev, client]);
     addLog('client', `New Client record created for ${client.name} (${client.practiceArea}).`);
+    setDoc(doc(db, 'clients', client.id), client).catch(err => {
+      handleFirestoreError(err, OperationType.WRITE, `clients/${client.id}`);
+    });
   };
 
   const handleAddMatter = (newMatter: Omit<Matter, 'id' | 'createdAt'>) => {
@@ -362,21 +496,33 @@ export default function App() {
     };
     setMatters(prev => [...prev, matter]);
     addLog('matter', `New Matter opened: ${matter.title} (${matter.caseNumber}) linked to ${matter.clientName}.`);
+    setDoc(doc(db, 'matters', matter.id), matter).catch(err => {
+      handleFirestoreError(err, OperationType.WRITE, `matters/${matter.id}`);
+    });
   };
 
   const handleUpdateMatter = (updatedMatter: Matter) => {
     setMatters(prev => prev.map(m => m.id === updatedMatter.id ? updatedMatter : m));
     addLog('matter', `Matter case file ${updatedMatter.caseNumber} ("${updatedMatter.title}") details updated.`);
+    setDoc(doc(db, 'matters', updatedMatter.id), updatedMatter).catch(err => {
+      handleFirestoreError(err, OperationType.WRITE, `matters/${updatedMatter.id}`);
+    });
   };
 
-  const handleAddGeneratedDoc = (doc: GeneratedDocument) => {
-    setGeneratedDocs(prev => [...prev, doc]);
-    addLog('document', `AI automation drafted standard file: "${doc.title}" for Client ${doc.clientName}.`);
+  const handleAddGeneratedDoc = (docData: GeneratedDocument) => {
+    setGeneratedDocs(prev => [...prev, docData]);
+    addLog('document', `AI automation drafted standard file: "${docData.title}" for Client ${docData.clientName}.`);
+    setDoc(doc(db, 'generatedDocs', docData.id), docData).catch(err => {
+      handleFirestoreError(err, OperationType.WRITE, `generatedDocs/${docData.id}`);
+    });
   };
 
   const handleAddEvidenceFile = (file: EvidenceFile) => {
     setEvidenceFiles(prev => [...prev, file]);
     addLog('document', `New client evidence file compiled & OCR scanned: "${file.name}" for Client ${file.clientName}.`);
+    setDoc(doc(db, 'evidenceFiles', file.id), file).catch(err => {
+      handleFirestoreError(err, OperationType.WRITE, `evidenceFiles/${file.id}`);
+    });
   };
 
   const handleAddMessage = (msg: LegalMessage) => {
@@ -386,15 +532,24 @@ export default function App() {
     } else {
       addLog('system', `Legal Agent "${msg.agentName}" compiled response successfully.`);
     }
+    setDoc(doc(db, 'chatThread', msg.id), msg).catch(err => {
+      handleFirestoreError(err, OperationType.WRITE, `chatThread/${msg.id}`);
+    });
   };
 
   const handleUpdateAgentProgress = (updatedProgress: AgentProgress) => {
     setAgentProgressList(prev => prev.map(p => p.agentId === updatedProgress.agentId ? updatedProgress : p));
+    setDoc(doc(db, 'agentProgressList', updatedProgress.agentId), updatedProgress).catch(err => {
+      handleFirestoreError(err, OperationType.WRITE, `agentProgressList/${updatedProgress.agentId}`);
+    });
   };
 
   const handleAddConsultation = (session: ConsultationSession) => {
     setConsultations(prev => [...prev, session]);
     addLog('system', `Active video Room initialized: "${session.roomName}" representing Client ${session.clientName}`);
+    setDoc(doc(db, 'consultations', session.id), session).catch(err => {
+      handleFirestoreError(err, OperationType.WRITE, `consultations/${session.id}`);
+    });
   };
 
   const handleUpdateConsultation = (updatedSession: ConsultationSession) => {
@@ -402,14 +557,20 @@ export default function App() {
     if (updatedSession.status === 'concluded') {
       addLog('system', `Concluded Video Consultation loop with ${updatedSession.clientName}. Transcripts saved as reference notes.`);
     }
+    setDoc(doc(db, 'consultations', updatedSession.id), updatedSession).catch(err => {
+      handleFirestoreError(err, OperationType.WRITE, `consultations/${updatedSession.id}`);
+    });
   };
 
   const handleDeleteConsultation = (id: string) => {
     setConsultations(prev => prev.filter(s => s.id !== id));
     addLog('system', 'Archived consultation session successfully removed from indexes.');
+    deleteDoc(doc(db, 'consultations', id)).catch(err => {
+      handleFirestoreError(err, OperationType.DELETE, `consultations/${id}`);
+    });
   };
 
-  const handleRestoreState = (state: ImportedState) => {
+  const handleRestoreState = async (state: ImportedState) => {
     if (state.clients) setClients(state.clients);
     if (state.matters) setMatters(state.matters);
     if (state.generatedDocs) setGeneratedDocs(state.generatedDocs);
@@ -417,6 +578,33 @@ export default function App() {
     if (state.agentProgressList) setAgentProgressList(state.agentProgressList);
     if (state.consultations) setConsultations(state.consultations);
     addLog('system', 'Global System Mirror synced successfully. All clients, cases, and Progressive AI milestones rebuilt.');
+
+    try {
+      const batch = writeBatch(db);
+      if (state.clients) {
+        state.clients.forEach(c => batch.set(doc(db, 'clients', c.id), c));
+      }
+      if (state.matters) {
+        state.matters.forEach(m => batch.set(doc(db, 'matters', m.id), m));
+      }
+      if (state.generatedDocs) {
+        state.generatedDocs.forEach(d => batch.set(doc(db, 'generatedDocs', d.id), d));
+      }
+      if (state.chatThread) {
+        state.chatThread.forEach(t => batch.set(doc(db, 'chatThread', t.id), t));
+      }
+      if (state.agentProgressList) {
+        state.agentProgressList.forEach(p => batch.set(doc(db, 'agentProgressList', p.agentId), p));
+      }
+      if (state.consultations) {
+        state.consultations.forEach(s => batch.set(doc(db, 'consultations', s.id), s));
+      }
+      await batch.commit();
+      addLog('system', 'Cloud database synchronized with imported backup mirror.');
+    } catch (err: any) {
+      console.error("Backup sync to Firestore failed", err);
+      addLog('system', `Cloud Sync error: failed to write restore payload (${err.message || 'database error'})`);
+    }
   };
 
   const triggerSearchFromDashboard = (tab: string) => {
@@ -565,6 +753,29 @@ export default function App() {
                     <Clock className="w-3.5 h-3.5 text-teal-400 animate-pulse" />
                     <span className="text-slate-400">{utcTime.split(' ')[1] || 'UTC'}</span>
                   </div>
+
+                  {/* Firestore Cloud Persistent Sync status pill */}
+                  <div 
+                    className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-mono transition-all duration-300 select-none ${
+                      dbSyncStatus === 'synced' 
+                        ? 'bg-emerald-500/10 border-emerald-500/35 text-emerald-400' 
+                        : dbSyncStatus === 'connecting'
+                        ? 'bg-amber-500/10 border-amber-500/35 text-amber-400'
+                        : 'bg-rose-500/10 border-rose-500/35 text-rose-400'
+                    }`}
+                    title={syncMessage}
+                  >
+                    {dbSyncStatus === 'synced' ? (
+                      <Database className="w-3.5 h-3.5 text-emerald-400" />
+                    ) : dbSyncStatus === 'connecting' ? (
+                      <CloudLightning className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                    ) : (
+                      <CloudOff className="w-3.5 h-3.5 text-rose-400 animate-bounce" />
+                    )}
+                    <span className="hidden lg:inline">{syncMessage}</span>
+                    <span className="inline lg:hidden">{dbSyncStatus === 'synced' ? 'Synced' : dbSyncStatus === 'connecting' ? 'Syncing...' : 'Offline'}</span>
+                  </div>
+
                   <div className="px-2.5 py-1 text-[10px] font-mono uppercase rounded bg-teal-500/10 border border-teal-500/20 text-teal-400 shrink-0">
                     Alex (Design Lead)
                   </div>
@@ -580,6 +791,7 @@ export default function App() {
                       key="dashboard"
                       clients={clients}
                       matters={matters}
+                      generatedDocs={generatedDocs}
                       setActiveTab={setActiveTab}
                       triggerNewClient={() => {
                         setActiveTab('clients');
@@ -665,6 +877,8 @@ export default function App() {
                       agentProgressList={agentProgressList}
                       consultations={consultations}
                       onRestoreState={handleRestoreState}
+                      dbSyncStatus={dbSyncStatus}
+                      syncMessage={syncMessage}
                     />
                   )}
 
@@ -673,6 +887,15 @@ export default function App() {
                       key="diagnostic"
                       logs={activityLogs}
                       onClearLogs={clearLogs}
+                    />
+                  )}
+
+                  {activeTab === 'client_portal' && (
+                    <ClientPortalTab
+                      key="client_portal"
+                      clients={clients}
+                      matters={matters}
+                      evidenceFiles={evidenceFiles}
                     />
                   )}
 
@@ -737,7 +960,8 @@ export default function App() {
                   { text: '🧠 Consult Progressive Phoenix Staff', tab: 'staff' },
                   { text: '🔊 Open SPEECH Synthesis Engine', tab: 'voice' },
                   { text: '📹 Initiate Secure Peer Video Meetings', tab: 'consult' },
-                  { text: '🔄 Sync Cloud Database Backups', tab: 'backups' },
+                  { text: '🔄 Sync Desktop, Ollama & Google Drive', tab: 'backups' },
+                  { text: '👁️ Simulate secure read-only Client Portal', tab: 'client_portal' },
                   { text: '📟 Inspect System Diagnostics Logs', tab: 'diagnostic' },
                   { text: '🖥️ Toggle Electron Desktop App Mode', toggleDesktop: true },
                   { text: '🚪 Clear Auditing activity logs', runClear: true }

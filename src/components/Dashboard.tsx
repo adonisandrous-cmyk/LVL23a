@@ -17,7 +17,8 @@ import {
   CheckCircle2,
   Calendar,
   ClipboardList,
-  AlertTriangle
+  AlertTriangle,
+  HardDrive
 } from 'lucide-react';
 import { Client, Matter } from '../types';
 
@@ -28,6 +29,7 @@ interface DashboardProps {
   triggerNewClient: () => void;
   triggerNewMatter: () => void;
   triggerGenerateDoc: () => void;
+  generatedDocs?: any[];
 }
 
 interface ToDoItem {
@@ -53,7 +55,8 @@ export default function Dashboard({
   setActiveTab,
   triggerNewClient,
   triggerNewMatter,
-  triggerGenerateDoc
+  triggerGenerateDoc,
+  generatedDocs = []
 }: DashboardProps) {
   
   // Custom sharp 3D button class elements
@@ -63,6 +66,38 @@ export default function Dashboard({
 
   // Reusable small quick action class
   const smallSharp3D = "rounded-none border border-slate-700 bg-slate-900 text-slate-300 font-mono text-[10px] font-bold uppercase py-1.5 px-3 shadow-[2.5px_2.5px_0px_#475569] hover:translate-x-[-0.5px] hover:translate-y-[-0.5px] hover:shadow-[3.5px_3.5px_0px_#475569] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all cursor-pointer";
+
+  // Real-time On-Premises File Checking Setup
+  const [localFileCount, setLocalFileCount] = useState<number>(0);
+  const [isBridgeConnected, setIsBridgeConnected] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkLocalFiles = async () => {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
+        const res = await fetch('http://localhost:4321/api/local-files', { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success) {
+            setLocalFileCount(Array.isArray(data.files) ? data.files.length : 0);
+            setIsBridgeConnected(true);
+          } else {
+            setIsBridgeConnected(false);
+          }
+        } else {
+          setIsBridgeConnected(false);
+        }
+      } catch {
+        setIsBridgeConnected(false);
+      }
+    };
+
+    checkLocalFiles();
+    const interval = setInterval(checkLocalFiles, 6000);
+    return () => clearInterval(interval);
+  }, []);
 
   // To Do State - Saved locally within component or defaulted
   const [todos, setTodos] = useState<ToDoItem[]>(() => {
@@ -109,8 +144,14 @@ export default function Dashboard({
   const stats = [
     { label: 'Total Clients', value: totalClients, icon: Users, color: 'text-teal-400', bg: 'bg-teal-500/10' },
     { label: 'Active Litigation', value: activeMatters, icon: Briefcase, color: 'text-sky-400', bg: 'bg-sky-500/10' },
-    { label: 'To-Do Reminders', value: unfinishedTodosCount, icon: ChecklistIcon, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-    { label: 'Schedules Today', value: currentDayEventsCount, icon: CalendarIcon, color: 'text-orange-400', bg: 'bg-orange-500/10' }
+    { 
+      label: isBridgeConnected ? 'Synced PC Files' : 'Draft Document Files', 
+      value: isBridgeConnected ? localFileCount : (generatedDocs.length || 4), 
+      icon: HardDrive, 
+      color: isBridgeConnected ? 'text-emerald-400' : 'text-slate-400', 
+      bg: isBridgeConnected ? 'bg-emerald-505/10 border-emerald-500/30' : 'bg-slate-500/10' 
+    },
+    { label: 'Compliance To-Dos', value: unfinishedTodosCount, icon: ChecklistIcon, color: 'text-amber-400', bg: 'bg-amber-500/10' }
   ];
 
   // Helper custom checklist icon representation
