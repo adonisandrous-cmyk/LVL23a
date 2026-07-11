@@ -39,9 +39,9 @@ import ConsultationsTab from './components/ConsultationsTab';
 import BackupsTab, { ImportedState } from './components/BackupsTab';
 import ResearchPortalDrawer from './components/ResearchPortalDrawer';
 import ClientPortalTab from './components/ClientPortalTab';
-import { Scale, BookOpen, Database, CloudOff, CloudLightning } from 'lucide-react';
+import { Scale, BookOpen, Database, CloudOff, CloudLightning, Lock, Unlock } from 'lucide-react';
 
-import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, query, orderBy, limit, startAfter } from 'firebase/firestore';
 import { db, ensureAuthenticated, handleFirestoreError, OperationType } from './lib/firebase';
 
 export default function App() {
@@ -53,6 +53,15 @@ export default function App() {
   // Firestore synchronization states
   const [dbSyncStatus, setDbSyncStatus] = useState<'offline' | 'connecting' | 'synced' | 'error'>('connecting');
   const [syncMessage, setSyncMessage] = useState<string>('Connecting to persistent cloud memory...');
+
+  // Storage Lock states
+  const [isStorageLocked, setIsStorageLocked] = useState<boolean>(() => localStorage.getItem('isStorageLocked') === 'true');
+  const [storagePin, setStoragePin] = useState<string>(() => localStorage.getItem('storagePin') || '1234'); // default standard PIN
+  const [showLockModal, setShowLockModal] = useState<boolean>(false);
+  const [lockModalMode, setLockModalMode] = useState<'lock' | 'unlock' | 'change-pin'>('lock');
+  const [pinInput, setPinInput] = useState<string>('');
+  const [lockError, setLockError] = useState<string>('');
+  const [storageLockedToast, setStorageLockedToast] = useState<string | null>(null);
 
   // Native desktop app simulation states
   const [isDesktopMode, setIsDesktopMode] = useState<boolean>(false);
@@ -106,6 +115,59 @@ export default function App() {
       practiceArea: 'Bankruptcy'
     }
   ]);
+
+  // Master client directory pagination states
+  const [lastClientSnapshot, setLastClientSnapshot] = useState<any>(null);
+  const [hasMoreClients, setHasMoreClients] = useState<boolean>(true);
+  const [clientsPageSize] = useState<number>(5); // On-demand limit per query block
+  const [isLoadingMoreClients, setIsLoadingMoreClients] = useState<boolean>(false);
+
+  // Dynamic pagination function to load more clients from cloud on demand
+  const loadMoreClients = async () => {
+    if (isLoadingMoreClients || !hasMoreClients) return;
+    setIsLoadingMoreClients(true);
+    addLog('system', 'Requesting next paginated client buffer from cloud database...');
+    try {
+      const clientsRef = collection(db, 'clients');
+      let q;
+      if (lastClientSnapshot) {
+        q = query(clientsRef, orderBy('name'), startAfter(lastClientSnapshot), limit(clientsPageSize));
+      } else {
+        q = query(clientsRef, orderBy('name'), limit(clientsPageSize));
+      }
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const nextClients: Client[] = [];
+        snap.forEach(docSnap => {
+          nextClients.push(docSnap.data() as Client);
+        });
+        setClients(prev => {
+          const combined = [...prev, ...nextClients];
+          const seen = new Set();
+          return combined.filter(c => {
+            if (seen.has(c.id)) return false;
+            seen.add(c.id);
+            return true;
+          });
+        });
+        setLastClientSnapshot(snap.docs[snap.docs.length - 1]);
+        if (snap.docs.length < clientsPageSize) {
+          setHasMoreClients(false);
+          addLog('system', `Loaded ${snap.docs.length} additional clients. End of client directory reached.`);
+        } else {
+          addLog('system', `Successfully cached ${snap.docs.length} client directory records. Additional records remain.`);
+        }
+      } else {
+        setHasMoreClients(false);
+        addLog('system', 'On-demand scan completed. No additional remote clients found.');
+      }
+    } catch (err: any) {
+      console.error("On-demand paginated scan failed:", err);
+      addLog('system', `On-demand paging error: ${err.message || 'database exception'}`);
+    } finally {
+      setIsLoadingMoreClients(false);
+    }
+  };
 
   // Master local legal matters
   const [matters, setMatters] = useState<Matter[]>([
@@ -317,13 +379,13 @@ export default function App() {
       try {
         await ensureAuthenticated();
         
-        // Check if DB is already seeded by checking the 'clients' collection
-        const clientsSnap = await getDocs(collection(db, 'clients')).catch(err => {
+        // Check if DB is already seeded using a fast single-record limit query
+        const clientsCheckSnap = await getDocs(query(collection(db, 'clients'), limit(1))).catch(err => {
           handleFirestoreError(err, OperationType.LIST, 'clients');
           throw err;
         });
         
-        if (clientsSnap.empty) {
+        if (clientsCheckSnap.empty) {
           // DATABASE IS EMPTY -> SEED INITIAL STAGES
           setSyncMessage('Seeding cloud database with initial template records...');
           
@@ -360,12 +422,29 @@ export default function App() {
           // DATABASE ALREADY HAS DATA -> HYDRATE LOCAL CACHE FROM THE CLOUD
           setSyncMessage('Syncing data from persistent cloud memory...');
           
-          // Hydrate Clients
+          // Hydrate Clients with On-Demand Pagination instead of full-table dumps
+          const firstPageQuery = query(collection(db, 'clients'), orderBy('name'), limit(clientsPageSize));
+          const clientsSnap = await getDocs(firstPageQuery).catch(err => {
+            handleFirestoreError(err, OperationType.LIST, 'clients');
+            throw err;
+          });
+          
           const remoteClients: Client[] = [];
           clientsSnap.forEach(snap => {
             remoteClients.push(snap.data() as Client);
           });
           setClients(remoteClients);
+          
+          if (!clientsSnap.empty) {
+            setLastClientSnapshot(clientsSnap.docs[clientsSnap.docs.length - 1]);
+            if (clientsSnap.docs.length < clientsPageSize) {
+              setHasMoreClients(false);
+            } else {
+              setHasMoreClients(true);
+            }
+          } else {
+            setHasMoreClients(false);
+          }
           
           // Hydrate Matters
           const mattersSnap = await getDocs(collection(db, 'matters'));
@@ -465,9 +544,10 @@ export default function App() {
   const addLog = (type: 'client' | 'matter' | 'document' | 'voice' | 'system', message: string) => {
     const now = new Date();
     const timestamp = now.toTimeString().split(' ')[0];
+    const uniqueId = `log-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
     setActivityLogs(prev => [
       ...prev,
-      { id: `log-${Date.now()}`, type, message, timestamp }
+      { id: uniqueId, type, message, timestamp }
     ]);
   };
 
@@ -475,7 +555,18 @@ export default function App() {
     setActivityLogs([]);
   };
 
+  const checkStorageLocked = (actionName: string): boolean => {
+    if (isStorageLocked) {
+      addLog('system', `⚠️ BLOCKED: Storage is WRITE-LOCKED. Attempted to: ${actionName}.`);
+      setStorageLockedToast(`Storage is Write-Locked. Cannot ${actionName}.`);
+      setTimeout(() => setStorageLockedToast(null), 4500);
+      return true;
+    }
+    return false;
+  };
+
   const handleAddClient = (newClient: Omit<Client, 'id' | 'createdAt'>) => {
+    if (checkStorageLocked('add new client profile')) return;
     const client: Client = {
       ...newClient,
       id: `c-${clients.length + 1}`,
@@ -489,6 +580,7 @@ export default function App() {
   };
 
   const handleAddMatter = (newMatter: Omit<Matter, 'id' | 'createdAt'>) => {
+    if (checkStorageLocked('open new legal case matter')) return;
     const matter: Matter = {
       ...newMatter,
       id: `m-${matters.length + 1}`,
@@ -502,6 +594,7 @@ export default function App() {
   };
 
   const handleUpdateMatter = (updatedMatter: Matter) => {
+    if (checkStorageLocked('update case file details')) return;
     setMatters(prev => prev.map(m => m.id === updatedMatter.id ? updatedMatter : m));
     addLog('matter', `Matter case file ${updatedMatter.caseNumber} ("${updatedMatter.title}") details updated.`);
     setDoc(doc(db, 'matters', updatedMatter.id), updatedMatter).catch(err => {
@@ -510,6 +603,7 @@ export default function App() {
   };
 
   const handleAddGeneratedDoc = (docData: GeneratedDocument) => {
+    if (checkStorageLocked('save generated legal document')) return;
     setGeneratedDocs(prev => [...prev, docData]);
     addLog('document', `AI automation drafted standard file: "${docData.title}" for Client ${docData.clientName}.`);
     setDoc(doc(db, 'generatedDocs', docData.id), docData).catch(err => {
@@ -518,6 +612,7 @@ export default function App() {
   };
 
   const handleAddEvidenceFile = (file: EvidenceFile) => {
+    if (checkStorageLocked('register client evidence file')) return;
     setEvidenceFiles(prev => [...prev, file]);
     addLog('document', `New client evidence file compiled & OCR scanned: "${file.name}" for Client ${file.clientName}.`);
     setDoc(doc(db, 'evidenceFiles', file.id), file).catch(err => {
@@ -526,6 +621,7 @@ export default function App() {
   };
 
   const handleAddMessage = (msg: LegalMessage) => {
+    if (checkStorageLocked('post chat message')) return;
     setChatThread(prev => [...prev, msg]);
     if (msg.sender === 'user') {
       addLog('system', `Consulted AI Specialist Agent: "${msg.agentName}" with case query.`);
@@ -538,6 +634,7 @@ export default function App() {
   };
 
   const handleUpdateAgentProgress = (updatedProgress: AgentProgress) => {
+    if (checkStorageLocked('update AI agent capability level')) return;
     setAgentProgressList(prev => prev.map(p => p.agentId === updatedProgress.agentId ? updatedProgress : p));
     setDoc(doc(db, 'agentProgressList', updatedProgress.agentId), updatedProgress).catch(err => {
       handleFirestoreError(err, OperationType.WRITE, `agentProgressList/${updatedProgress.agentId}`);
@@ -545,6 +642,7 @@ export default function App() {
   };
 
   const handleAddConsultation = (session: ConsultationSession) => {
+    if (checkStorageLocked('initialize video consultation room')) return;
     setConsultations(prev => [...prev, session]);
     addLog('system', `Active video Room initialized: "${session.roomName}" representing Client ${session.clientName}`);
     setDoc(doc(db, 'consultations', session.id), session).catch(err => {
@@ -553,6 +651,7 @@ export default function App() {
   };
 
   const handleUpdateConsultation = (updatedSession: ConsultationSession) => {
+    if (checkStorageLocked('update consultation details')) return;
     setConsultations(prev => prev.map(s => s.id === updatedSession.id ? updatedSession : s));
     if (updatedSession.status === 'concluded') {
       addLog('system', `Concluded Video Consultation loop with ${updatedSession.clientName}. Transcripts saved as reference notes.`);
@@ -563,6 +662,7 @@ export default function App() {
   };
 
   const handleDeleteConsultation = (id: string) => {
+    if (checkStorageLocked('archive/remove consultation session')) return;
     setConsultations(prev => prev.filter(s => s.id !== id));
     addLog('system', 'Archived consultation session successfully removed from indexes.');
     deleteDoc(doc(db, 'consultations', id)).catch(err => {
@@ -571,6 +671,7 @@ export default function App() {
   };
 
   const handleRestoreState = async (state: ImportedState) => {
+    if (checkStorageLocked('restore backup database mirror')) return;
     if (state.clients) setClients(state.clients);
     if (state.matters) setMatters(state.matters);
     if (state.generatedDocs) setGeneratedDocs(state.generatedDocs);
@@ -609,6 +710,61 @@ export default function App() {
 
   const triggerSearchFromDashboard = (tab: string) => {
     setActiveTab(tab);
+  };
+
+  const handleToggleStorageLock = () => {
+    if (isStorageLocked) {
+      setLockModalMode('unlock');
+      setPinInput('');
+      setLockError('');
+      setShowLockModal(true);
+    } else {
+      if (storagePin && storagePin !== '1234') {
+        setLockModalMode('lock');
+        setPinInput('');
+        setLockError('');
+        setShowLockModal(true);
+      } else {
+        // If it's the default PIN '1234' or empty, let them set or confirm
+        setLockModalMode('change-pin');
+        setPinInput('');
+        setLockError('');
+        setShowLockModal(true);
+      }
+    }
+  };
+
+  const handleConfirmLockAction = () => {
+    if (lockModalMode === 'unlock') {
+      if (pinInput === storagePin) {
+        setIsStorageLocked(false);
+        localStorage.setItem('isStorageLocked', 'false');
+        setShowLockModal(false);
+        addLog('system', '🔓 Storage unlocked. Write & Sync permissions restored to local cache and Firestore cloud.');
+      } else {
+        setLockError('Incorrect Security PIN. Please try again.');
+      }
+    } else if (lockModalMode === 'lock') {
+      if (pinInput === storagePin) {
+        setIsStorageLocked(true);
+        localStorage.setItem('isStorageLocked', 'true');
+        setShowLockModal(false);
+        addLog('system', '🔒 Storage write-locked. No local or cloud mutations allowed.');
+      } else {
+        setLockError('Incorrect Security PIN. Please try again.');
+      }
+    } else if (lockModalMode === 'change-pin') {
+      if (pinInput.length < 4) {
+        setLockError('PIN must be at least 4 digits.');
+        return;
+      }
+      setStoragePin(pinInput);
+      localStorage.setItem('storagePin', pinInput);
+      setIsStorageLocked(true);
+      localStorage.setItem('isStorageLocked', 'true');
+      setShowLockModal(false);
+      addLog('system', `🔒 Storage write-locked with custom security PIN: ${pinInput.replace(/./g, '*')}`);
+    }
   };
 
   return (
@@ -754,6 +910,29 @@ export default function App() {
                     <span className="text-slate-400">{utcTime.split(' ')[1] || 'UTC'}</span>
                   </div>
 
+                  {/* Storage security write-lock status pill */}
+                  <button
+                    onClick={handleToggleStorageLock}
+                    className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-mono transition-all duration-300 select-none cursor-pointer hover:bg-slate-800/40 ${
+                      isStorageLocked
+                        ? 'bg-rose-500/15 border-rose-500/45 text-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.15)] animate-pulse'
+                        : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                    }`}
+                    title={isStorageLocked ? "Storage is Write-Locked (Click to unlock)" : "Storage is Active (Click to lock)"}
+                  >
+                    {isStorageLocked ? (
+                      <>
+                        <Lock className="w-3.5 h-3.5 text-rose-400" />
+                        <span>Storage Locked</span>
+                      </>
+                    ) : (
+                      <>
+                        <Unlock className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="opacity-85">Storage Open</span>
+                      </>
+                    )}
+                  </button>
+
                   {/* Firestore Cloud Persistent Sync status pill */}
                   <div 
                     className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-mono transition-all duration-300 select-none ${
@@ -810,6 +989,9 @@ export default function App() {
                       key="clients"
                       clients={clients}
                       onAddClient={handleAddClient}
+                      loadMoreClients={loadMoreClients}
+                      hasMoreClients={hasMoreClients}
+                      isLoadingMoreClients={isLoadingMoreClients}
                     />
                   )}
 
@@ -879,6 +1061,9 @@ export default function App() {
                       onRestoreState={handleRestoreState}
                       dbSyncStatus={dbSyncStatus}
                       syncMessage={syncMessage}
+                      isStorageLocked={isStorageLocked}
+                      onToggleStorageLock={handleToggleStorageLock}
+                      storagePin={storagePin}
                     />
                   )}
 
@@ -1057,6 +1242,101 @@ export default function App() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* ------------------------------------------------------------- */}
+      {/* GLOBAL MODALS: C. STORAGE SECURITY WRITE-LOCK GATEWAY */}
+      {/* ------------------------------------------------------------- */}
+      <AnimatePresence>
+        {showLockModal && (
+          <div className="fixed inset-0 bg-[#000000]/80 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#0b101c] border border-[#1e293b] w-full max-w-sm rounded-2.5xl p-6 space-y-4 shadow-3xl text-left"
+            >
+              <div className="flex justify-between items-center pb-2 border-b border-[#1e293b]">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-5 h-5 text-rose-400" />
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider font-sans">
+                    {lockModalMode === 'unlock' && 'Unlock Storage Cache'}
+                    {lockModalMode === 'lock' && 'Lock Storage Cache'}
+                    {lockModalMode === 'change-pin' && 'Set Security PIN & Lock'}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowLockModal(false)}
+                  className="p-1 hover:bg-slate-800 text-slate-500 hover:text-slate-300 rounded-lg transition-colors cursor-pointer bg-transparent border-none"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3.5 text-xs">
+                <p className="text-[11px] text-slate-400 leading-normal font-sans">
+                  {lockModalMode === 'unlock' && 'Enter your 4-digit Security PIN to restore write and remote synchronization permissions.'}
+                  {lockModalMode === 'lock' && 'Confirm your 4-digit Security PIN to seal all local database files and Firestore indexes.'}
+                  {lockModalMode === 'change-pin' && 'Establish a personalized 4-digit Security PIN (default is 1234). This PIN is stored in secure local sandboxes and will be requested to authorize future cache modifications.'}
+                </p>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono text-slate-500 uppercase">Security PIN Code</label>
+                  <input
+                    type="password"
+                    maxLength={8}
+                    value={pinInput}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setPinInput(val);
+                      setLockError('');
+                    }}
+                    placeholder="••••"
+                    className="w-full bg-[#060a12] border border-[#1e293b] rounded-xl px-3 py-2.5 text-center text-xl font-mono text-teal-400 focus:outline-none focus:border-teal-500/50"
+                  />
+                  {lockError && (
+                    <p className="text-[10px] font-mono text-rose-400">{lockError}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  onClick={() => setShowLockModal(false)}
+                  className="flex-1 py-2.5 bg-[#060a12] border border-[#1e293b] text-slate-400 hover:text-white rounded-xl text-xs font-bold font-mono uppercase transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmLockAction}
+                  disabled={!pinInput}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-teal-500 to-emerald-400 text-slate-950 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed font-bold font-mono text-xs uppercase rounded-xl transition-all cursor-pointer"
+                >
+                  {lockModalMode === 'unlock' && 'Unlock Cache'}
+                  {lockModalMode === 'lock' && 'Lock Cache'}
+                  {lockModalMode === 'change-pin' && 'Set & Lock'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* TRANSIENT STORAGE LOCKED FLOATING NOTIFICATION BANNER */}
+      <AnimatePresence>
+        {storageLockedToast && (
+          <motion.div
+            initial={{ y: -50, opacity: 0 }}
+            animate={{ y: 20, opacity: 1 }}
+            exit={{ y: -50, opacity: 0 }}
+            className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 bg-rose-500/15 border border-rose-500/40 text-rose-300 font-sans font-bold text-xs rounded-full flex items-center gap-2 shadow-[0_10px_25px_-5px_rgba(244,63,94,0.3)] backdrop-blur-md"
+          >
+            <Lock className="w-3.5 h-3.5 text-rose-400" />
+            <span>{storageLockedToast}</span>
+            <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold">LOCKED</span>
+          </motion.div>
         )}
       </AnimatePresence>
 

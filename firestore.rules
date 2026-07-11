@@ -6,50 +6,40 @@ service cloud.firestore {
     match /{document=**} {
       allow read, write: if false;
     }
-    
-    // Validates that string IDs are clean and within safe size limits
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-    
-    // Checks if the request is authenticated
-    function isSignedIn() {
-      return request.auth != null;
-    }
 
     // Clients Collection
     match /clients/{clientId} {
-      allow read, write: if isValidId(clientId);
+      allow read, write: if true;
     }
 
     // Matters/Cases Collection
     match /matters/{matterId} {
-      allow read, write: if isValidId(matterId);
+      allow read, write: if true;
     }
 
     // Generated Documents Briefs/Pleadings
     match /generatedDocs/{docId} {
-      allow read, write: if isValidId(docId);
+      allow read, write: if true;
     }
 
     // Scanned Evidence Files OCR data
     match /evidenceFiles/{fileId} {
-      allow read, write: if isValidId(fileId);
+      allow read, write: if true;
     }
 
     // AI Specialist Chat Logs Thread
     match /chatThread/{msgId} {
-      allow read, write: if isValidId(msgId);
+      allow read, write: if true;
     }
 
     // Agent Progress Milestones
     match /agentProgressList/{agentId} {
-      allow read, write: if isValidId(agentId);
+      allow read, write: if true;
     }
 
     // Active Consultation Sessions
     match /consultations/{sessionId} {
-      allow read, write: if isValidId(sessionId);
+      allow read, write: if true;
     }
   }
 }

@@ -33,9 +33,18 @@ import { Client } from '../types';
 interface ClientsTabProps {
   clients: Client[];
   onAddClient: (newClient: Omit<Client, 'id' | 'createdAt'>) => void;
+  loadMoreClients?: () => Promise<void>;
+  hasMoreClients?: boolean;
+  isLoadingMoreClients?: boolean;
 }
 
-export default function ClientsTab({ clients, onAddClient }: ClientsTabProps) {
+export default function ClientsTab({ 
+  clients, 
+  onAddClient,
+  loadMoreClients,
+  hasMoreClients = false,
+  isLoadingMoreClients = false
+}: ClientsTabProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'pending'>('all');
   const [selectedClient, setSelectedClient] = useState<Client | null>(clients[0] || null);
@@ -555,6 +564,40 @@ END:VCARD`;
               </button>
             ))
           )}
+        </div>
+
+        {/* On-Demand Paginated Loading Controls */}
+        <div className="p-4 bg-[#0a0f19] border-t border-[#1e293b] flex flex-col gap-2 shrink-0">
+          <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
+            <span>Buffer Profile Stream:</span>
+            <span className="text-teal-400 font-semibold">{clients.length} Cached Profiles</span>
+          </div>
+          {hasMoreClients ? (
+            <button
+              onClick={loadMoreClients}
+              disabled={isLoadingMoreClients}
+              className="w-full rounded-xl border border-teal-500/35 bg-teal-500/5 hover:bg-teal-500/15 text-teal-400 hover:text-teal-300 font-mono text-xs py-2 px-3 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isLoadingMoreClients ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-teal-400" />
+                  <span>Streaming Next Page...</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="w-3.5 h-3.5 text-teal-400" />
+                  <span>On-Demand Fetch Next Clients</span>
+                </>
+              )}
+            </button>
+          ) : (
+            <div className="w-full text-center py-2 px-3 border border-slate-800 bg-[#070b12] rounded-xl text-[11px] font-mono text-slate-500 select-none">
+              ✓ All active firm records fetched
+            </div>
+          )}
+          <p className="text-[9px] text-center text-slate-600 font-sans tracking-wide">
+            Dynamic Paging Engine active for scaling up to 500+ active clients.
+          </p>
         </div>
       </div>
 
