@@ -26,9 +26,15 @@ import {
   File,
   Trash2,
   ExternalLink,
-  Upload
+  Upload,
+  Table,
+  Check,
+  FileSpreadsheet,
+  Link,
+  X
 } from 'lucide-react';
 import { Client } from '../types';
+import { getAccessToken } from '../lib/driveAuth';
 
 interface ClientsTabProps {
   clients: Client[];
@@ -64,6 +70,139 @@ export default function ClientsTab({
 
   // Drag and drop uploading state
   const [isDragging, setIsDragging] = useState(false);
+
+  // Google Sheets Sync States
+  const [showSheetsModal, setShowSheetsModal] = useState(false);
+  const [sheetUrl, setSheetUrl] = useState('https://docs.google.com/spreadsheets/d/1LGQwoKnfw9wgl9QM9AD1wA5qeBFisf5YwuglUJz3yWc/edit?gid=2064516725#gid=2064516725');
+  const [isLoadingSheet, setIsLoadingSheet] = useState(false);
+  const [sheetData, setSheetData] = useState<{
+    headers: string[];
+    rows: Record<string, string>[];
+    clients: any[];
+    spreadsheetId?: string;
+    gid?: string;
+    sheetTitle?: string;
+  } | null>(null);
+  const [sheetError, setSheetError] = useState<string | null>(null);
+  const [importedCount, setImportedCount] = useState<number | null>(null);
+
+  // Google Workspace Action States
+  const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null);
+  const [isDispatchingGmail, setIsDispatchingGmail] = useState(false);
+  const [isCreatingDoc, setIsCreatingDoc] = useState(false);
+
+  const handleDispatchGmail = async () => {
+    if (!selectedClient) return;
+    setIsDispatchingGmail(true);
+    setWorkspaceNotice(null);
+    try {
+      const token = getAccessToken();
+      const res = await fetch('/api/gmail/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          recipientEmail: selectedClient.email || 'client@level23consulting.com',
+          subject: `Level 23 Consulting — Matter Ref #${selectedClient.id.slice(0, 8)} Status Notice`,
+          bodyContent: `Dear ${selectedClient.name},\n\nThis is an official communication regarding your legal file (Ref #${selectedClient.id.slice(0, 8)}).\n\nPractice Department: ${selectedClient.practiceArea}\nStatus: ${selectedClient.status.toUpperCase()}\n\nPlease reply to this email directly if you have updated disclosures or questions.\n\nSincerely,\nLevel 23 Consulting Practice Management`
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setWorkspaceNotice(`Gmail message sent to ${selectedClient.email || selectedClient.name}`);
+        setTimeout(() => setWorkspaceNotice(null), 4000);
+      }
+    } catch (err: any) {
+      alert('Gmail dispatch error: ' + err.message);
+    } finally {
+      setIsDispatchingGmail(false);
+    }
+  };
+
+  const handleCreateGoogleDoc = async () => {
+    if (!selectedClient) return;
+    setIsCreatingDoc(true);
+    setWorkspaceNotice(null);
+    try {
+      const token = getAccessToken();
+      const res = await fetch('/api/docs/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          title: `Client Intake Summary — ${selectedClient.name} (Ref #${selectedClient.id.slice(0, 8)})`,
+          content: `LEVEL 23 CONSULTING LEGAL PRACTICE MANAGEMENT\n\nCLIENT INTAKE SUMMARY & MEMORANDUM\n=========================================\nClient Name: ${selectedClient.name}\nReference ID: ${selectedClient.id}\nDepartment: ${selectedClient.practiceArea}\nEmail: ${selectedClient.email}\nPhone: ${selectedClient.phone}\nIntake Date: ${new Date(selectedClient.createdAt).toLocaleDateString()}\n\nINTAKE NOTES:\n${selectedClient.intakeNotes || 'Standard client intake dossier compiled.'}\n\nGENERATED VIA GOOGLE WORKSPACE DOCS INTEGRATION`
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setWorkspaceNotice(`Google Doc created: ${data.title || 'Intake Summary'}`);
+        if (data.webViewLink) {
+          window.open(data.webViewLink, '_blank');
+        }
+        setTimeout(() => setWorkspaceNotice(null), 4000);
+      }
+    } catch (err: any) {
+      alert('Google Docs creation error: ' + err.message);
+    } finally {
+      setIsCreatingDoc(false);
+    }
+  };
+
+  const fetchGoogleSheetData = async (urlToFetch?: string) => {
+    const target = urlToFetch || sheetUrl;
+    if (!target) return;
+
+    setIsLoadingSheet(true);
+    setSheetError(null);
+    setImportedCount(null);
+
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('google_drive_access_token') : null;
+      const res = await fetch('/api/sheets/read', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ url: target })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSheetData(data);
+      } else {
+        setSheetError(data.error || 'Failed to parse Google Spreadsheet.');
+      }
+    } catch (err: any) {
+      setSheetError(err.message || 'Error connecting to Google Sheets API.');
+    } finally {
+      setIsLoadingSheet(false);
+    }
+  };
+
+  const handleImportSheetClients = () => {
+    if (!sheetData || !sheetData.clients || sheetData.clients.length === 0) return;
+
+    let count = 0;
+    sheetData.clients.forEach(c => {
+      onAddClient({
+        name: c.name || 'Imported Client',
+        email: c.email || 'client@example.com',
+        phone: c.phone || '(555) 000-0000',
+        practiceArea: c.practiceArea || 'General Law',
+        status: (c.status?.toLowerCase().includes('active') ? 'active' : 'pending') as any,
+        intakeNotes: c.intakeNotes || `Imported from Google Sheets: ${sheetData.sheetTitle || 'Spreadsheet'}`
+      });
+      count++;
+    });
+
+    setImportedCount(count);
+  };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -485,14 +624,42 @@ END:VCARD`;
               <Users className="w-4.5 h-4.5 text-teal-400" />
               Clients Directory
             </h2>
-            <button
-              id="btn-add-client-trigger"
-              onClick={() => setShowModal(true)}
-              className="px-3 py-1.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 border border-teal-500/30 hover:border-teal-400 rounded-lg text-xs font-semibold font-heading flex items-center gap-1.5 cursor-pointer transition-all"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Intake Client</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <a
+                href="https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH?usp=drive_link"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:border-amber-400 rounded-lg text-xs font-semibold font-heading flex items-center gap-1.5 cursor-pointer transition-all"
+                title="Open Google Drive Primary Filing System (level23consulting@gmail.com)"
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
+                <span>Drive Folder</span>
+              </a>
+
+              <button
+                id="btn-google-sheets-import"
+                onClick={() => {
+                  setShowSheetsModal(true);
+                  if (!sheetData) {
+                    fetchGoogleSheetData();
+                  }
+                }}
+                className="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:border-emerald-400 rounded-lg text-xs font-semibold font-heading flex items-center gap-1.5 cursor-pointer transition-all"
+                title="Sync Google Sheets Client Directory"
+              >
+                <Table className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Sheets Sync</span>
+              </button>
+
+              <button
+                id="btn-add-client-trigger"
+                onClick={() => setShowModal(true)}
+                className="px-3 py-1.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 border border-teal-500/30 hover:border-teal-400 rounded-lg text-xs font-semibold font-heading flex items-center gap-1.5 cursor-pointer transition-all"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Intake Client</span>
+              </button>
+            </div>
           </div>
 
           {/* Search bar inside list */}
@@ -633,6 +800,42 @@ END:VCARD`;
                  <div className="p-2.5 bg-[#090d16] rounded-lg border border-[#1e293b] flex items-center gap-2.5 text-xs text-slate-400">
                    <Calendar className="w-3.5 h-3.5 text-slate-500" />
                    <span>Inital Intake {new Date(selectedClient.createdAt).toLocaleDateString()}</span>
+                 </div>
+               </div>
+
+               {/* Google Workspace Action Bar */}
+               <div className="p-2.5 bg-[#090d16] border border-[#1e293b] rounded-xl flex flex-wrap items-center justify-between gap-2 my-3">
+                 <div className="flex items-center gap-2">
+                   <span className="text-[10px] font-mono uppercase bg-sky-500/10 text-sky-400 px-2 py-0.5 rounded border border-sky-500/20 font-bold">
+                     Google Workspace Actions
+                   </span>
+                   {workspaceNotice && (
+                     <span className="text-xs font-mono text-emerald-400 animate-fade-in flex items-center gap-1">
+                       <Check className="w-3.5 h-3.5" /> {workspaceNotice}
+                     </span>
+                   )}
+                 </div>
+
+                 <div className="flex items-center gap-2">
+                   <button
+                     type="button"
+                     onClick={handleDispatchGmail}
+                     disabled={isDispatchingGmail}
+                     className="px-3 py-1.5 bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-300 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                   >
+                     <Mail className="w-3.5 h-3.5 text-sky-400" />
+                     <span>{isDispatchingGmail ? 'Sending Gmail...' : 'Gmail Notice'}</span>
+                   </button>
+
+                   <button
+                     type="button"
+                     onClick={handleCreateGoogleDoc}
+                     disabled={isCreatingDoc}
+                     className="px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-indigo-300 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                   >
+                     <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                     <span>{isCreatingDoc ? 'Creating Doc...' : 'Export Google Doc'}</span>
+                   </button>
                  </div>
                </div>
 
@@ -899,7 +1102,7 @@ END:VCARD`;
                  <div className="p-3 bg-teal-950/20 border border-teal-500/20 rounded-xl flex items-center justify-between text-[11px]">
                    <div className="flex items-center gap-2 text-slate-300">
                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                     <span>Bi-directional cloud sync point: <strong className="font-mono text-teal-400">10sli3oVprhgacIRjH7wzze9wNSn4lxJk</strong></span>
+                     <span>Bi-directional cloud sync point: <strong className="font-mono text-teal-400">1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH</strong></span>
                    </div>
                    <span className="text-slate-500 italic">Autosaved to GDrive mount</span>
                  </div>
@@ -1206,6 +1409,189 @@ END:VCARD`;
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Google Sheets Sync & Import Modal */}
+      <AnimatePresence>
+        {showSheetsModal && (
+          <div id="google-sheets-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-3 sm:p-6 overflow-y-auto">
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              className="bg-[#0a0f1d] border-2 border-emerald-500/70 w-full max-w-5xl max-h-[90vh] flex flex-col shadow-[0_0_50px_rgba(16,185,129,0.25)] overflow-hidden"
+            >
+              {/* Modal Header */}
+              <div className="p-4 bg-[#0d1627] border-b border-[#1e293b] flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-400">
+                    <Table className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-white uppercase font-sans tracking-wide flex items-center gap-2">
+                      <span>Google Sheets Sync & Data Explorer</span>
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center gap-1">
+                        <Check className="w-3 h-3 text-emerald-400" />
+                        CONNECTED: level23consulting@gmail.com
+                      </span>
+                    </h3>
+                    <p className="text-[10.5px] font-mono text-emerald-400/90 mt-0.5 flex items-center gap-2 flex-wrap">
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Spreadsheet: {sheetData?.sheetTitle || 'Google Sheets Repository'}</span>
+                      <span className="text-slate-600">&bull;</span>
+                      <a
+                        href="https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH?usp=drive_link"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-amber-300 hover:text-amber-200 underline font-bold flex items-center gap-1"
+                      >
+                        <FolderOpen className="w-3 h-3 text-amber-400" />
+                        <span>Root Folder (1EW-bOXh...)</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowSheetsModal(false)}
+                  className="p-1.5 bg-[#050811] border border-slate-700 hover:border-emerald-400 text-slate-300 hover:text-emerald-400 cursor-pointer"
+                  title="Close Google Sheets Modal"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* URL input & Fetch Toolbar */}
+              <div className="p-4 bg-[#080d17] border-b border-[#1e293b] space-y-3 font-mono text-xs">
+                <label className="text-[11px] font-bold text-slate-300 uppercase block">
+                  Google Spreadsheet Link / URL:
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Link className="absolute left-3 top-2.5 w-4 h-4 text-emerald-400" />
+                    <input
+                      type="text"
+                      value={sheetUrl}
+                      onChange={(e) => setSheetUrl(e.target.value)}
+                      placeholder="https://docs.google.com/spreadsheets/d/..."
+                      className="w-full bg-[#050811] border border-[#1e293b] text-emerald-300 pl-9 pr-3 py-2 text-xs outline-none focus:border-emerald-500 font-mono"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => fetchGoogleSheetData()}
+                    disabled={isLoadingSheet}
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-[#090d16] font-bold uppercase cursor-pointer flex items-center gap-1.5 transition-all shrink-0"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 text-[#090d16] ${isLoadingSheet ? 'animate-spin' : ''}`} />
+                    <span>{isLoadingSheet ? 'Fetching...' : 'Fetch Sheet'}</span>
+                  </button>
+                </div>
+
+                {importedCount !== null && (
+                  <div className="p-2.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 flex items-center gap-2 text-xs">
+                    <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span className="font-bold">
+                      Successfully imported {importedCount} client record(s) from Google Sheets into your Clients Directory!
+                    </span>
+                  </div>
+                )}
+
+                {sheetError && (
+                  <div className="p-2.5 bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-center gap-2 text-xs">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>{sheetError}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Data Table Display */}
+              <div className="flex-1 overflow-y-auto p-4 bg-[#050811] space-y-4">
+                {isLoadingSheet ? (
+                  <div className="flex flex-col items-center justify-center p-12 space-y-3">
+                    <RefreshCw className="w-8 h-8 text-emerald-400 animate-spin" />
+                    <span className="text-xs font-mono text-emerald-400 uppercase font-bold">
+                      Connecting to Google Sheets API & Parsing Cells...
+                    </span>
+                  </div>
+                ) : sheetData ? (
+                  <div className="space-y-3 font-mono text-xs">
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+                      <span>Sheet Title: <strong className="text-emerald-400">{sheetData.sheetTitle}</strong></span>
+                      <span>Total Rows: <strong className="text-emerald-400">{sheetData.rows?.length || 0}</strong></span>
+                      <span>Spreadsheet ID: <strong className="text-slate-300">{sheetData.spreadsheetId}</strong></span>
+                    </div>
+
+                    {/* Table View */}
+                    <div className="border border-[#1e293b] bg-[#080d16] overflow-x-auto max-h-[360px]">
+                      <table className="w-full text-left border-collapse font-mono text-[11px]">
+                        <thead>
+                          <tr className="bg-[#0e1626] border-b border-[#1e293b] text-emerald-400 uppercase font-bold">
+                            <th className="p-2.5 border-r border-[#1e293b] w-10 text-center">#</th>
+                            {sheetData.headers.map((h, idx) => (
+                              <th key={idx} className="p-2.5 border-r border-[#1e293b] whitespace-nowrap min-w-[120px]">
+                                {h}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#1e293b]/70">
+                          {sheetData.rows.map((row, rIdx) => (
+                            <tr key={rIdx} className="hover:bg-[#0d1627] transition-colors">
+                              <td className="p-2.5 border-r border-[#1e293b] text-slate-500 text-center font-bold">
+                                {rIdx + 1}
+                              </td>
+                              {sheetData.headers.map((h, hIdx) => (
+                                <td key={hIdx} className="p-2.5 border-r border-[#1e293b] text-slate-200 whitespace-nowrap">
+                                  {row[h] || <span className="text-slate-600 italic">empty</span>}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-12 text-center text-slate-400 space-y-2">
+                    <FileSpreadsheet className="w-10 h-10 text-slate-600" />
+                    <p className="text-xs font-mono">No spreadsheet loaded yet. Click "Fetch Sheet" to load your data.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Actions */}
+              <div className="p-3 bg-[#0d1627] border-t border-[#1e293b] flex items-center justify-between">
+                <span className="text-[10px] font-mono text-slate-400">
+                  Google Workspace Sheets API &bull; Link: {sheetUrl.substring(0, 45)}...
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleImportSheetClients}
+                    disabled={!sheetData || !sheetData.clients || sheetData.clients.length === 0}
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-[#090d16] font-mono text-xs font-bold uppercase cursor-pointer flex items-center gap-1.5 transition-all"
+                  >
+                    <Users className="w-3.5 h-3.5 text-[#090d16]" />
+                    <span>Import All Rows into Clients Directory</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowSheetsModal(false)}
+                    className="px-4 py-2 bg-[#050811] border border-slate-700 hover:border-slate-500 text-slate-300 font-mono text-xs uppercase cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+
             </motion.div>
           </div>
         )}

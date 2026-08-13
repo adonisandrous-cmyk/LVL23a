@@ -185,7 +185,7 @@ if (!fs.existsSync(baseDir)) {
 const possibleDrivePaths = [
   path.join(os.homedir(), 'Google Drive', 'My Drive', 'iiiamadex'),
   path.join(os.homedir(), 'Google Drive', 'iiiamadex'),
-  path.join(os.homedir(), 'Google Drive (adonisandrous@gmail.com)', 'My Drive', 'iiiamadex'),
+  path.join(os.homedir(), 'Google Drive (level23consulting@gmail.com)', 'My Drive', 'iiiamadex'),
   'G:\\\\My Drive\\\\iiiamadex',
   'G:\\\\iiiamadex'
 ];
@@ -1010,11 +1010,11 @@ app.listen(PORT, '0.0.0.0', () => {
           <div className="p-3 bg-[#050810] border border-[#1e293b] flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-none">
             <div className="space-y-0.5">
               <span className="text-[9px] uppercase font-mono text-slate-500 block">Active Target Cloud Folder ID</span>
-              <span className="text-xs font-mono font-bold text-[#dfb76c] block truncate">10sli3oVprhgacIRjH7wzze9wNSn4lxJk</span>
+              <span className="text-xs font-mono font-bold text-[#dfb76c] block truncate">1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH</span>
             </div>
             
             <a
-              href="https://drive.google.com/drive/folders/10sli3oVprhgacIRjH7wzze9wNSn4lxJk?usp=drive_link"
+              href="https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH?usp=drive_link"
               target="_blank"
               rel="noopener noreferrer"
               className="px-3 py-1.5 bg-[#dfb76c]/10 hover:bg-[#dfb76c]/20 border border-[#dfb76c]/30 hover:border-[#dfb76c] text-[#dfb76c] text-xs font-mono uppercase font-bold flex items-center gap-1.5 rounded-none transition-colors cursor-pointer"

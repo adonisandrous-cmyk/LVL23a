@@ -40,6 +40,8 @@ if (!fs.existsSync(baseDir)) {
 const possibleDrivePaths = [
   path.join(os.homedir(), 'Google Drive', 'My Drive', 'iiiamadex'),
   path.join(os.homedir(), 'Google Drive', 'iiiamadex'),
+  path.join(os.homedir(), 'Google Drive (level23consulting@gmail.com)', 'My Drive', 'iiiamadex'),
+  path.join(os.homedir(), 'Google Drive (level23@gmail.com)', 'My Drive', 'iiiamadex'),
   path.join(os.homedir(), 'Google Drive (adonisandrous@gmail.com)', 'My Drive', 'iiiamadex'),
   // If no email specific or root path, map to a folder inside Google Drive desktop mount G:\
   'G:\\My Drive\\iiiamadex',

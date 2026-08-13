@@ -99,17 +99,26 @@ export default function Dashboard({
     return () => clearInterval(interval);
   }, []);
 
-  // To Do State - Saved locally within component or defaulted
+  // Dynamic date helpers
+  const getOffsetDateStr = (offsetDays: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offsetDays);
+    return d.toISOString().split('T')[0];
+  };
+
+  const todayStr = getOffsetDateStr(0);
+
+  // To Do State - Saved locally within component or defaulted with dynamic dates
   const [todos, setTodos] = useState<ToDoItem[]>(() => {
     const saved = localStorage.getItem('l23_dashboard_todos');
     if (saved) {
       try { return JSON.parse(saved); } catch { }
     }
     return [
-      { id: 't-1', taskName: 'Submit California Form FL-100 pleading schedule', priority: 'HIGH', completed: false, dueDate: '2026-05-21' },
-      { id: 't-2', taskName: 'Extract asylum narrative declaration from Mateo Alvarez response', priority: 'HIGH', completed: true, dueDate: '2026-05-20' },
-      { id: 't-3', taskName: 'Audit secured asset liability ledger for Samuel Miller bankrupt record', priority: 'MEDIUM', completed: false, dueDate: '2026-05-22' },
-      { id: 't-4', taskName: 'Draft mutual NDA governing clause for Acme Apex contract', priority: 'LOW', completed: false, dueDate: '2026-05-25' }
+      { id: 't-1', taskName: 'Submit California Form FL-100 pleading schedule', priority: 'HIGH', completed: false, dueDate: getOffsetDateStr(0) },
+      { id: 't-2', taskName: 'Extract asylum narrative declaration from Mateo Alvarez response', priority: 'HIGH', completed: true, dueDate: getOffsetDateStr(-1) },
+      { id: 't-3', taskName: 'Audit secured asset liability ledger for Samuel Miller bankrupt record', priority: 'MEDIUM', completed: false, dueDate: getOffsetDateStr(1) },
+      { id: 't-4', taskName: 'Draft mutual NDA governing clause for Acme Apex contract', priority: 'LOW', completed: false, dueDate: getOffsetDateStr(3) }
     ];
   });
 
@@ -117,14 +126,49 @@ export default function Dashboard({
   const [newTaskPriority, setNewTaskPriority] = useState<'HIGH' | 'MEDIUM' | 'LOW'>('MEDIUM');
 
   // Calendar State - Chosen date index & list of scheduled events
-  const [selectedDate, setSelectedDate] = useState<string>('2026-05-21'); // Default selected day
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([
-    { id: 'e-1', time: '09:00 AM', title: 'Sarah Jenkins Care Intake Review', clientName: 'Sarah Jenkins', type: 'Intake', dateStr: '2026-05-21' },
-    { id: 'e-2', time: '11:15 AM', title: 'Chapter 7 Liquidation Counsel', clientName: 'Samuel Miller', type: 'Hearing', dateStr: '2026-05-21' },
-    { id: 'e-3', time: '02:00 PM', title: 'Asylum Statement Briefing Room', clientName: 'Mateo Alvarez', type: 'Deposition', dateStr: '2026-05-22' },
-    { id: 'e-4', time: '04:30 PM', title: 'Contract Mutual Clause Sync', clientName: 'Apex Co', type: 'Filing', dateStr: '2026-05-23' },
-    { id: 'e-5', time: '10:00 AM', title: 'Judicial Council Form Signoff', clientName: 'Sarah Jenkins', type: 'Intake', dateStr: '2026-05-20' }
+    { id: 'e-1', time: '09:00 AM', title: 'Sarah Jenkins Care Intake Review', clientName: 'Sarah Jenkins', type: 'Intake', dateStr: getOffsetDateStr(0) },
+    { id: 'e-2', time: '11:15 AM', title: 'Chapter 7 Liquidation Counsel', clientName: 'Samuel Miller', type: 'Hearing', dateStr: getOffsetDateStr(0) },
+    { id: 'e-3', time: '02:00 PM', title: 'Asylum Statement Briefing Room', clientName: 'Mateo Alvarez', type: 'Deposition', dateStr: getOffsetDateStr(1) },
+    { id: 'e-4', time: '04:30 PM', title: 'Contract Mutual Clause Sync', clientName: 'Apex Co', type: 'Filing', dateStr: getOffsetDateStr(2) },
+    { id: 'e-5', time: '10:00 AM', title: 'Judicial Council Form Signoff', clientName: 'Sarah Jenkins', type: 'Intake', dateStr: getOffsetDateStr(-1) }
   ]);
+
+  // Sync Google Calendar events on mount
+  useEffect(() => {
+    const fetchLiveCalendar = async () => {
+      try {
+        const res = await fetch('/api/calendar/events');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.events) && data.events.length > 0) {
+            const mapped: CalendarEvent[] = data.events.map((ev: any, idx: number) => {
+              const startDate = ev.start?.dateTime ? new Date(ev.start.dateTime) : new Date();
+              const dateStr = startDate.toISOString().split('T')[0];
+              const timeStr = startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              return {
+                id: ev.id || `gcal-${idx}`,
+                time: timeStr,
+                title: ev.summary || 'Scheduled Meeting',
+                clientName: 'Level 23 Client',
+                type: 'Hearing',
+                dateStr: dateStr
+              };
+            });
+            setCalendarEvents(prev => {
+              const existingIds = new Set(prev.map(e => e.id));
+              const newItems = mapped.filter(m => !existingIds.has(m.id));
+              return [...prev, ...newItems];
+            });
+          }
+        }
+      } catch (err) {
+        // Silently preserve local calendar state
+      }
+    };
+    fetchLiveCalendar();
+  }, []);
 
   const [newEventTitle, setNewEventTitle] = useState('');
   const [newEventTime, setNewEventTime] = useState('10:00 AM');
@@ -203,16 +247,22 @@ export default function Dashboard({
     setCalendarEvents(prev => prev.filter(e => e.id !== id));
   };
 
-  // Static Calendar Days list generator for a 7-day strip (e.g. May 17 to May 23, 2026)
-  const currentWeekDays = [
-    { dayName: 'Sun', dateStr: '2026-05-17', num: '17' },
-    { dayName: 'Mon', dateStr: '2026-05-18', num: '18' },
-    { dayName: 'Tue', dateStr: '2026-05-19', num: '19' },
-    { dayName: 'Wed', dateStr: '2026-05-20', num: '20' },
-    { dayName: 'Thu', dateStr: '2026-05-21', num: '21' },
-    { dayName: 'Fri', dateStr: '2026-05-22', num: '22' },
-    { dayName: 'Sat', dateStr: '2026-05-23', num: '23' }
-  ];
+  // Dynamic 7-day strip calculation for current week (Sun-Sat)
+  const todayObj = new Date();
+  const dayOfWeek = todayObj.getDay();
+  const currentWeekDays = Array.from({ length: 7 }).map((_, i) => {
+    const d = new Date(todayObj);
+    d.setDate(todayObj.getDate() - dayOfWeek + i);
+    const dateStr = d.toISOString().split('T')[0];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return {
+      dayName: dayNames[d.getDay()],
+      dateStr: dateStr,
+      num: String(d.getDate()).padStart(2, '0')
+    };
+  });
+
+  const currentMonthYear = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   // Group practice areas distribution counts
   const practiceAreaCounts = matters.reduce(
@@ -316,7 +366,7 @@ export default function Dashboard({
                 <p className="text-[11px] text-slate-400">Manage court hearings, asylum interviews, and intake briefings</p>
               </div>
               <span className="text-[10px] font-mono text-teal-400 bg-teal-500/10 border border-teal-500/20 px-2 py-0.5">
-                May 2026
+                {currentMonthYear}
               </span>
             </div>
 

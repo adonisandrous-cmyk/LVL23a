@@ -37,7 +37,7 @@ export default function SystemHealthTab({ logs, onClearLogs }: SystemHealthTabPr
   const [routerConfig, setRouterConfig] = useState<any>({
     strategy: "DYNAMIC_LLM_EVALUATOR",
     freeModel: "google/gemma-4-31b-it:free",
-    premiumModel: "google/gemini-2.5-flash",
+    premiumModel: "google/gemini-3.6-flash",
     evaluatorThreshold: 45,
     simulatedStats: {
       totalRouted: 24,
@@ -364,9 +364,8 @@ export default function SystemHealthTab({ logs, onClearLogs }: SystemHealthTabPr
                   onChange={(e) => updateRouterSettings({ premiumModel: e.target.value })}
                   className="w-full bg-[#070b13] border border-[#1e293b] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-teal-400 outline-none transition-colors font-mono"
                 >
-                  <option value="google/gemini-2.5-flash">google/gemini-2.5-flash (Active Premium)</option>
-                  <option value="google/gemini-2.5-pro">google/gemini-2.5-pro (Flagship - Paid Plan)</option>
-                  <option value="google/gemini-2.0-flash">google/gemini-2.0-flash (Experimental)</option>
+                  <option value="google/gemini-3.6-flash">google/gemini-3.6-flash (Active Fast)</option>
+                  <option value="google/gemini-3.1-pro-preview">google/gemini-3.1-pro-preview (Flagship - Deep Thinking)</option>
                 </select>
                 <div className="flex items-center gap-1.5 pt-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-sky-400"></span>

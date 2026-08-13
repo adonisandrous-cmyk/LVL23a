@@ -24,22 +24,13 @@ import {
   Copy
 } from 'lucide-react';
 import { Client, Matter } from '../types';
+import { ALL_RESEARCH_COURT_FORMS, ResearchCourtForm as CourtForm } from '../data/legalFormsCatalog';
 
 interface ResearchPortalDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   clients: Client[];
   matters: Matter[];
-}
-
-// California Court Form template definition
-interface CourtForm {
-  code: string;
-  title: string;
-  category: string;
-  pdfUrl: string;
-  description: string;
-  guidelines: string[];
 }
 
 export default function ResearchPortalDrawer({
@@ -84,96 +75,7 @@ export default function ResearchPortalDrawer({
   const [newFormDescription, setNewFormDescription] = useState('');
   const [newFormGuidelines, setNewFormGuidelines] = useState('');
 
-  const defaultCourtForms: CourtForm[] = [
-    {
-      code: "FL-100",
-      title: "Petition for Dissolution of Marriage",
-      category: "Family Law",
-      pdfUrl: "https://www.courts.ca.gov/documents/fl100.pdf",
-      description: "This is the initial petition filed to start a divorce or legal separation process in California, outlining basic marriage facts, communal property, and child custody requests.",
-      guidelines: [
-        "In Section 1: Declare the duration of legal residency (typically must be in California for 6 months and county for 3 months prior).",
-        "In Section 2: List the date of marriage and date of separation accurately. This divides community and separate property earnings.",
-        "In Section 5: Specify child custody, visitation rights, and physical placement carefully.",
-        "In Section 7: Make sure to check the box requesting reservation of jurisdiction to award spousal support to protect liabilities."
-      ]
-    },
-    {
-      code: "FL-150",
-      title: "Income and Expense Declaration",
-      category: "Family Law",
-      pdfUrl: "https://www.courts.ca.gov/documents/fl150.pdf",
-      description: "A comprehensive mandatory disclosure document detail listing current employment earnings, tax withholdings, monthly expenses, assets, and liabilities.",
-      guidelines: [
-        "This form must be accompanied by copies of your pay stubs for the last 2 months.",
-        "Make sure monthly mortgage, property tax, and medical emergency expenses are exact.",
-        "Itemize separate property investments and communal debts to support legal review.",
-        "Must be signed under penalty of perjury under CA Civ. Proc. Code."
-      ]
-    },
-    {
-      code: "FL-160",
-      title: "Property Declaration (Community Property)",
-      category: "Family Law",
-      pdfUrl: "https://www.courts.ca.gov/documents/fl160.pdf",
-      description: "Provides an exhaustive index of communal real estate, vehicles, financial portfolio balances, retirement trusts, and credit liabilities to be partitioned.",
-      guidelines: [
-        "Identify the current Fair Market Value (FMV) of all properties listed.",
-        "Specify the exact mortgage debt outstanding as of the Separation Date.",
-        "Cross-reference individual bank statements and townhouse deeds for audit consistency.",
-        "Keep separate property claims registered separately on Form FL-160 (Separate)."
-      ]
-    },
-    {
-      code: "FL-300",
-      title: "Request for Order (RFO)",
-      category: "Family Law",
-      pdfUrl: "https://www.courts.ca.gov/documents/fl300.pdf",
-      description: "Used to petition the court for temporary or immediate modifications to child support, spousal support, custody schedules, or attorneys' fee orders before trial.",
-      guidelines: [
-        "State the exact reasons support modifications are urgent (e.g. involuntary change in employment).",
-        "Section 10: Attach a copy of your completed FL-150 Income and Expense Declaration.",
-        "Outline supporting facts chronologically in an attached 2-3 page declaration."
-      ]
-    },
-    {
-      code: "MC-025",
-      title: "Attachment to Judicial Council Form",
-      category: "General Civil",
-      pdfUrl: "https://www.courts.ca.gov/documents/mc025.pdf",
-      description: "A standard clean overflow sheet used to detail additional complaints, facts, or signatures when forms lack physical layout space.",
-      guidelines: [
-        "Clearly indicate the source form code and section reference at the top of the overflow sheet.",
-        "Consolidate points using high-contrast numbered bullet blocks.",
-        "Each page must be clearly numbered at the bottom (e.g., Page 3 of 4)."
-      ]
-    },
-    {
-      code: "UD-100",
-      title: "Complaint - Unlawful Detainer",
-      category: "Real Property",
-      pdfUrl: "https://www.courts.ca.gov/documents/ud100.pdf",
-      description: "Main pleading form used by landlords to initiate eviction proceedings in California, citing non-payment of rent or lease violations.",
-      guidelines: [
-        "Must verify that the required 3-Day or 30-Day notice was formally and legally served first.",
-        "Include daily rent liability calculation metrics clearly in Section 11.",
-        "Attach a clean copy of the written lease agreement and notice of non-payment."
-      ]
-    },
-    {
-      code: "I-589",
-      title: "Petition for Asylum and for Withholding of Removal",
-      category: "Federal / Immigration",
-      pdfUrl: "https://www.uscourts.gov", // Redirect to official printable index
-      description: "Federal petition used to apply for asylum and withholding of removal in the United States, representing Targeted Social group persecution.",
-      guidelines: [
-        "Provide a highly detailed, chronological narrative declaration outline.",
-        "Ensure all direct extortion warnings and cartel communications are translated, indexed, and formatted.",
-        "List all prior minor children, spouses, and dates of entry/exits meticulously.",
-        "Must file within 365 days of applicant’s initial physical entry into the United States."
-      ]
-    }
-  ];
+  const defaultCourtForms: CourtForm[] = ALL_RESEARCH_COURT_FORMS;
 
   // Combined calCourtForms containing defaults & custom loaded items
   const calCourtForms: CourtForm[] = [...defaultCourtForms, ...customForms];
@@ -257,9 +159,27 @@ export default function ResearchPortalDrawer({
       };
 
       if (form.code === 'FL-100') {
-        data.marriageDetails = "Estimated marriage date: July 2, 2012. Separation Date: April 10th.";
-        data.children = "Two minor children recorded in active client records.";
-        data.communalAssets = "Communal Residence Townhouse Asset to be partitioned as community property.";
+        if (client.name.includes('Watson') || client.name.includes('Don')) {
+          data.petitionerName = "Don Watson (Petitioner)";
+          data.petitionerDOB = "November 14, 1982";
+          data.petitionerAddress = "1420 Newport Center Dr, Suite 500, Newport Beach, CA 92660";
+          data.petitionerContact = "don.watson@watsontech.com | +1 (949) 555-0198";
+          data.respondentName = "Clara Watson (Respondent)";
+          data.respondentDOB = "April 22, 1985";
+          data.respondentAddress = "780 Coast Hwy, Laguna Beach, CA 92651";
+          data.respondentContact = "clara.watson@gmail.com | +1 (949) 555-0812";
+          data.jurisdictionalBasis = "California Family Code Section 300 (6 Months CA / 3 Months Orange County verified)";
+          data.countyFiling = "Superior Court of California, County of Orange (341 The City Drive South, Orange, CA 92868)";
+          data.actionNature = "Dissolution of Marriage (Marriage Date: June 15, 2012; Separation Date: April 10, 2026)";
+          data.marriageDetails = "Marriage Date: June 15, 2012 in Newport Beach, CA. Separation Date: April 10, 2026.";
+          data.children = "Ethan Watson (DOB: 08/10/2016), Chloe Watson (DOB: 12/05/2019). Joint Legal & Primary Physical Custody to Petitioner.";
+          data.communalAssets = "Newport Beach residential real estate ($1.4M valuation) & WatsonTech equity. Separate pre-marital tech patents confirmed.";
+          data.coverSheetDeclaration = "Declaration & Cover Sheet filed referencing Dissolution of Marriage, Orange County filing, under CA Fam Code § 300.";
+        } else {
+          data.marriageDetails = "Estimated marriage date: July 2, 2012. Separation Date: April 10th.";
+          data.children = "Two minor children recorded in active client records.";
+          data.communalAssets = "Communal Residence Townhouse Asset to be partitioned as community property.";
+        }
       } else if (form.code === 'FL-150') {
         data.incomeEstimation = "Gross monthly income average $3,140 net. Pay stubs attached.";
         data.disputedCosts = "Medical emergency expenses (Orange County General Hospital) listed as liabilities.";
@@ -551,6 +471,24 @@ export default function ResearchPortalDrawer({
               </button>
             </div>
 
+            {/* AI Engagement Client Context Selector Bar */}
+            <div className="px-4 py-2 bg-[#050912] border-b border-[#1e293b] flex items-center justify-between gap-3 text-xs font-mono shrink-0">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0 animate-pulse" />
+                <span className="text-slate-300 font-bold uppercase text-[10.5px]">AI Engagement Target Client:</span>
+              </div>
+              <select
+                value={selectedClientForForm}
+                onChange={(e) => setSelectedClientForForm(e.target.value)}
+                className="bg-[#0b1322] border border-amber-500/40 text-amber-300 font-bold px-2.5 py-1 rounded-lg text-xs outline-none focus:border-amber-400 cursor-pointer max-w-[260px]"
+              >
+                <option value="">-- Select Client for AI Context --</option>
+                {clients.map(c => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.practiceArea || 'General'})</option>
+                ))}
+              </select>
+            </div>
+
             {/* Glowing Tab Indicator Dock */}
             <div className="flex border-b border-[#1e293b]/60 bg-[#060a10]/50 p-2 gap-1 overflow-x-auto select-none scrollbar-hide shrink-0">
               {[
@@ -689,7 +627,7 @@ export default function ResearchPortalDrawer({
                             <option value="default">Default Router</option>
                             <option value="openrouter-fusion">OR Fusion</option>
                             <option value="claude-3.7-sonnet">Claude 3.7</option>
-                            <option value="gemini-2.5-pro">Gemini Pro</option>
+                            <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option>
                           </select>
                         </div>
                         <button
@@ -1108,7 +1046,7 @@ export default function ResearchPortalDrawer({
                       <span className="text-[10px] text-slate-400 font-mono">{filteredForms.length} documents</span>
                     </div>
                     <div className="flex flex-wrap gap-1">
-                      {['All', 'Family Law', 'General Civil', 'Real Property', 'Federal / Immigration'].map((cat) => (
+                      {['All', ...Array.from(new Set(calCourtForms.map(f => f.category)))].map((cat) => (
                         <button
                           key={cat}
                           onClick={() => setSelectedCategory(cat)}
@@ -1362,7 +1300,7 @@ export default function ResearchPortalDrawer({
                               {/* Download actions */}
                               <div className="flex gap-2">
                                 <a
-                                  href={form.pdfUrl}
+                                  href={form.pdfUrl || 'https://www.courts.ca.gov/forms.htm'}
                                   target="_blank"
                                   referrerPolicy="no-referrer"
                                   className="flex-1 py-2 bg-gradient-to-r from-[#dfb76c]/10 to-[#dfb76c]/5 hover:from-[#dfb76c]/15 hover:to-[#dfb76c]/10 border border-[#dfb76c]/40 hover:border-[#dfb76c]/70 text-[#fbd890] rounded-xl font-mono text-[10px] font-black uppercase text-center flex items-center justify-center gap-2 group cursor-pointer transition-all duration-200"

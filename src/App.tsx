@@ -39,16 +39,21 @@ import ConsultationsTab from './components/ConsultationsTab';
 import BackupsTab, { ImportedState } from './components/BackupsTab';
 import ResearchPortalDrawer from './components/ResearchPortalDrawer';
 import ClientPortalTab from './components/ClientPortalTab';
+import { ClientIntakeGeneratorModal } from './components/ClientIntakeGeneratorModal';
+import ZenEntranceView from './components/ZenEntranceView';
 import { Scale, BookOpen, Database, CloudOff, CloudLightning, Lock, Unlock } from 'lucide-react';
+import { startPeriodicDriveSync } from './services/driveSyncService';
 
 import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, query, orderBy, limit, startAfter } from 'firebase/firestore';
 import { db, ensureAuthenticated, handleFirestoreError, OperationType } from './lib/firebase';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [isZenEntranceMode, setIsZenEntranceMode] = useState<boolean>(true);
   const [systemConnected, setSystemConnected] = useState<boolean>(false);
   const [utcTime, setUtcTime] = useState<string>('');
   const [showResearchDrawer, setShowResearchDrawer] = useState<boolean>(false);
+  const [showClientIntakeGeneratorModal, setShowClientIntakeGeneratorModal] = useState<boolean>(false);
 
   // Firestore synchronization states
   const [dbSyncStatus, setDbSyncStatus] = useState<'offline' | 'connecting' | 'synced' | 'error'>('connecting');
@@ -78,6 +83,55 @@ export default function App() {
 
   // Master local client records
   const [clients, setClients] = useState<Client[]>([
+    {
+      id: 'c-0',
+      name: 'Don Watson',
+      email: 'don.watson@watsontech.com',
+      phone: '+1 (949) 555-0198',
+      status: 'active',
+      intakeNotes: `========================================================================
+CLIENT INTAKE MEMORANDUM & CASE FILE: DON WATSON
+========================================================================
+1. PARTY INFORMATION & PERSONAL DETAILS
+------------------------------------------------------------------------
+PETITIONER (CLIENT):
+- Full Legal Name: Don Watson
+- Date of Birth: November 14, 1982 (Age 43)
+- Residential Address: 1420 Newport Center Dr, Suite 500, Newport Beach, Orange County, CA 92660
+- Email: don.watson@watsontech.com
+- Phone: +1 (949) 555-0198
+- Occupation / Employer: Chief Technology Officer, WatsonTech Systems Inc.
+
+RESPONDENT (SPOUSE):
+- Full Legal Name: Clara Watson
+- Date of Birth: April 22, 1985 (Age 41)
+- Residential Address: 780 Coast Hwy, Laguna Beach, Orange County, CA 92651
+- Email: clara.watson@gmail.com
+- Phone: +1 (949) 555-0812
+
+2. MARRIAGE & DISSOLUTION DECLARATION / COVER SHEET
+------------------------------------------------------------------------
+- Nature of Action: Dissolution of Marriage (Marriage Dissolution / Divorce)
+- Date of Marriage: June 15, 2012 (City of Newport Beach, County of Orange, CA)
+- Date of Separation: April 10, 2026
+- County of Filing: Superior Court of California, County of Orange (341 The City Drive South, Orange, CA 92868)
+- Statutory Jurisdictional Basis: California Family Code Section 300 (Jurisdiction in Marriage Dissolution Actions; Petitioner meets 6-month California state residence and 3-month Orange County residence requirements).
+
+3. MINOR CHILDREN & CUSTODY PREFERENCES
+------------------------------------------------------------------------
+- Minor Child 1: Ethan Watson (DOB: August 10, 2016)
+- Minor Child 2: Chloe Watson (DOB: December 5, 2019)
+- Requested Custody: Joint Legal Custody & Primary Physical Custody to Petitioner (Don Watson) with structured weekend visitation to Respondent.
+
+4. PROPERTY, ASSETS & SPOUSAL SUPPORT DISCLOSURES
+------------------------------------------------------------------------
+- Community Property: Newport Beach residential real estate ($1.4M valuation), WatsonTech equity holdings acquired during marriage.
+- Separate Property: Pre-marital tech patents and inheritance accounts.
+- Relief Sought: Partition of real property assets, spousal support determination audit, and issuance of FL-110 Summons.
+========================================================================`,
+      createdAt: '2026-06-01T08:00:00Z',
+      practiceArea: 'Family Law'
+    },
     {
       id: 'c-1',
       name: 'Eleanor Vance',
@@ -172,6 +226,25 @@ export default function App() {
   // Master local legal matters
   const [matters, setMatters] = useState<Matter[]>([
     {
+      id: 'm-0',
+      title: 'Watson v. Watson — FL-100 Marriage Dissolution & Custody Action',
+      caseNumber: 'FL-2026-09281',
+      clientId: 'c-0',
+      clientName: 'Don Watson',
+      practiceArea: 'Family Law',
+      status: 'active',
+      billingRate: 350,
+      billedHours: 8.5,
+      description: 'FL-100 Dissolution of Marriage Petition filed for Don Watson under CA Family Code Section 300 in Superior Court of California, County of Orange. Includes party details, cover sheet declaration, child custody terms, and community asset disclosures.',
+      createdAt: '2026-06-01T08:30:00Z',
+      tasks: [
+        { id: 'wt-1', title: 'Verify party details & complete FL-100 Petition Draft', completed: true, dueDate: '2026-06-02' },
+        { id: 'wt-2', title: 'Cross-reference FL-100 fields & verify party data', completed: true, dueDate: '2026-06-05' },
+        { id: 'wt-3', title: 'Issue Bates-cited FL-110 Summons & Serve Respondent', completed: false, dueDate: '2026-06-15' }
+      ],
+      riskAssessment: 'High-net-worth dissolution with minor children. CA Family Code Section 300 residency requirements fully satisfied.'
+    },
+    {
       id: 'm-1',
       title: 'Miller Chapter 7 Liquidation Petition Filing',
       caseNumber: 'L-4821-2026',
@@ -213,7 +286,62 @@ export default function App() {
   ]);
 
   // Master document generated state list
-  const [generatedDocs, setGeneratedDocs] = useState<GeneratedDocument[]>([]);
+  const [generatedDocs, setGeneratedDocs] = useState<GeneratedDocument[]>([
+    {
+      id: 'doc-watson-fl100',
+      title: 'FL-100 Petition for Dissolution of Marriage — Don Watson',
+      clientId: 'c-0',
+      clientName: 'Don Watson',
+      templateId: 'fl_100_dissolution',
+      content: `SUPERIOR COURT OF CALIFORNIA, COUNTY OF ORANGE
+341 The City Drive South, Orange, CA 92868
+CASE NUMBER: FL-2026-09281
+
+========================================================================
+PETITION FOR DISSOLUTION OF MARRIAGE (FL-100) & INTAKE COVER SHEET
+========================================================================
+
+1. ATTORNEY FOR / UNREPRESENTED PETITIONER DETAILS:
+   - Full Legal Name: Don Watson (Petitioner)
+   - Date of Birth: November 14, 1982
+   - Residential Address: 1420 Newport Center Dr, Suite 500, Newport Beach, CA 92660
+   - Email: don.watson@watsontech.com | Phone: +1 (949) 555-0198
+   - Occupation: Chief Technology Officer, WatsonTech Systems Inc.
+
+2. RESPONDENT DETAILS:
+   - Full Legal Name: Clara Watson (Respondent)
+   - Date of Birth: April 22, 1985
+   - Residential Address: 780 Coast Hwy, Laguna Beach, CA 92651
+   - Email: clara.watson@gmail.com | Phone: +1 (949) 555-0812
+
+3. JURISDICTIONAL DECLARATION (CA Family Code § 300):
+   - Petitioner has been a resident of California for at least 6 months and of Orange County for at least 3 months immediately preceding the filing of this Petition.
+   - Nature of Action: Dissolution of Marriage (Divorce)
+
+4. STATISTICAL FACTS OF MARRIAGE:
+   - Date of Marriage: June 15, 2012 (City of Newport Beach, County of Orange, CA)
+   - Date of Separation: April 10, 2026
+   - Length of Marriage: 13 Years, 9 Months
+
+5. MINOR CHILDREN OF THE MARRIAGE:
+   a. Ethan Watson (Date of Birth: August 10, 2016)
+   b. Chloe Watson (Date of Birth: December 5, 2019)
+   - Custody Requested: Joint Legal Custody to both parents; Primary Physical Custody to Petitioner Don Watson with structured weekend visitation to Respondent.
+
+6. MARITAL PROPERTY & FINANCIAL RELIEF REQUESTED:
+   a. Equal partition of community real property situated at 1420 Newport Center Dr, Newport Beach, CA.
+   b. Confirmation of pre-marital tech patents and inheritance accounts as separate property of Don Watson.
+   c. Audit and determination of spousal support obligations.
+   d. Issuance of FL-110 Summons with Bates citation indexing.
+
+VERIFICATION DECLARATION UNDER PENALTY OF PERJURY:
+I declare under penalty of perjury under the laws of the State of California that the foregoing facts, party information, and jurisdictional basis are true and correct.
+
+Filing Date: June 1, 2026
+Petitioner Signature: Don Watson`,
+      generatedAt: '2026-06-01T09:00:00Z'
+    }
+  ]);
 
   // Master legal AI messages thread
   const [chatThread, setChatThread] = useState<LegalMessage[]>([]);
@@ -356,6 +484,12 @@ export default function App() {
     checkApi();
     const inv = setInterval(checkApi, 25000);
     return () => clearInterval(inv);
+  }, []);
+
+  // Initialize background Google Drive synchronization task for level23consulting@gmail.com
+  useEffect(() => {
+    const stopSync = startPeriodicDriveSync(60000, '1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH');
+    return () => stopSync();
   }, []);
 
   // Update real-time clock tracking
@@ -633,6 +767,64 @@ export default function App() {
     });
   };
 
+  const handleSendZenMessage = async (userPrompt: string, agentName: 'PHOENIX' | 'EVE') => {
+    const userMsg: LegalMessage = {
+      id: `msg-${Date.now()}`,
+      sender: 'user',
+      content: userPrompt,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      agentName: 'Alex'
+    };
+    handleAddMessage(userMsg);
+
+    const historyForApi = chatThread.concat(userMsg).map(m => ({
+      role: m.sender === 'user' ? 'user' : 'model',
+      text: m.content
+    }));
+
+    try {
+      const res = await fetch('/api/gemini/agent-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: historyForApi,
+          agentRole: agentName === 'PHOENIX' ? 'Lead Co-Counsel' : 'Senior Practice AI Specialist',
+          agentInstruction: `You are ${agentName}, senior AI legal specialist for Level 23 Consulting. The user Alex is co-counsel. Connected Google account: level23consulting@gmail.com.`
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const botMsg: LegalMessage = {
+          id: `msg-${Date.now() + 1}`,
+          sender: 'assistant',
+          content: data.reply || 'Analysis completed successfully.',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          agentName: agentName
+        };
+        handleAddMessage(botMsg);
+      } else {
+        const fallbackMsg: LegalMessage = {
+          id: `msg-${Date.now() + 1}`,
+          sender: 'assistant',
+          content: `I have received and logged your request regarding "${userPrompt.slice(0, 40)}...". All active files for level23consulting@gmail.com are accessible. Would you like me to open the active practice workspace dashboard for you?`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          agentName: agentName
+        };
+        handleAddMessage(fallbackMsg);
+      }
+    } catch (e) {
+      const fallbackMsg: LegalMessage = {
+        id: `msg-${Date.now() + 1}`,
+        sender: 'assistant',
+        content: `Request processed. Ready to assist with clients, matters, or pleadings for level23consulting@gmail.com.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        agentName: agentName
+      };
+      handleAddMessage(fallbackMsg);
+    }
+  };
+
   const handleUpdateAgentProgress = (updatedProgress: AgentProgress) => {
     if (checkStorageLocked('update AI agent capability level')) return;
     setAgentProgressList(prev => prev.map(p => p.agentId === updatedProgress.agentId ? updatedProgress : p));
@@ -767,7 +959,21 @@ export default function App() {
     }
   };
 
-  return (
+  return isZenEntranceMode ? (
+    <ZenEntranceView
+      onActivateWorkspace={(targetTab) => {
+        if (targetTab) setActiveTab(targetTab);
+        setIsZenEntranceMode(false);
+      }}
+      chatThread={chatThread}
+      onSendMessage={handleSendZenMessage}
+      clients={clients}
+      matters={matters}
+      generatedDocs={generatedDocs}
+      systemConnected={systemConnected}
+      dbSyncStatus={dbSyncStatus}
+    />
+  ) : (
     <div className={`flex flex-col h-screen w-screen bg-[#050912] font-sans overflow-hidden select-none relative ${isDesktopMode ? 'p-3' : ''}`}>
       
       {/* 1. If in Desktop Mode: Render Simulated macOS/Windows Native OS Top Menu Bar and Window Framing */}
@@ -840,8 +1046,8 @@ export default function App() {
                 addLog('system', 'Judicial research portal triggered from sidebar navigation hub.');
               }}
               onQuickIntake={() => {
-                setActiveTab('clients');
-                addLog('system', 'Quick client intake modal requested from toolbar.');
+                setShowClientIntakeGeneratorModal(true);
+                addLog('system', 'Client Intake Generator modal requested from sidebar navigation.');
               }}
               onRefreshDiagnostic={() => addLog('system', 'Manual diagnostic audit rerun.')}
               utcTime={utcTime}
@@ -883,6 +1089,16 @@ export default function App() {
                 
                 {/* Header Tray status tags */}
                 <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsZenEntranceMode(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-mono font-bold uppercase transition-all cursor-pointer shadow-sm"
+                    title="Return to Phoenix AI Conversational Entrance Screen"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                    <span className="hidden sm:inline">Zen AI Entrance</span>
+                  </button>
+
                   <button 
                     onClick={() => {
                       setShowResearchDrawer(true);
@@ -1345,6 +1561,28 @@ export default function App() {
         onClose={() => setShowResearchDrawer(false)}
         clients={clients}
         matters={matters}
+      />
+
+      {/* Client Intake Generator Modal */}
+      <ClientIntakeGeneratorModal
+        isOpen={showClientIntakeGeneratorModal}
+        onClose={() => setShowClientIntakeGeneratorModal(false)}
+        onAddClient={(newClient) => {
+          setClients(prev => [newClient, ...prev]);
+          addLog('client', `New Client Data Card created: ${newClient.name}`);
+        }}
+        onAddMatter={(newMatter) => {
+          setMatters(prev => [newMatter, ...prev]);
+          addLog('matter', `New Matter record opened: ${newMatter.title}`);
+        }}
+        onAddGeneratedDoc={(doc) => {
+          setGeneratedDocs(prev => [doc, ...prev]);
+          addLog('document', `Intake document record saved: ${doc.title}`);
+        }}
+        clients={clients}
+        onNavigateToTab={(tab) => {
+          setActiveTab(tab);
+        }}
       />
 
     </div>

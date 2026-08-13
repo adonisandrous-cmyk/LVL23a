@@ -238,14 +238,15 @@ export default function Sidebar({
           )}
         </div>
 
-        {/* Quick Help Intakes Button - Compact height */}
+        {/* Client Intake Generator Button */}
         <button
           id="btn-sidebar-quick-action"
           onClick={onQuickIntake}
-          className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-gradient-to-r from-teal-500 to-emerald-400 hover:from-teal-600 hover:to-emerald-500 active:scale-[0.98] text-[#090d16] font-bold rounded-lg text-[10.5px] uppercase transition-all shadow-md cursor-pointer border-none"
+          className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-gradient-to-r from-teal-500 to-emerald-400 hover:from-teal-600 hover:to-emerald-500 active:scale-[0.98] text-[#090d16] font-extrabold rounded-lg text-[10px] uppercase transition-all shadow-md cursor-pointer border-none"
+          title="Open AI Powered Client Intake Generator"
         >
-          <Sparkles className="w-3 h-3 shrink-0" />
-          <span>Quick Intake</span>
+          <Sparkles className="w-3.5 h-3.5 shrink-0" />
+          <span>Client Intake Generator</span>
         </button>
 
         {/* Powered Tag */}
