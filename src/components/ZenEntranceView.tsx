@@ -208,6 +208,11 @@ export default function ZenEntranceView({
 
         {/* Top Right Quick Workspace Activation */}
         <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-teal-950/80 border border-teal-500/40 rounded-lg text-[10px] font-mono text-teal-300">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>VOICE WAKE ACTIVE</span>
+          </div>
+
           <button
             type="button"
             onClick={requestMediaPermissions}

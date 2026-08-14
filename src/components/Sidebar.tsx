@@ -1,5 +1,5 @@
-import React from 'react';
-import { motion } from 'motion/react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard,
   Users,
@@ -19,8 +19,25 @@ import {
   Laptop,
   Keyboard,
   Scale,
-  Eye
+  Eye,
+  AlertTriangle,
+  HardDrive,
+  ExternalLink,
+  ShieldAlert,
+  CheckCircle2,
+  X,
+  Key
 } from 'lucide-react';
+import {
+  subscribeDriveSync,
+  getDriveSyncState,
+  forceDriveSync,
+  clearDriveSyncError,
+  DriveSyncState,
+  GOOGLE_DRIVE_FOLDER_URL,
+  DEFAULT_TARGET_FOLDER_ID,
+  DEFAULT_ACCOUNT_EMAIL
+} from '../services/driveSyncService';
 
 interface SidebarProps {
   activeTab: string;
@@ -47,6 +64,36 @@ export default function Sidebar({
   onOpenShortcuts,
   onOpenResearch
 }: SidebarProps) {
+  const [driveSync, setDriveSync] = useState<DriveSyncState>(getDriveSyncState());
+  const [isToastDismissed, setIsToastDismissed] = useState(false);
+  const [isRetryingSync, setIsRetryingSync] = useState(false);
+  const [showDriveModal, setShowDriveModal] = useState(false);
+
+  // Subscribe to real-time Google Drive sync events
+  useEffect(() => {
+    const unsubscribe = subscribeDriveSync((newState) => {
+      setDriveSync(newState);
+      if (newState.status === 'error' && newState.error) {
+        setIsToastDismissed(false); // Pop toast on new error
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleManualRetry = async () => {
+    setIsRetryingSync(true);
+    try {
+      await forceDriveSync();
+    } finally {
+      setIsRetryingSync(false);
+    }
+  };
+
+  const handleAuthorizeDrive = () => {
+    // Open Google Drive folder directly or invoke token prompt
+    window.open(GOOGLE_DRIVE_FOLDER_URL, '_blank', 'noopener,noreferrer');
+  };
+
   const sidebarItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'clients', label: 'Clients', icon: Users },
@@ -60,14 +107,15 @@ export default function Sidebar({
     { id: 'diagnostic', label: 'Diagnostics', icon: Activity }
   ];
 
+  const hasDriveError = driveSync.status === 'error' || Boolean(driveSync.error);
+
   return (
-    <aside id="sidebar-container" className="w-64 h-full max-h-full min-h-0 overflow-hidden bg-[#090d16] border-r border-[#1e293b] flex flex-col justify-between select-none shrink-0">
-      {/* Sidebar Header Brand with Custom Level 23 Geometric Badge - Extremely Compact Horizontal Layout */}
-      <div className="p-3 border-b border-[#1e293b]/60 bg-[#070b13]/80 shrink-0">
+    <aside id="sidebar-container" className="w-64 h-full max-h-full min-h-0 overflow-hidden bg-[#090d16] border-r border-[#1e293b] flex flex-col justify-between select-none shrink-0 relative">
+      {/* Sidebar Header Brand with Custom Level 23 Geometric Badge */}
+      <div className="p-3 border-b border-[#1e293b]/60 bg-[#070b13]/80 shrink-0 space-y-2">
         <div className="flex items-center gap-2.5">
-          {/* Level 23 Geometric Shield Logo - Scaled Down */}
+          {/* Level 23 Geometric Shield Logo */}
           <div className="relative w-10 h-10 flex items-center justify-center shrink-0">
-            {/* Background ambient lighting */}
             <div className="absolute inset-0 bg-radial-gradient from-[#dfb76c]/15 via-[#b38627]/5 to-transparent rounded-full animate-pulse filter blur-md"></div>
             
             <svg id="level-23-logo-svg" viewBox="0 0 120 120" className="w-8 h-8 relative z-10 filter drop-shadow-[0_2px_8px_rgba(223,183,108,0.35)]">
@@ -82,27 +130,21 @@ export default function Sidebar({
                   <stop offset="100%" stopColor="#fce093" />
                 </linearGradient>
               </defs>
-              {/* Outer Golden Hexagonal Border */}
               <polygon points="60,10 105,35 105,85 60,110 15,85 15,35" fill="none" stroke="url(#brandGold)" strokeWidth="4" strokeLinejoin="round" />
-              {/* Inner Hexagon Container */}
               <polygon points="60,18 97,40 97,80 60,102 23,80 23,40" fill="#020203" stroke="rgba(223,183,108,0.25)" strokeWidth="2" strokeLinejoin="round" opacity="0.95" />
-              {/* Modern Slab L-23 Styled Elements */}
               <g fill="url(#brandGold)">
                 <text x="32" y="74" fontSize="35" fontWeight="900" fontFamily='"Americana BT", "Cinzel", "Playfair Display", Georgia, serif' fill="url(#brandGold)" letterSpacing="-2">L</text>
                 <text x="56" y="74" fontSize="35" fontWeight="900" fontFamily='"Americana BT", "Cinzel", "Playfair Display", Georgia, serif' fill="url(#goldAccent)" letterSpacing="-2">23</text>
               </g>
-              {/* Scales under structural level */}
               <path d="M 45,85 L 75,85 M 60,81 L 60,89" stroke="url(#brandGold)" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </div>
 
           <div className="text-left space-y-0.5 min-w-0 flex-1">
-            {/* Level 23 Brand Name */}
             <div className="text-[14px] font-black tracking-[0.15em] text-transparent bg-clip-text bg-gradient-to-r from-[#fce093] via-[#dfb76c] to-[#b38627] font-heading uppercase leading-none select-none truncate">
               LEVEL 23
             </div>
             
-            {/* Sub branding labels */}
             <div className="flex items-center gap-1.5 leading-none">
               <h2 className="text-[9px] font-bold tracking-[0.1em] text-[#fae093] uppercase font-mono truncate">
                 LEGAL DESK
@@ -114,8 +156,8 @@ export default function Sidebar({
           </div>
         </div>
 
-        {/* Live Active Status Tag - Compact Single Row */}
-        <div className="mt-2 flex items-center justify-between gap-1.5 px-2 py-1 bg-[#0a101d] rounded-lg border border-[#1e293b]/60 text-[9px]">
+        {/* Live Active Status Tag */}
+        <div className="flex items-center justify-between gap-1.5 px-2 py-1 bg-[#0a101d] rounded-lg border border-[#1e293b]/60 text-[9px]">
           <div className="flex items-center gap-1.5 min-w-0">
             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${systemConnected ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.4)]' : 'bg-rose-400 shadow-[0_0_6px_rgba(251,113,133,0.4)]'}`}></span>
             <span className="text-slate-400 font-mono font-bold tracking-wide truncate">
@@ -124,9 +166,113 @@ export default function Sidebar({
           </div>
           <span className="text-[8px] font-mono text-slate-500 uppercase shrink-0">v2.4</span>
         </div>
+
+        {/* GOOGLE DRIVE REAL-TIME SYNC STATUS INDICATOR IN SIDEBAR */}
+        <div
+          id="sidebar-gdrive-sync-indicator"
+          onClick={() => setShowDriveModal(true)}
+          className={`flex items-center justify-between gap-1.5 px-2 py-1.5 rounded-lg border text-[9.5px] font-mono transition-all cursor-pointer ${
+            hasDriveError
+              ? 'bg-rose-950/40 border-rose-500/50 hover:bg-rose-900/50 text-rose-300 shadow-[0_0_8px_rgba(244,63,94,0.15)]'
+              : driveSync.status === 'syncing'
+              ? 'bg-amber-950/40 border-amber-500/40 hover:bg-amber-900/40 text-amber-300'
+              : 'bg-[#0a1424] border-teal-500/30 hover:border-teal-500/60 text-teal-300'
+          }`}
+          title="Click to view Google Drive folder sync diagnostics"
+        >
+          <div className="flex items-center gap-1.5 min-w-0 truncate">
+            {hasDriveError ? (
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0 animate-bounce" />
+            ) : driveSync.status === 'syncing' ? (
+              <RefreshCw className="w-3.5 h-3.5 text-amber-400 shrink-0 animate-spin" />
+            ) : (
+              <HardDrive className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+            )}
+            <span className="font-bold truncate">
+              {hasDriveError
+                ? 'GDrive: Auth / Access Error'
+                : driveSync.status === 'syncing'
+                ? 'GDrive: Syncing...'
+                : 'GDrive: Synced (1EW-b...)'}
+            </span>
+          </div>
+          
+          <span className={`text-[8px] font-extrabold uppercase px-1 rounded shrink-0 ${
+            hasDriveError
+              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+              : driveSync.status === 'syncing'
+              ? 'bg-amber-500/20 text-amber-300'
+              : 'bg-emerald-500/20 text-emerald-400'
+          }`}>
+            {hasDriveError ? 'ERR' : driveSync.status === 'syncing' ? 'SYNC' : 'OK'}
+          </span>
+        </div>
       </div>
 
-      {/* Sidebar Items Content - Maximized Scrollable Area */}
+      {/* VISUAL ERROR TOAST IN SIDEBAR (Notifies user of authentication / access errors during periodic sync) */}
+      <AnimatePresence>
+        {hasDriveError && !isToastDismissed && (
+          <motion.div
+            id="sidebar-drive-error-toast"
+            initial={{ opacity: 0, y: -8, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="mx-2.5 my-2 p-2.5 bg-gradient-to-b from-[#2a0c12] via-[#1a080c] to-[#0f0407] border-2 border-rose-500/70 rounded-xl shadow-[0_4px_16px_rgba(244,63,94,0.3)] text-left relative z-20"
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between gap-1.5 pb-1.5 border-b border-rose-500/30">
+              <div className="flex items-center gap-1.5 text-rose-300 font-mono font-black text-[10.5px] uppercase tracking-tight">
+                <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0 animate-pulse" />
+                <span>Drive Sync Auth Error</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsToastDismissed(true)}
+                className="text-rose-400 hover:text-rose-200 p-0.5 rounded transition-colors cursor-pointer"
+                title="Dismiss warning toast"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Error Body */}
+            <div className="py-2 space-y-1">
+              <p className="text-[10px] text-rose-200 font-sans leading-tight">
+                Periodic Google Drive synchronization encountered an <strong>Authentication or Access Error</strong> for <code className="text-amber-300 font-mono">level23consulting@gmail.com</code>.
+              </p>
+              <div className="text-[9px] font-mono text-rose-300/80 bg-black/40 p-1.5 rounded border border-rose-500/20 truncate">
+                Folder: 1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-1.5 pt-1">
+              <button
+                type="button"
+                onClick={handleManualRetry}
+                disabled={isRetryingSync}
+                className="flex-1 py-1 px-2 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-mono text-[9px] font-black uppercase rounded-md transition-all flex items-center justify-center gap-1 shadow cursor-pointer border-none"
+              >
+                <RefreshCw className={`w-3 h-3 ${isRetryingSync ? 'animate-spin' : ''}`} />
+                <span>{isRetryingSync ? 'Retrying...' : 'Retry Sync'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleAuthorizeDrive}
+                className="py-1 px-2 bg-[#090d16] hover:bg-slate-900 border border-amber-500/50 text-amber-300 font-mono text-[9px] font-bold uppercase rounded-md transition-all flex items-center gap-1 cursor-pointer"
+                title="Open Google Drive Folder"
+              >
+                <ExternalLink className="w-3 h-3" />
+                <span>Drive</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar Items Content */}
       <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
         {sidebarItems.map((item) => {
           const Icon = item.icon;
@@ -170,7 +316,7 @@ export default function Sidebar({
           );
         })}
 
-        {/* Dedicated Gold Judicial Research Panel Trigger - Compact */}
+        {/* Dedicated Gold Judicial Research Panel Trigger */}
         {onOpenResearch && (
           <button
             type="button"
@@ -194,9 +340,9 @@ export default function Sidebar({
         )}
       </nav>
 
-      {/* Sidebar Footer Section - Super space-efficient */}
+      {/* Sidebar Footer Section */}
       <div className="p-2.5 border-t border-[#1e293b] bg-[#070b12] space-y-2 shrink-0">
-        {/* Dynamic UTC Time Display - Single-line layout */}
+        {/* Dynamic UTC Time Display */}
         <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#0f172a]/60 border border-[#1e293b]/60 rounded-lg text-[10px] font-mono">
           <div className="flex items-center gap-1.5 text-slate-400">
             <Clock className="w-3.5 h-3.5 text-teal-400 shrink-0" />
@@ -205,7 +351,7 @@ export default function Sidebar({
           <span className="text-teal-400 font-semibold truncate">{utcTime}</span>
         </div>
 
-        {/* Dynamic Desktop/Electron Wrapper Toggle - Highly compressed layout */}
+        {/* Dynamic Desktop/Electron Wrapper Toggle */}
         <div className="p-2 bg-[#0a101b] border border-[#1e293b]/60 rounded-lg space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-[9.5px] font-mono uppercase text-slate-400 flex items-center gap-1.5 font-bold">
@@ -255,6 +401,84 @@ export default function Sidebar({
           <span>Phoenix Staff</span>
         </div>
       </div>
+
+      {/* GOOGLE DRIVE SYNC DIAGNOSTIC MODAL */}
+      {showDriveModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0b1220] border border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-teal-400 font-mono font-bold text-sm">
+                <HardDrive className="w-5 h-5 text-teal-400" />
+                <span>Google Drive Sync Status</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDriveModal(false)}
+                className="text-slate-400 hover:text-white p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs font-mono">
+              <div className="p-3 bg-[#060a12] rounded-xl border border-slate-800 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Account:</span>
+                  <span className="text-white font-bold">{DEFAULT_ACCOUNT_EMAIL}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Target Folder:</span>
+                  <span className="text-teal-300">{DEFAULT_TARGET_FOLDER_ID}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Sync Status:</span>
+                  <span className={`font-bold uppercase ${hasDriveError ? 'text-rose-400' : 'text-emerald-400'}`}>
+                    {hasDriveError ? 'Authentication Required' : driveSync.status}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Last Attempt:</span>
+                  <span className="text-slate-300">{new Date(driveSync.lastSyncedAt).toLocaleTimeString()}</span>
+                </div>
+              </div>
+
+              {hasDriveError && (
+                <div className="p-3 bg-rose-950/40 border border-rose-500/40 rounded-xl text-rose-300 space-y-1.5">
+                  <div className="font-bold flex items-center gap-1.5 text-rose-200">
+                    <ShieldAlert className="w-4 h-4" />
+                    <span>Error Description:</span>
+                  </div>
+                  <p className="text-[11px] font-sans leading-relaxed">
+                    {driveSync.error || 'Google Drive authentication token missing or expired. Access permission required to sync files.'}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={handleManualRetry}
+                disabled={isRetryingSync}
+                className="px-3 py-1.5 bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold rounded-lg uppercase text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRetryingSync ? 'animate-spin' : ''}`} />
+                <span>{isRetryingSync ? 'Syncing...' : 'Force Sync Now'}</span>
+              </button>
+
+              <a
+                href={GOOGLE_DRIVE_FOLDER_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 bg-[#090d16] hover:bg-slate-800 text-amber-300 border border-amber-500/40 font-bold rounded-lg uppercase text-xs flex items-center gap-1.5 transition-all"
+              >
+                <span>Open in Drive</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

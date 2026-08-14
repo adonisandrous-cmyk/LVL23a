@@ -173,35 +173,35 @@ export default function AIStaffTab({
     return terms.some(term => normMsg.includes(term));
   };
 
-  // All Female Agent Profiles. Alexandra Partner has the British/UK female accent ('Aoede' voice).
+  // All Female Agent Profiles with clear hierarchy and roles
   const agentProfiles: VoiceAgentProfile[] = [
     {
       id: 'ap-4',
       name: customNames['ap-4'] || 'EVE',
       avatar: '🤖',
-      role: 'Paralegal, Document Auditor & Evidence Specialist',
-      voiceName: 'Eve', // Specialized US Receptionist Voice
-      description: 'Fact-checks documents, evaluates & sorts evidence for inconsistencies, creates Bates-Cite matrixes, and compiles executive summaries directly for Phoenix Senior Partner.',
-      accent: 'Ollama-Powered Accent (US Receptionist / Paralegal)',
-      style: 'Meticulous, analytical, proactive, organized, evidence-focused',
+      role: 'Office Manager & Operations Lead',
+      voiceName: 'Eve', // Specialized US Receptionist / Office Manager Voice
+      description: 'Second in seniority behind Phoenix (#2 Seniority). Office Manager who keeps order, schedules appointments, coordinates client intakes, organizes case files, routes filings, audits evidence, and keeps everyday firm tasks running smoothly.',
+      accent: 'Professional & Efficient (US Female)',
+      style: 'Organized, proactive, orderly, supportive, task-focused',
       portrait: evePortrait
     },
     {
       id: 'ap-1',
       name: customNames['ap-1'] || 'Phoenix',
       avatar: '👩‍⚖️',
-      role: 'Senior Litigation Strategist',
+      role: 'Senior Managing Partner & Litigation Lead',
       voiceName: 'Aoede', // Professional UK Female
-      description: 'Prepares trial strategy boards, outlines procedural demand metrics, and manages trial briefs.',
+      description: 'Leader of the firm (#1 Seniority). Guides master legal strategy, tri-jurisdictional trial doctrine (CA, NV, Federal), high-stakes litigation, and leads the overall practice.',
       accent: 'Distinguished British Accent (UK Female)',
-      style: 'Authoritative, structured, precise',
+      style: 'Authoritative, strategic, commanding, visionary',
       portrait: phoenixPortrait
     },
     {
       id: 'ap-2',
       name: customNames['ap-2'] || 'Sentry',
       avatar: '🛡️',
-      role: 'System Administrator & App Maintenance Sentry',
+      role: 'Systems Security & Diagnostic Specialist',
       voiceName: 'Zephyr', // Mid-Atlantic Academic Female
       description: 'Responsible for diagnostic sweeps, applet health integrity, package tracking, and active deployment monitoring.',
       accent: 'Mid-Atlantic Academic (US Female)',
@@ -212,11 +212,11 @@ export default function AIStaffTab({
       id: 'ap-3',
       name: customNames['ap-3'] || 'Alure',
       avatar: '💼',
-      role: 'Office Manager & Business Reviewer',
+      role: 'Legal Research Associate & Case File Reviewer',
       voiceName: 'Kore', // West Coast Modern Female
-      description: 'Reviews cases, audits document pipelines, manages client intakes, and performs thorough office operational review.',
+      description: 'Conducts statutory legal research, brief drafting support, and comprehensive case analysis.',
       accent: 'Modern West Coast (US Female)',
-      style: 'Efficient, highly responsive, concise',
+      style: 'Analytical, highly responsive, concise',
       portrait: alurePortrait
     }
   ];
@@ -262,15 +262,15 @@ export default function AIStaffTab({
   const [inconsistencyReport, setInconsistencyReport] = useState<string | null>(null);
   const [isInconsistencyAuditing, setIsInconsistencyAuditing] = useState(false);
 
-  // Speech Recognition & TTS States
-  const [isListening, setIsListening] = useState(false);
-  const [voiceStatus, setVoiceStatus] = useState<'SLEEPING' | 'LISTENING' | 'WAKING' | 'SPEAKING' | 'ERROR'>('SLEEPING');
+  // Speech Recognition & TTS States (Active by Default)
+  const [isListening, setIsListening] = useState(true);
+  const [voiceStatus, setVoiceStatus] = useState<'SLEEPING' | 'LISTENING' | 'WAKING' | 'SPEAKING' | 'ERROR'>('LISTENING');
   const [recognition, setRecognition] = useState<any>(null);
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [isSpeakingAudio, setIsSpeakingAudio] = useState(false);
   const [automaticSpeakMode, setAutomaticSpeakMode] = useState(true); // Toggle to speak replies automatically
   const [lastHeardSpeech, setLastHeardSpeech] = useState<string>('');
-  const [showHandsFreeDeck, setShowHandsFreeDeck] = useState(false);
+  const [showHandsFreeDeck, setShowHandsFreeDeck] = useState(true);
 
   // Live Microphone Audio Analyzer & Dictation States
   const [micVolume, setMicVolume] = useState<number>(0);
@@ -320,14 +320,56 @@ export default function AIStaffTab({
   // Audio Playback Elements & Voice Refs
   const audioContextRef = useRef<AudioContext | null>(null);
   const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const currentAudioTokenRef = useRef<number>(0);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const lastSpokeTimeRef = useRef<number>(0);
   const isListeningRef = useRef(isListening);
+  const isSpeakingAudioRef = useRef(isSpeakingAudio);
+  const activeProfileRef = useRef(activeProfile);
+  const automaticSpeakModeRef = useRef(automaticSpeakMode);
   const recognitionRef = useRef<any>(null);
+  const restartTimeoutRef = useRef<any>(null);
+  const [continuousConversation, setContinuousConversation] = useState<boolean>(true);
+  const continuousConversationRef = useRef(true);
 
   useEffect(() => {
     isListeningRef.current = isListening;
   }, [isListening]);
+
+  useEffect(() => {
+    isSpeakingAudioRef.current = isSpeakingAudio;
+  }, [isSpeakingAudio]);
+
+  useEffect(() => {
+    activeProfileRef.current = activeProfile;
+  }, [activeProfile]);
+
+  useEffect(() => {
+    automaticSpeakModeRef.current = automaticSpeakMode;
+  }, [automaticSpeakMode]);
+
+  useEffect(() => {
+    continuousConversationRef.current = continuousConversation;
+  }, [continuousConversation]);
+
+  // Safe restart helper to prevent InvalidStateError and maintain continuous hot mic
+  const safeRestartRecognition = (delay = 120) => {
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+    }
+    restartTimeoutRef.current = setTimeout(() => {
+      if (!isListeningRef.current) return;
+      const rec = recognitionRef.current;
+      if (!rec) return;
+      try {
+        rec.start();
+        setVoiceStatus('LISTENING');
+        setSpeechError(null);
+      } catch (err: any) {
+        // If already started or transitioning, ignore safely
+      }
+    }, delay);
+  };
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -373,31 +415,38 @@ export default function AIStaffTab({
           console.info("🎙️ Speech Recognition: Silent interval.");
           return;
         }
-        if (event.error === 'network' || event.error === 'aborted' || event.error === 'not-allowed') {
-          console.info("🎙️ Speech Recognition network/permission notice:", event.error);
-          isListeningRef.current = false;
-          setIsListening(false);
-          setVoiceStatus('SLEEPING');
-          if (event.error === 'network') {
-            setSpeechError("Speech recognition paused (browser sandbox network restriction). You can type commands directly.");
+        if (event.error === 'aborted') {
+          console.info("🎙️ Speech Recognition aborted event. Re-arming listener...");
+          if (isListeningRef.current) {
+            safeRestartRecognition(150);
           }
           return;
         }
+        if (event.error === 'network') {
+          console.info("🎙️ Speech Recognition network notice:", event.error);
+          if (isListeningRef.current) {
+            safeRestartRecognition(600);
+          }
+          return;
+        }
+        if (event.error === 'not-allowed') {
+          console.warn("🎙️ Speech Recognition permission not allowed.");
+          isListeningRef.current = false;
+          setIsListening(false);
+          setVoiceStatus('SLEEPING');
+          setSpeechError("Microphone access denied. Please enable microphone permissions in your browser to converse.");
+          return;
+        }
         console.error("Speech Recognition error:", event.error);
-        setSpeechError(event.error);
-        setVoiceStatus('ERROR');
-        setIsListening(false);
+        if (isListeningRef.current) {
+          safeRestartRecognition(400);
+        }
       };
 
       rec.onend = () => {
         if (isListeningRef.current) {
-          // Restart background recognition automatically for continuous listening experience
-          try {
-            rec.start();
-          } catch {
-            setIsListening(false);
-            setVoiceStatus('SLEEPING');
-          }
+          // Keep hot mic alive for continuous conversational turn-taking
+          safeRestartRecognition(100);
         } else {
           setVoiceStatus('SLEEPING');
         }
@@ -406,21 +455,30 @@ export default function AIStaffTab({
       rec.onresult = (event: any) => {
         // Prevent feedback looping when active speech synthesis is running or finished very recently (microphone echo delay)
         const timeSinceLastSpoke = Date.now() - lastSpokeTimeRef.current;
-        if (isSpeakingAudio || (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) || timeSinceLastSpoke < 2200) {
-          console.info("🤫 Prevented self-feedback loop or active speaker echo while assistant is responding.");
+        if (isSpeakingAudioRef.current || (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) || timeSinceLastSpoke < 350) {
+          console.info("🤫 Muted speaker feedback while assistant is outputting audio.");
           return;
         }
         const lastResultIndex = event.resultIndex;
         const transcript = event.results[lastResultIndex][0].transcript.trim();
         console.log("🎙️ Legal Wake Listener parsed speech:", transcript);
         setLastHeardSpeech(transcript);
-        if (event.results[lastResultIndex].isFinal || transcript.length > 3) {
+        if (event.results[lastResultIndex].isFinal || transcript.length > 2) {
           handleHeardSpeechPhrase(transcript);
         }
       };
 
       recognitionRef.current = rec;
       setRecognition(rec);
+
+      // Auto-start continuous wake word listening on mount
+      try {
+        rec.start();
+        setIsListening(true);
+        setVoiceStatus('LISTENING');
+      } catch (err) {
+        console.info("Voice wake auto-start notice:", err);
+      }
     }
   }, []);
 
@@ -483,21 +541,29 @@ export default function AIStaffTab({
   };
 
   const stopActiveSpeech = () => {
+    currentAudioTokenRef.current++;
     if (activeSourceRef.current) {
       try {
         activeSourceRef.current.stop();
+        activeSourceRef.current.disconnect();
       } catch {}
       activeSourceRef.current = null;
     }
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
     }
+    isSpeakingAudioRef.current = false;
     setIsSpeakingAudio(false);
   };
 
   // Speaks response using premium Gemini TTS API with graceful local browser standard speechSynthesis backup
+  // Guaranteed single-agent speaker execution (eliminates double talk / overlapping audio)
   const speakResponseText = async (rawText: string, voiceName: string) => {
     stopActiveSpeech();
+    const thisToken = ++currentAudioTokenRef.current;
+    isSpeakingAudioRef.current = true;
     setIsSpeakingAudio(true);
     setVoiceStatus('SPEAKING');
 
@@ -507,14 +573,17 @@ export default function AIStaffTab({
       .trim();
 
     if (!cleanText) {
+      isSpeakingAudioRef.current = false;
       setIsSpeakingAudio(false);
-      setVoiceStatus(isListening ? 'LISTENING' : 'SLEEPING');
+      setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
+      if (isListeningRef.current) safeRestartRecognition(100);
       return;
     }
 
     // Helper to invoke browser native SpeechSynthesis with resume/cancel sequence
     const fallbackToBrowserSpeech = () => {
-      if ('speechSynthesis' in window) {
+      if (thisToken !== currentAudioTokenRef.current) return;
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         try {
           window.speechSynthesis.cancel();
           window.speechSynthesis.resume();
@@ -558,32 +627,57 @@ export default function AIStaffTab({
           utterance.pitch = voiceName === 'Eve' ? 1.1 : 1.0;
 
           utterance.onstart = () => {
+            if (thisToken !== currentAudioTokenRef.current) {
+              window.speechSynthesis.cancel();
+              return;
+            }
+            isSpeakingAudioRef.current = true;
             setIsSpeakingAudio(true);
             setVoiceStatus('SPEAKING');
           };
 
           utterance.onend = () => {
-            setIsSpeakingAudio(false);
-            setVoiceStatus(isListening ? 'LISTENING' : 'SLEEPING');
-            lastSpokeTimeRef.current = Date.now();
+            if (thisToken === currentAudioTokenRef.current) {
+              isSpeakingAudioRef.current = false;
+              setIsSpeakingAudio(false);
+              setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
+              lastSpokeTimeRef.current = Date.now();
+              if (isListeningRef.current) {
+                safeRestartRecognition(100);
+              }
+            }
           };
 
           utterance.onerror = (e) => {
             console.warn("SpeechSynthesis error:", e);
-            setIsSpeakingAudio(false);
-            setVoiceStatus(isListening ? 'LISTENING' : 'SLEEPING');
-            lastSpokeTimeRef.current = Date.now();
+            if (thisToken === currentAudioTokenRef.current) {
+              isSpeakingAudioRef.current = false;
+              setIsSpeakingAudio(false);
+              setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
+              lastSpokeTimeRef.current = Date.now();
+              if (isListeningRef.current) {
+                safeRestartRecognition(100);
+              }
+            }
           };
 
           window.speechSynthesis.speak(utterance);
         } catch (err) {
           console.warn("SpeechSynthesis exception:", err);
-          setIsSpeakingAudio(false);
-          setVoiceStatus(isListening ? 'LISTENING' : 'SLEEPING');
+          if (thisToken === currentAudioTokenRef.current) {
+            isSpeakingAudioRef.current = false;
+            setIsSpeakingAudio(false);
+            setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
+            if (isListeningRef.current) safeRestartRecognition(100);
+          }
         }
       } else {
-        setIsSpeakingAudio(false);
-        setVoiceStatus(isListening ? 'LISTENING' : 'SLEEPING');
+        if (thisToken === currentAudioTokenRef.current) {
+          isSpeakingAudioRef.current = false;
+          setIsSpeakingAudio(false);
+          setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
+          if (isListeningRef.current) safeRestartRecognition(100);
+        }
       }
     };
 
@@ -597,12 +691,16 @@ export default function AIStaffTab({
         })
       });
 
+      if (thisToken !== currentAudioTokenRef.current) return;
+
       if (!response.ok) {
         fallbackToBrowserSpeech();
         return;
       }
 
       const data = await response.json();
+      if (thisToken !== currentAudioTokenRef.current) return;
+
       if (data.base64Audio) {
         await resumeAudioContextIfSuspended();
         const ctx = audioContextRef.current;
@@ -649,6 +747,8 @@ export default function AIStaffTab({
               }
             }
 
+            if (thisToken !== currentAudioTokenRef.current) return;
+
             if (audioBuffer) {
               const source = ctx.createBufferSource();
               source.buffer = audioBuffer;
@@ -656,9 +756,15 @@ export default function AIStaffTab({
               activeSourceRef.current = source;
 
               source.onended = () => {
-                setIsSpeakingAudio(false);
-                setVoiceStatus(isListening ? 'LISTENING' : 'SLEEPING');
-                lastSpokeTimeRef.current = Date.now();
+                if (thisToken === currentAudioTokenRef.current) {
+                  isSpeakingAudioRef.current = false;
+                  setIsSpeakingAudio(false);
+                  setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
+                  lastSpokeTimeRef.current = Date.now();
+                  if (isListeningRef.current) {
+                    safeRestartRecognition(100);
+                  }
+                }
               };
 
               source.start(0);
@@ -679,7 +785,8 @@ export default function AIStaffTab({
 
   // Handles real spoken speech and routes matching names / wake words
   const handleHeardSpeechPhrase = (phrase: string) => {
-    const normalized = phrase.toLowerCase();
+    const normalized = phrase.toLowerCase().trim();
+    if (!normalized || normalized.length < 2) return;
     
     // Dynamic matching of the custom names assigned by the user
     const alexName = (customNames['ap-1'] || 'Alexandra').toLowerCase();
@@ -687,17 +794,17 @@ export default function AIStaffTab({
     const aidaName = (customNames['ap-3'] || 'Aida').toLowerCase();
     const eveName = (customNames['ap-4'] || 'EVE').toLowerCase();
 
-    const hasAlexandra = normalized.includes(alexName) || normalized.includes("alexandra") || normalized.includes("alexa") || normalized.includes("partner") || normalized.includes("phoenix");
-    const hasMiranda = normalized.includes(mirandaName) || normalized.includes("miranda") || normalized.includes("bankruptcy") || normalized.includes("sentry");
-    const hasAida = normalized.includes(aidaName) || normalized.includes("aida") || normalized.includes("associate") || normalized.includes("alure");
-    const hasEve = normalized.includes(eveName) || normalized.includes("eve") || normalized.includes("receptionist") || normalized.includes("router");
+    const hasAlexandra = normalized.includes(alexName) || normalized.includes("alexandra") || normalized.includes("alexa") || normalized.includes("partner") || normalized.includes("phoenix") || normalized.includes("leader");
+    const hasMiranda = normalized.includes(mirandaName) || normalized.includes("miranda") || normalized.includes("bankruptcy") || normalized.includes("sentry") || normalized.includes("security");
+    const hasAida = normalized.includes(aidaName) || normalized.includes("aida") || normalized.includes("associate") || normalized.includes("alure") || normalized.includes("research");
+    const hasEve = normalized.includes(eveName) || normalized.includes("eve") || normalized.includes("receptionist") || normalized.includes("office manager") || normalized.includes("operations") || normalized.includes("router");
     const hasWakeWord = normalized.includes("wake up") || normalized.includes("wake-up") || normalized.includes("hello") || normalized.includes("activate") || normalized.includes("listen");
 
     let matchedProfile = null;
     if (hasAlexandra) matchedProfile = agentProfiles.find(p => p.id === 'ap-1');
+    else if (hasEve) matchedProfile = agentProfiles.find(p => p.id === 'ap-4');
     else if (hasMiranda) matchedProfile = agentProfiles.find(p => p.id === 'ap-2');
     else if (hasAida) matchedProfile = agentProfiles.find(p => p.id === 'ap-3');
-    else if (hasEve) matchedProfile = agentProfiles.find(p => p.id === 'ap-4');
 
     if (matchedProfile) {
       setActiveProfile(matchedProfile);
@@ -709,6 +816,7 @@ export default function AIStaffTab({
         .replace(alexName, "")
         .replace("alexandra", "")
         .replace("phoenix", "")
+        .replace("leader", "")
         .replace(mirandaName, "")
         .replace("miranda", "")
         .replace("sentry", "")
@@ -717,6 +825,7 @@ export default function AIStaffTab({
         .replace("alure", "")
         .replace(eveName, "")
         .replace("eve", "")
+        .replace("office manager", "")
         .replace("wake up", "")
         .replace("wake-up", "")
         .replace("listen", "")
@@ -724,21 +833,19 @@ export default function AIStaffTab({
         .trim();
 
       if (querySpoken.length > 2) {
-        // Speak transition notice and execute query immediately hands-free!
-        const intro = `Yes! ${matchedProfile.name} listening. Processing: "${querySpoken}"`;
-        speakResponseText(intro, matchedProfile.voiceName);
+        // Direct execution without double-talk or conflicting intro phrases
         submitSpokenCommandDirectly(querySpoken, matchedProfile);
       } else {
-        // Simple wake up - Co-Counsel status & tri-jurisdictional practice alignment
+        // Simple wake up - clear hierarchy & role representation
         let responsePhrase = "";
         if (matchedProfile.id === 'ap-1') {
-          responsePhrase = `Yes, I am ${matchedProfile.name}, your Senior Litigation Strategist. I value working on these tri-jurisdictional matters as your co-counsel. What trial strategy or joint filings do you need, Alex?`;
+          responsePhrase = `Yes, I am ${matchedProfile.name}, your Senior Managing Partner and Litigation Lead. What trial strategy or joint filings do you need, Alex?`;
+        } else if (matchedProfile.id === 'ap-4') {
+          responsePhrase = `Hello! I am ${matchedProfile.name}, your Office Manager & Operations Lead. I keep our everyday tasks, calendar, intakes, and case files in complete order. How can I help you today, Alex?`;
         } else if (matchedProfile.id === 'ap-2') {
-          responsePhrase = `Hello, I am ${matchedProfile.name}, your Systems Diagnostic Sentry. I am monitoring your California and Nevada filings security scope. What audit or system check should I run, Alex?`;
-        } else if (matchedProfile.id === 'ap-3') {
-          responsePhrase = `Hi, I am ${matchedProfile.name}, your Office Case Reviewer. Our case files, intake schemas, and client checklists are set. How can I assist you with your professional practice today, Alex?`;
+          responsePhrase = `Hello, I am ${matchedProfile.name}, your Systems Diagnostic Sentry. All cloud synchronization and system integrity sweeps are active. What check should I run, Alex?`;
         } else {
-          responsePhrase = `Hello! I am ${matchedProfile.name}, your Administrative Receptionist and Task Router. I keep the iiiamadex filing system perfectly organized and synchronized. How can I help you route documents or build briefs today, Alex?`;
+          responsePhrase = `Hi, I am ${matchedProfile.name}, your Legal Research Associate. Case research and document reviews are ready. How can I assist you, Alex?`;
         }
         
         speakResponseText(responsePhrase, matchedProfile.voiceName);
@@ -756,7 +863,7 @@ export default function AIStaffTab({
       const pPhoenix = agentProfiles.find(p => p.id === 'ap-1')?.name || 'Phoenix';
       const pSentry = agentProfiles.find(p => p.id === 'ap-2')?.name || 'Sentry';
       const pAlure = agentProfiles.find(p => p.id === 'ap-3')?.name || 'Alure';
-      const wakeGreeting = `Yes, I am awake. ${pEve}, ${pPhoenix}, ${pSentry}, and ${pAlure} are all online. Who would you like to speak with?`;
+      const wakeGreeting = `Yes, I am awake. ${pEve} (Office Manager), ${pPhoenix} (Firm Leader), ${pSentry}, and ${pAlure} are all online and ready.`;
       speakResponseText(wakeGreeting, activeProfile.voiceName);
       onAddMessage({
         id: `m-voice-${Date.now()}`,
@@ -765,6 +872,11 @@ export default function AIStaffTab({
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         agentName: activeProfile.name
       });
+    } else if (continuousConversationRef.current && isListeningRef.current && phrase.trim().length >= 2) {
+      // 🎯 CONTINUOUS CONVERSATION: Natural turn-taking reply directed to current active agent!
+      const currentAgent = activeProfileRef.current || activeProfile;
+      console.log(`🎙️ Natural conversational reply routed to active agent (${currentAgent.name}):`, phrase);
+      submitSpokenCommandDirectly(phrase.trim(), currentAgent);
     }
   };
 
@@ -1604,7 +1716,7 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
                   const profile = agentProfiles.find(p => p.id === 'ap-1')!;
                   setActiveProfile(profile);
                   playWakeChime();
-                  const phrase = `Yes! I am ${profile.name}, Senior Litigation Strategist. I am listening co-counsel. What trial strategy or motion brief do you need, Alex?`;
+                  const phrase = `Yes! I am ${profile.name}, Senior Managing Partner and Litigation Lead. I am listening co-counsel. What trial strategy or motion brief do you need, Alex?`;
                   speakResponseText(phrase, profile.voiceName);
                   onAddMessage({
                     id: `m-voice-${Date.now()}`,
@@ -1616,10 +1728,10 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
                 }}
                 className="p-2 bg-[#08101d] hover:bg-teal-950/40 border border-teal-500/30 rounded-xl text-left text-slate-200 transition cursor-pointer flex items-center gap-2 group shadow"
               >
-                <span className="text-lg">🦅</span>
+                <span className="text-lg">👩‍⚖️</span>
                 <div className="min-w-0">
                   <span className="font-bold block truncate group-hover:text-teal-300">Wake Phoenix</span>
-                  <span className="text-[8px] text-slate-400 block truncate">Litigation Partner</span>
+                  <span className="text-[8px] text-teal-400 font-bold block truncate">#1 Firm Leader</span>
                 </div>
               </button>
 
@@ -1629,7 +1741,7 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
                   const profile = agentProfiles.find(p => p.id === 'ap-4')!;
                   setActiveProfile(profile);
                   playWakeChime();
-                  const phrase = `Hello! I am ${profile.name}, your Evidence Auditor & Paralegal. I can fact-check filings, generate Bates matrixes, or summarize briefs hands-free.`;
+                  const phrase = `Hello! I am ${profile.name}, your Office Manager & Operations Lead. I keep our everyday tasks, calendar, intakes, and case files in complete order.`;
                   speakResponseText(phrase, profile.voiceName);
                   onAddMessage({
                     id: `m-voice-${Date.now()}`,
@@ -1644,7 +1756,7 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
                 <span className="text-lg">🤖</span>
                 <div className="min-w-0">
                   <span className="font-bold block truncate group-hover:text-teal-300">Wake EVE</span>
-                  <span className="text-[8px] text-slate-400 block truncate">Paralegal Auditor</span>
+                  <span className="text-[8px] text-cyan-400 font-bold block truncate">#2 Office Manager</span>
                 </div>
               </button>
 
@@ -2953,6 +3065,75 @@ EVE has completed document synchronization audit:
               </div>
             </div>
           )}
+
+          {/* Real-time Turn-Taking Conversational Activity Banner */}
+          <div className={`px-3 py-1.5 border-t text-[10px] font-mono flex items-center justify-between gap-2 shrink-0 select-none transition-all ${
+            isSpeakingAudio
+              ? 'bg-amber-950/40 border-amber-500/40 text-amber-300'
+              : isListening
+              ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300'
+              : 'bg-[#090d16] border-[#1e293b] text-slate-400'
+          }`}>
+            <div className="flex items-center gap-2 min-w-0 truncate">
+              {isSpeakingAudio ? (
+                <>
+                  <Volume2 className="w-3.5 h-3.5 text-amber-400 shrink-0 animate-bounce" />
+                  <span className="font-bold truncate">
+                    🔊 {activeProfile.name} is speaking... (Listen or interrupt to reply)
+                  </span>
+                </>
+              ) : isListening ? (
+                <>
+                  <Mic className="w-3.5 h-3.5 text-emerald-400 shrink-0 animate-pulse" />
+                  <span className="font-bold truncate">
+                    🎙️ Continuous Conversation: {activeProfile.name} is listening — speak your reply now...
+                  </span>
+                </>
+              ) : (
+                <>
+                  <MicOff className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                  <span className="truncate">Hot Mic Paused • Click Resume to converse hands-free</span>
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {isSpeakingAudio && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopActiveSpeech();
+                    if (!isListening) {
+                      setIsListening(true);
+                      isListeningRef.current = true;
+                    }
+                    safeRestartRecognition(50);
+                  }}
+                  className="px-2 py-0.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded text-[9px] uppercase tracking-wider shadow cursor-pointer transition flex items-center gap-1"
+                  title="Interrupt Assistant Speech and Open Microphone"
+                >
+                  <VolumeX className="w-3 h-3" />
+                  <span>Interrupt & Speak</span>
+                </button>
+              )}
+
+              {!isListening && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsListening(true);
+                    isListeningRef.current = true;
+                    setVoiceStatus('LISTENING');
+                    safeRestartRecognition(50);
+                  }}
+                  className="px-2 py-0.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded text-[9px] uppercase tracking-wider shadow cursor-pointer transition flex items-center gap-1"
+                >
+                  <Mic className="w-3 h-3" />
+                  <span>Resume Voice</span>
+                </button>
+              )}
+            </div>
+          </div>
 
           {/* Keyboard input send form box with Dictation Mic Button */}
           <form onSubmit={handleSend} className="p-2.5 border-t border-[#1e293b] bg-[#070b12] flex gap-2 items-end shrink-0">
