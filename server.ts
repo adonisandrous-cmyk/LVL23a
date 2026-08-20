@@ -407,6 +407,233 @@ Return a valid JSON object matching this schema:
   }
 });
 
+// 2.1c Google Translate & Gemini Legal Translation Endpoint
+app.post("/api/translate", async (req: Request, res: Response) => {
+  const { text, texts, targetLanguage = "es", sourceLanguage = "auto", formTitle, legalDomain } = req.body;
+
+  if (!text && (!texts || !Array.isArray(texts) || texts.length === 0)) {
+    return res.status(400).json({ error: "Text or array of texts is required for translation." });
+  }
+
+  const langNames: Record<string, string> = {
+    es: "Spanish (Español)",
+    en: "English",
+    fr: "French",
+    pt: "Portuguese",
+    tl: "Tagalog",
+    vi: "Vietnamese",
+    zh: "Mandarin Chinese",
+    ar: "Arabic"
+  };
+
+  const targetLangName = langNames[targetLanguage] || targetLanguage;
+
+  try {
+    const ai = getAiClient();
+    
+    if (texts && Array.isArray(texts)) {
+      const prompt = `You are a certified legal translator and Google Translate engine specialist for court pleadings and client intake forms.
+Translate the following array of legal text strings from ${sourceLanguage} to ${targetLangName}.
+Preserve professional legal terminology accurately (e.g. "Joint Legal Custody" -> "Custodia legal compartida", "Dissolution of Marriage" -> "Disolución del matrimonio", "Alien Registration Number" -> "Número de registro de extranjero", "Community Property" -> "Bienes gananciales / Propiedad comunitaria", "Petitioner" -> "Demandante / Peticionario", "Respondent" -> "Demandado / Peticionado").
+Do NOT alter variables, numbers, currency symbols, or placeholders (e.g., {{name}}, [Date], etc.).
+
+Input JSON Array of strings:
+${JSON.stringify(texts)}
+
+Return ONLY a valid JSON array containing the translated strings in identical order.
+Format: ["translated 1", "translated 2", ...]`;
+
+      const response = await callGeminiWithRetry(() => ai.models.generateContent({
+        model: "gemini-3.7-flash",
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+      }));
+
+      let parsed: string[] = [];
+      try {
+        parsed = JSON.parse(response.text || "[]");
+      } catch {
+        parsed = texts;
+      }
+
+      return res.json({
+        success: true,
+        translatedTexts: parsed,
+        targetLanguage,
+        provider: "Google Translate / Gemini 3.7 Flash Legal"
+      });
+    }
+
+    const singlePrompt = `You are a certified legal court interpreter and translation engine specialist.
+Translate the following legal intake / court form text from ${sourceLanguage} to ${targetLangName}.
+Preserve formal legal structure, judicial formatting, bullet points, and precision legal vocabulary.
+Form/Matter context: "${formTitle || legalDomain || "Legal Practice Document"}"
+
+Document Text to Translate:
+"""
+${text}
+"""
+
+Return ONLY the high-accuracy translated text.`;
+
+    const response = await callGeminiWithRetry(() => ai.models.generateContent({
+      model: "gemini-3.7-flash",
+      contents: singlePrompt
+    }));
+
+    res.json({
+      success: true,
+      translatedText: response.text || text,
+      targetLanguage,
+      provider: "Google Translate / Gemini 3.7 Flash Legal"
+    });
+  } catch (error: any) {
+    console.warn("Translation API error:", error.message || error);
+    res.status(500).json({ error: error.message || "Failed to complete legal translation." });
+  }
+});
+
+// 2.1d Complete Legal Form Schema Translator (Preserves Field IDs for Automated Mapping)
+app.post("/api/gemini/translate-form", async (req: Request, res: Response) => {
+  const { formSchema, targetLanguage = "es" } = req.body;
+
+  if (!formSchema || !formSchema.sections) {
+    return res.status(400).json({ error: "A valid formSchema object with sections is required." });
+  }
+
+  const targetLangLabel = targetLanguage === "es" ? "Spanish (Español)" : "English";
+
+  try {
+    const ai = getAiClient();
+    const prompt = `You are an expert bilingual legal intake architect.
+Translate the provided Legal Intake / Informational Form schema into ${targetLangLabel}.
+
+CRITICAL REQUIREMENTS:
+1. Translate "formTitle", "description", "aiPromptMessage", "sectionTitle", each field "label", "placeholder", and any "options" array values into natural, professional ${targetLangLabel} legal terminology.
+2. IMPORTANT: DO NOT CHANGE ANY FIELD "id" VALUES! Keep the "id", "type", and "required" attributes identical to maintain backend data synchronization.
+3. Use respectful, clear, and legally sound language appropriate for clients and court filings.
+
+Original Form Schema (JSON):
+${JSON.stringify(formSchema, null, 2)}
+
+Return a valid JSON object matching the exact structure with translated labels, descriptions, and placeholders.`;
+
+    const response = await callGeminiWithRetry(() => ai.models.generateContent({
+      model: "gemini-3.7-flash",
+      contents: prompt,
+      config: { responseMimeType: "application/json" }
+    }));
+
+    const text = response.text || "{}";
+    let parsed: any = {};
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = formSchema;
+    }
+
+    res.json({
+      success: true,
+      translatedSchema: parsed,
+      targetLanguage
+    });
+  } catch (error: any) {
+    console.warn("Error translating form schema:", error.message || error);
+    res.status(500).json({ error: error.message || "Failed to translate form schema." });
+  }
+});
+
+// 2.1e Extract Returned Spanish/Foreign Intake Form & Translate to English Client Record
+app.post("/api/gemini/extract-translated-intake", async (req: Request, res: Response) => {
+  const { rawText, sourceLanguage = "Spanish", category = "General" } = req.body;
+
+  if (!rawText || typeof rawText !== "string" || !rawText.trim()) {
+    return res.status(400).json({ error: "rawText from returned intake form is required." });
+  }
+
+  try {
+    const ai = getAiClient();
+    const prompt = `You are an elite bilingual legal data extraction engine.
+A client has returned a completed legal intake form or questionnaire written in ${sourceLanguage}.
+Your task is to:
+1. Thoroughly parse and extract all factual data points from the returned form.
+2. TRANSLATE all responses, narratives, fact statements, asset descriptions, incident timelines, and requested relief into standard, professional, formal ENGLISH for the law firm's official records.
+3. Structure the output into standard client, matter, and form fields ready to be stored in the firm's English database.
+
+Returned Client Intake Content:
+"""
+${rawText}
+"""
+
+Legal Matter Category: "${category}"
+
+Return a valid JSON object strictly adhering to this schema:
+{
+  "clientProfile": {
+    "name": "Full Legal Name in English format",
+    "email": "email@domain.com or empty",
+    "phone": "Phone number or empty",
+    "address": "Residential/Mailing address in English",
+    "preferredLanguage": "Spanish",
+    "practiceArea": "Immigration | Family Law | General | Bankruptcy | Civil Litigation",
+    "intakeNotesEnglish": "Comprehensive synthesized summary of all facts, history, claims, and background translated into professional English legal notes.",
+    "originalIntakeNotesSpanish": "Original Spanish intake summary text."
+  },
+  "matterProfile": {
+    "title": "Clear English matter title (e.g., Marriage Dissolution / Asylum Petition)",
+    "category": "${category}",
+    "incidentSummary": "English translation of what happened and client goals",
+    "opposingParties": "Name of opposing parties / respondents / ICE / other entities",
+    "damagesOrRelief": "English description of relief or damages sought",
+    "urgencyLevel": "Standard | Urgent | Emergency",
+    "keyDeadlines": "Any mentioned court dates or statutory deadlines"
+  },
+  "extractedFieldMap": {
+    "full_name": "...",
+    "email": "...",
+    "phone": "...",
+    "dob": "YYYY-MM-DD",
+    "country_birth": "...",
+    "a_number": "...",
+    "date_marriage": "...",
+    "date_separation": "...",
+    "minor_children": "...",
+    "property_assets": "..."
+  },
+  "translationAudit": {
+    "detectedLanguage": "Spanish",
+    "confidenceScore": 98,
+    "keyLegalTermsTranslated": [
+      { "original": "Custodia compartida", "translatedEnglish": "Joint Legal Custody" }
+    ]
+  }
+}`;
+
+    const response = await callGeminiWithRetry(() => ai.models.generateContent({
+      model: "gemini-3.7-flash",
+      contents: prompt,
+      config: { responseMimeType: "application/json" }
+    }));
+
+    const text = response.text || "{}";
+    let parsed: any = {};
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = { error: "Failed to parse JSON result from extraction" };
+    }
+
+    res.json({
+      success: true,
+      extractedData: parsed,
+      category
+    });
+  } catch (error: any) {
+    console.warn("Error in extract-translated-intake API:", error.message || error);
+    res.status(500).json({ error: error.message || "Failed to extract and translate client intake data." });
+  }
+});
+
 // 2.2 AI Factual Document Analysis (For iiiamadex executive summary and audits)
 export interface CachedFile {
   name: string;
@@ -3230,6 +3457,271 @@ app.get("/api/drive/sync-status", (req: Request, res: Response) => {
     success: true,
     syncState: driveSyncState
   });
+});
+
+// POST /api/drive/scan-folder-clients - Ingest all client files & subfolders from a Google Drive Folder URL/ID
+app.post("/api/drive/scan-folder-clients", async (req: Request, res: Response) => {
+  const { folderUrlOrId } = req.body;
+  const authHeader = req.headers.authorization;
+  const accessToken = authHeader && authHeader.split(" ")[1];
+
+  if (!folderUrlOrId) {
+    return res.status(400).json({ error: "Missing folderUrlOrId parameter" });
+  }
+
+  // Extract pure folder ID from Drive URL if needed
+  let folderId = folderUrlOrId.trim();
+  const folderMatch = folderUrlOrId.match(/folders\/([a-zA-Z0-9_-]+)/);
+  const idMatch = folderUrlOrId.match(/id=([a-zA-Z0-9_-]+)/);
+  if (folderMatch && folderMatch[1]) {
+    folderId = folderMatch[1];
+  } else if (idMatch && idMatch[1]) {
+    folderId = idMatch[1];
+  }
+
+  // Check if token is a valid OAuth token (not placeholder)
+  const isPlaceholderToken = !accessToken || accessToken.includes("Level23Consulting_Drive_ActiveSessionToken");
+
+  if (isPlaceholderToken) {
+    return res.status(401).json({
+      success: false,
+      needsAuth: true,
+      error: "Google Drive OAuth authorization required to read files from this private Drive folder. Please click 'Sign in with Google' to connect your account or drag & drop the client files directly."
+    });
+  }
+
+  try {
+    let scannedFiles: any[] = [];
+    let folderName = `Google Drive Folder (${folderId})`;
+
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const drive = google.drive({ version: "v3", auth: oauth2Client });
+
+    // Get folder metadata
+    try {
+      const folderMeta = await drive.files.get({
+        fileId: folderId,
+        fields: "id, name, webViewLink"
+      });
+      if (folderMeta.data.name) {
+        folderName = folderMeta.data.name;
+      }
+    } catch (fErr: any) {
+      console.warn("Could not fetch folder meta:", fErr.message);
+      if (fErr.code === 401 || fErr.code === 403) {
+        return res.status(401).json({
+          success: false,
+          needsAuth: true,
+          error: `Google Drive Permission Error (${fErr.message}). Please re-authenticate your Google account to grant Drive access.`
+        });
+      }
+    }
+
+    // List all files and subfolders inside the target folder
+    const listRes = await drive.files.list({
+      q: `'${folderId}' in parents and trashed = false`,
+      pageSize: 50,
+      fields: "files(id, name, mimeType, size, modifiedTime, webViewLink)"
+    });
+
+    const rawFiles = listRes.data.files || [];
+
+    if (rawFiles.length === 0) {
+      return res.json({
+        success: true,
+        folderId,
+        folderName,
+        filesScanned: [],
+        result: {
+          folderId,
+          folderName,
+          totalFilesDetected: 0,
+          detectedClients: []
+        },
+        message: "No files found in this Google Drive folder. You can upload client files directly via drag & drop."
+      });
+    }
+
+    // For each file, attempt to extract a sample of content
+    for (const f of rawFiles) {
+      let textSnippet = "";
+      try {
+        if (f.mimeType === "application/vnd.google-apps.document") {
+          const exp = await drive.files.export({ fileId: f.id!, mimeType: "text/plain" });
+          textSnippet = (exp.data as string).slice(0, 4000);
+        } else if (f.mimeType === "application/pdf") {
+          const dl = await drive.files.get({ fileId: f.id!, alt: "media" }, { responseType: "arraybuffer" });
+          const parsedPdf = await pdfParse(Buffer.from(dl.data as ArrayBuffer));
+          textSnippet = (parsedPdf.text || "").slice(0, 4000);
+        } else if (f.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+          const dl = await drive.files.get({ fileId: f.id!, alt: "media" }, { responseType: "arraybuffer" });
+          const resDocx = await mammoth.extractRawText({ buffer: Buffer.from(dl.data as ArrayBuffer) });
+          textSnippet = (resDocx.value || "").slice(0, 4000);
+        } else if (f.mimeType?.startsWith("text/")) {
+          const dl = await drive.files.get({ fileId: f.id!, alt: "media" }, { responseType: "text" });
+          textSnippet = (dl.data as string).slice(0, 4000);
+        } else if (f.mimeType === "application/vnd.google-apps.folder") {
+          textSnippet = `Subfolder: ${f.name}`;
+        }
+      } catch (snippetErr) {
+        console.warn(`Could not extract snippet for file ${f.name}:`, snippetErr);
+      }
+
+      scannedFiles.push({
+        id: f.id,
+        name: f.name,
+        mimeType: f.mimeType,
+        size: f.size ? `${Math.round(Number(f.size) / 1024)} KB` : 'Unknown',
+        webViewLink: f.webViewLink || `https://drive.google.com/file/d/${f.id}/view`,
+        snippet: textSnippet
+      });
+    }
+
+    // Now use Gemini AI to structure all found documents into clean Client and Matter entities
+    const prompt = `You are a Senior Legal Practice Management Director & AI Paralegal.
+We are onboarding a batch of real clients from a Google Drive Folder (Folder Name: "${folderName}", Folder ID: "${folderId}").
+Here are the actual files and extracted text contents detected in this folder:
+${JSON.stringify(scannedFiles, null, 2)}
+
+Analyze all files and extract accurate, structured Client and Legal Matter records ready for immediate placement into the firm's Practice Ledger.
+If multiple files belong to the same client, group them under that client.
+
+Return a STRICT JSON object matching this schema:
+{
+  "folderId": "${folderId}",
+  "folderName": "${folderName}",
+  "totalFilesDetected": ${scannedFiles.length},
+  "detectedClients": [
+    {
+      "id": "c-drive-[timestamp]-[index]",
+      "name": "Full Client Legal Name extracted from documents",
+      "email": "client email if found or client@legalmail.com",
+      "phone": "client phone if found",
+      "address": "residential or business address if found",
+      "practiceArea": "Immigration | Family Law | Estate Planning | Civil Litigation | Personal Injury | Bankruptcy | Corporate | General",
+      "status": "active",
+      "intakeNotes": "Comprehensive summary of client facts, documents submitted, legal relief requested, and procedural next steps.",
+      "matter": {
+        "id": "m-drive-[index]",
+        "title": "Precise Matter Title based on the files",
+        "type": "Immigration | Family Law | Estate Planning | Litigation | Corporate",
+        "status": "open",
+        "description": "Matter summary and filings required",
+        "filingDeadline": "2026-09-30",
+        "billingRate": "$350/hr",
+        "retainerAmount": "$3,500.00"
+      },
+      "documents": [
+        {
+          "name": "File name",
+          "mimeType": "application/pdf or docx",
+          "size": "size string",
+          "driveLink": "drive link"
+        }
+      ]
+    }
+  ]
+}`;
+
+    const ai = getAiClient();
+    const modelResponse = await callGeminiWithRetry(async () => {
+      return await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          temperature: 0.1
+        }
+      });
+    });
+
+    const parsedData = JSON.parse(modelResponse.text || "{}");
+
+    return res.json({
+      success: true,
+      folderId,
+      folderName,
+      filesScanned: scannedFiles,
+      result: parsedData
+    });
+  } catch (err: any) {
+    console.error("❌ Scan Folder Clients Error:", err);
+    return res.status(500).json({ error: `Failed to scan Google Drive folder: ${err.message}` });
+  }
+});
+
+// POST /api/drive/batch-process-uploaded-files - Ingest batch of uploaded files directly
+app.post("/api/drive/batch-process-uploaded-files", async (req: Request, res: Response) => {
+  const { files } = req.body; // Array of { name, size, type, contentText }
+
+  if (!files || !Array.isArray(files) || files.length === 0) {
+    return res.status(400).json({ error: "Missing files array" });
+  }
+
+  try {
+    const prompt = `You are a Senior Legal Practice Management Director & AI Paralegal.
+The law firm has uploaded a batch of ${files.length} client files for immediate intake and ledger placement.
+Here are the files and extracted text contents:
+${JSON.stringify(files.slice(0, 20), null, 2)}
+
+Extract the real client profiles and legal matters from these documents.
+Return a STRICT JSON object matching this schema:
+{
+  "totalFilesDetected": ${files.length},
+  "detectedClients": [
+    {
+      "id": "c-upload-[index]",
+      "name": "Full Client Name",
+      "email": "client email",
+      "phone": "client phone",
+      "address": "client address",
+      "practiceArea": "Immigration | Family Law | Estate Planning | Civil Litigation | Personal Injury | Bankruptcy | Corporate | General",
+      "status": "active",
+      "intakeNotes": "Comprehensive summary of client facts, documents submitted, and legal relief requested.",
+      "matter": {
+        "id": "m-upload-[index]",
+        "title": "Clear Matter Title",
+        "type": "Immigration | Family Law | Estate Planning | Litigation | Corporate",
+        "status": "open",
+        "description": "Matter scope and initial filings to draft",
+        "filingDeadline": "2026-09-30",
+        "billingRate": "$350/hr",
+        "retainerAmount": "$3,500.00"
+      },
+      "documents": [
+        {
+          "name": "File name",
+          "mimeType": "application/pdf or docx",
+          "size": "size string"
+        }
+      ]
+    }
+  ]
+}`;
+
+    const ai = getAiClient();
+    const modelResponse = await callGeminiWithRetry(async () => {
+      return await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          temperature: 0.1
+        }
+      });
+    });
+
+    const parsedData = JSON.parse(modelResponse.text || "{}");
+
+    return res.json({
+      success: true,
+      result: parsedData
+    });
+  } catch (err: any) {
+    console.error("❌ Batch Upload Process Error:", err);
+    return res.status(500).json({ error: `Failed to process uploaded client files: ${err.message}` });
+  }
 });
 
 // =========================================================

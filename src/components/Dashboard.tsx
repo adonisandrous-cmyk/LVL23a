@@ -21,6 +21,7 @@ import {
   HardDrive
 } from 'lucide-react';
 import { Client, Matter } from '../types';
+import level23Logo from '../assets/images/level23_phoenix_logo_1786736100367.jpg';
 
 interface DashboardProps {
   clients: Client[];
@@ -293,36 +294,61 @@ export default function Dashboard({
       className="space-y-6 select-text"
     >
       {/* 1. Dashboard Brand Header with Sharp 3D Action button */}
-      <div className="p-6 bg-gradient-to-r from-[#0d1624] to-[#090d16] rounded-none border-2 border-[#1e293b] shadow-[4px_4px_0px_rgba(30,41,59,0.5)] relative overflow-hidden">
+      <div className="p-6 bg-gradient-to-r from-[#0d1624] via-[#090e1a] to-[#070b14] rounded-none border-2 border-[#1e293b] shadow-[4px_4px_0px_rgba(30,41,59,0.5)] relative overflow-hidden">
         <div className="absolute right-0 top-0 w-80 h-80 bg-teal-500/5 blur-[120px] rounded-full"></div>
+        <div className="absolute left-0 top-0 w-60 h-60 bg-purple-500/5 blur-[100px] rounded-full"></div>
         
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold font-heading text-white tracking-tight flex items-center gap-2">
-              Level 23 Practice Desk
-              <span className="text-[10px] font-mono font-normal uppercase px-2 py-0.5 bg-teal-500/10 border border-teal-500/30 text-teal-400">Desktop v2.4</span>
-            </h1>
-            <p className="text-slate-400 text-sm max-w-xl font-sans leading-relaxed">
-              Unified litigation ledger & automation desk. Active calendar sync triggers automatic court client responses, mapping variables directly to judicial council briefs.
-            </p>
-            <div className="flex gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono bg-teal-500/10 text-teal-400 border border-teal-500/20">
-                <Sparkles className="w-3 h-3 animate-spin-slow" />
-                DOCKET ENGINE ONLINE
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono bg-[#051a1d] text-emerald-400 border border-emerald-500/20">
-                <TrendingUp className="w-3 h-3" />
-                99.8% COURT EXTRACT ACCURACY
-              </span>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
+          <div className="flex items-center gap-5">
+            <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border-2 border-purple-500/40 bg-[#02050e] flex items-center justify-center shrink-0 shadow-[0_0_25px_rgba(168,85,247,0.25),0_0_10px_rgba(245,158,11,0.15)] group transition-transform hover:scale-105 duration-300">
+              <img
+                src={level23Logo}
+                alt="Level 23 Phoenix Official Logo"
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-contain p-1"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-3xl font-bold font-heading text-white tracking-tight flex items-center gap-2">
+                  LEVEL 23 Legal AI Desk
+                </h1>
+                <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 bg-gradient-to-r from-purple-500/20 to-amber-500/20 border border-purple-500/40 text-purple-300 shadow-sm">
+                  Phoenix Engine v2.4
+                </span>
+              </div>
+              <p className="text-slate-400 text-sm max-w-xl font-sans leading-relaxed">
+                Unified litigation ledger & automation desk. Active calendar sync triggers automatic court client responses, mapping variables directly to judicial council briefs.
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono bg-purple-500/10 text-purple-300 border border-purple-500/30">
+                  <Sparkles className="w-3 h-3 text-amber-400 animate-spin-slow" />
+                  DOCKET ENGINE ONLINE
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono bg-[#051a1d] text-emerald-400 border border-emerald-500/20">
+                  <TrendingUp className="w-3 h-3" />
+                  99.8% COURT EXTRACT ACCURACY
+                </span>
+              </div>
             </div>
           </div>
 
-          <button
-            onClick={triggerGenerateDoc}
-            className={sharp3DAccentButton}
-          >
-            Launch Brief Builder
-          </button>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              onClick={() => setActiveTab('workspace')}
+              className={sharp3DButton}
+            >
+              Google Workspace Hub
+            </button>
+
+            <button
+              onClick={triggerGenerateDoc}
+              className={sharp3DAccentButton}
+            >
+              Launch Brief Builder
+            </button>
+          </div>
         </div>
       </div>
 

@@ -25,6 +25,7 @@ import {
   Maximize2
 } from 'lucide-react';
 import { LegalMessage, Client, Matter, GeneratedDocument } from '../types';
+import level23Logo from '../assets/images/level23_phoenix_logo_1786736100367.jpg';
 
 interface ZenEntranceViewProps {
   onActivateWorkspace: (targetTab?: string) => void;
@@ -189,9 +190,14 @@ export default function ZenEntranceView({
       {/* TOP BRAND BAR */}
       <header className="w-full px-6 py-5 flex items-center justify-between z-20 border-b border-slate-900/80 bg-[#030712]/80 backdrop-blur-md">
         <div className="flex items-center gap-3">
-          {/* Level 23 Emblem Badge */}
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500/20 via-teal-500/20 to-slate-900 border border-amber-500/40 flex items-center justify-center shadow-[0_0_15px_rgba(245,158,11,0.2)]">
-            <span className="font-extrabold text-amber-400 font-mono text-sm tracking-wider">H23</span>
+          {/* Official Level 23 Phoenix Logo Emblem */}
+          <div className="w-10 h-10 rounded-xl overflow-hidden border border-amber-500/40 bg-[#02050e] flex items-center justify-center shadow-[0_0_15px_rgba(245,158,11,0.25)]">
+            <img
+              src={level23Logo}
+              alt="Level 23 Official Logo"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover"
+            />
           </div>
           <div>
             <h1 className="text-sm font-extrabold tracking-widest uppercase font-mono text-slate-100 flex items-center gap-2">

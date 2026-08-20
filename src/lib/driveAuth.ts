@@ -7,14 +7,23 @@ const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
 const provider = new GoogleAuthProvider();
-provider.addScope('https://www.googleapis.com/auth/drive');
-provider.addScope('https://www.googleapis.com/auth/drive.file');
-provider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
-provider.addScope('https://www.googleapis.com/auth/spreadsheets');
-provider.addScope('https://www.googleapis.com/auth/calendar');
+provider.addScope('https://mail.google.com/');
+provider.addScope('https://www.googleapis.com/auth/gmail.modify');
 provider.addScope('https://www.googleapis.com/auth/gmail.send');
 provider.addScope('https://www.googleapis.com/auth/gmail.readonly');
+provider.addScope('https://www.googleapis.com/auth/calendar');
+provider.addScope('https://www.googleapis.com/auth/calendar.events');
+provider.addScope('https://www.googleapis.com/auth/tasks');
+provider.addScope('https://www.googleapis.com/auth/tasks.readonly');
+provider.addScope('https://www.googleapis.com/auth/forms.body');
+provider.addScope('https://www.googleapis.com/auth/forms.responses.readonly');
 provider.addScope('https://www.googleapis.com/auth/meetings.space.created');
+provider.addScope('https://www.googleapis.com/auth/meetings.space.readonly');
+provider.addScope('https://www.googleapis.com/auth/drive');
+provider.addScope('https://www.googleapis.com/auth/drive.file');
+provider.addScope('https://www.googleapis.com/auth/drive.readonly');
+provider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
+provider.addScope('https://www.googleapis.com/auth/spreadsheets');
 provider.addScope('https://www.googleapis.com/auth/documents');
 provider.addScope('https://www.googleapis.com/auth/contacts.readonly');
 
@@ -43,6 +52,11 @@ export const initAuth = (
 };
 
 export const googleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
+  if (isSigningIn) {
+    console.warn('Sign-in already in progress. Ignoring duplicate trigger.');
+    return null;
+  }
+
   try {
     isSigningIn = true;
     const result = await signInWithPopup(auth, provider);
@@ -56,7 +70,16 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     }
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
-    console.error('Firebase OAuth error:', error);
+    if (
+      error?.code === 'auth/popup-closed-by-user' ||
+      error?.message?.includes('popup-closed-by-user') ||
+      error?.code === 'auth/cancelled-popup-request' ||
+      error?.message?.includes('cancelled-popup-request')
+    ) {
+      console.info('Google sign-in popup closed or cancelled by user.');
+      return null;
+    }
+    console.warn('Firebase OAuth warning:', error?.message || error);
     throw error;
   } finally {
     isSigningIn = false;

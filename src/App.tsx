@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 
 import { Client, Matter, ActivityLog, GeneratedDocument, LegalMessage, AgentProgress, ConsultationSession, EvidenceFile } from './types';
+import { INITIAL_CLIENTS_ROSTER, INITIAL_MATTERS_ROSTER } from './data/initialClients';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import ClientsTab from './components/ClientsTab';
@@ -39,9 +40,12 @@ import ConsultationsTab from './components/ConsultationsTab';
 import BackupsTab, { ImportedState } from './components/BackupsTab';
 import ResearchPortalDrawer from './components/ResearchPortalDrawer';
 import ClientPortalTab from './components/ClientPortalTab';
+import GoogleWorkspaceTab from './components/GoogleWorkspaceTab';
 import { ClientIntakeGeneratorModal } from './components/ClientIntakeGeneratorModal';
+import OmniUploadModal from './components/OmniUploadModal';
+import GoogleTranslateBar from './components/GoogleTranslateBar';
 import ZenEntranceView from './components/ZenEntranceView';
-import { Scale, BookOpen, Database, CloudOff, CloudLightning, Lock, Unlock } from 'lucide-react';
+import { Scale, BookOpen, Database, CloudOff, CloudLightning, Lock, Unlock, UploadCloud, Languages } from 'lucide-react';
 import { startPeriodicDriveSync } from './services/driveSyncService';
 
 import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, query, orderBy, limit, startAfter } from 'firebase/firestore';
@@ -54,6 +58,8 @@ export default function App() {
   const [utcTime, setUtcTime] = useState<string>('');
   const [showResearchDrawer, setShowResearchDrawer] = useState<boolean>(false);
   const [showClientIntakeGeneratorModal, setShowClientIntakeGeneratorModal] = useState<boolean>(false);
+  const [showOmniUploadModal, setShowOmniUploadModal] = useState<boolean>(false);
+  const [currentAppLanguage, setCurrentAppLanguage] = useState<string>('en');
 
   // Firestore synchronization states
   const [dbSyncStatus, setDbSyncStatus] = useState<'offline' | 'connecting' | 'synced' | 'error'>('connecting');
@@ -81,219 +87,59 @@ export default function App() {
     { id: 'log-2', type: 'system', message: 'IndexDB cache registers initialized.', timestamp: '12:56:30' }
   ]);
 
-  // Master local client records
-  const [clients, setClients] = useState<Client[]>([
-    {
-      id: 'c-0',
-      name: 'Don Watson',
-      email: 'don.watson@watsontech.com',
-      phone: '+1 (949) 555-0198',
-      status: 'active',
-      intakeNotes: `========================================================================
-CLIENT INTAKE MEMORANDUM & CASE FILE: DON WATSON
-========================================================================
-1. PARTY INFORMATION & PERSONAL DETAILS
-------------------------------------------------------------------------
-PETITIONER (CLIENT):
-- Full Legal Name: Don Watson
-- Date of Birth: November 14, 1982 (Age 43)
-- Residential Address: 1420 Newport Center Dr, Suite 500, Newport Beach, Orange County, CA 92660
-- Email: don.watson@watsontech.com
-- Phone: +1 (949) 555-0198
-- Occupation / Employer: Chief Technology Officer, WatsonTech Systems Inc.
-
-RESPONDENT (SPOUSE):
-- Full Legal Name: Clara Watson
-- Date of Birth: April 22, 1985 (Age 41)
-- Residential Address: 780 Coast Hwy, Laguna Beach, Orange County, CA 92651
-- Email: clara.watson@gmail.com
-- Phone: +1 (949) 555-0812
-
-2. MARRIAGE & DISSOLUTION DECLARATION / COVER SHEET
-------------------------------------------------------------------------
-- Nature of Action: Dissolution of Marriage (Marriage Dissolution / Divorce)
-- Date of Marriage: June 15, 2012 (City of Newport Beach, County of Orange, CA)
-- Date of Separation: April 10, 2026
-- County of Filing: Superior Court of California, County of Orange (341 The City Drive South, Orange, CA 92868)
-- Statutory Jurisdictional Basis: California Family Code Section 300 (Jurisdiction in Marriage Dissolution Actions; Petitioner meets 6-month California state residence and 3-month Orange County residence requirements).
-
-3. MINOR CHILDREN & CUSTODY PREFERENCES
-------------------------------------------------------------------------
-- Minor Child 1: Ethan Watson (DOB: August 10, 2016)
-- Minor Child 2: Chloe Watson (DOB: December 5, 2019)
-- Requested Custody: Joint Legal Custody & Primary Physical Custody to Petitioner (Don Watson) with structured weekend visitation to Respondent.
-
-4. PROPERTY, ASSETS & SPOUSAL SUPPORT DISCLOSURES
-------------------------------------------------------------------------
-- Community Property: Newport Beach residential real estate ($1.4M valuation), WatsonTech equity holdings acquired during marriage.
-- Separate Property: Pre-marital tech patents and inheritance accounts.
-- Relief Sought: Partition of real property assets, spousal support determination audit, and issuance of FL-110 Summons.
-========================================================================`,
-      createdAt: '2026-06-01T08:00:00Z',
-      practiceArea: 'Family Law'
-    },
-    {
-      id: 'c-1',
-      name: 'Eleanor Vance',
-      email: 'eleanor.vance@gmail.com',
-      phone: '+1 (415) 304-9271',
-      status: 'active',
-      intakeNotes: `Client Eleanor Vance seeks assistance regarding joint custody dissolution under CA codes.
-      Separation date was reported as April 10th. Marriage date was July 2nd, 2012. Two minor children are involved.
-      She seeks spousal support limits audit and partition of cooperative townhouse asset.`,
-      createdAt: '2026-04-10T14:22:00Z',
-      practiceArea: 'Family Law'
-    },
-    {
-      id: 'c-2',
-      name: 'Mateo Rodriguez',
-      email: 'm.rodriguez@fastmail.com',
-      phone: '+1 (510) 902-8344',
-      status: 'active',
-      intakeNotes: `Mateo Rodriguez is applying for form I-589 Asylum.
-      Country of Origin is El Salvador. He fled after receiving immediate threats for social-activist publications.
-      Police reports show critical failure of protection, and he possesses documented correspondence of direct persecution risks.`,
-      createdAt: '2026-04-15T09:45:00Z',
-      practiceArea: 'Immigration'
-    },
-    {
-      id: 'c-3',
-      name: 'Samuel Miller',
-      email: 'sam.miller@techcorp.io',
-      phone: '+1 (650) 844-3011',
-      status: 'pending',
-      intakeNotes: `Samuel seeks to declare individual Chapter 7 Insolvency.
-      Currently has $48,000 in unsecured consumer credit obligations. Monthly net home income is estimated at $3,100, which is below state median ranges.
-      Primary assets consist of personal vehicle worth under $4,500. He wishes to avoid foreclosure actions.`,
-      createdAt: '2026-05-18T11:10:00Z',
-      practiceArea: 'Bankruptcy'
-    }
-  ]);
-
-  // Master client directory pagination states
-  const [lastClientSnapshot, setLastClientSnapshot] = useState<any>(null);
-  const [hasMoreClients, setHasMoreClients] = useState<boolean>(true);
-  const [clientsPageSize] = useState<number>(5); // On-demand limit per query block
-  const [isLoadingMoreClients, setIsLoadingMoreClients] = useState<boolean>(false);
-
-  // Dynamic pagination function to load more clients from cloud on demand
-  const loadMoreClients = async () => {
-    if (isLoadingMoreClients || !hasMoreClients) return;
-    setIsLoadingMoreClients(true);
-    addLog('system', 'Requesting next paginated client buffer from cloud database...');
-    try {
-      const clientsRef = collection(db, 'clients');
-      let q;
-      if (lastClientSnapshot) {
-        q = query(clientsRef, orderBy('name'), startAfter(lastClientSnapshot), limit(clientsPageSize));
-      } else {
-        q = query(clientsRef, orderBy('name'), limit(clientsPageSize));
-      }
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const nextClients: Client[] = [];
-        snap.forEach(docSnap => {
-          nextClients.push(docSnap.data() as Client);
-        });
-        setClients(prev => {
-          const combined = [...prev, ...nextClients];
-          const seen = new Set();
-          return combined.filter(c => {
-            if (seen.has(c.id)) return false;
-            seen.add(c.id);
-            return true;
-          });
-        });
-        setLastClientSnapshot(snap.docs[snap.docs.length - 1]);
-        if (snap.docs.length < clientsPageSize) {
-          setHasMoreClients(false);
-          addLog('system', `Loaded ${snap.docs.length} additional clients. End of client directory reached.`);
-        } else {
-          addLog('system', `Successfully cached ${snap.docs.length} client directory records. Additional records remain.`);
+  // Master local client records with local persistence
+  const [clients, setClients] = useState<Client[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('l23_persistent_clients_v2');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
         }
-      } else {
-        setHasMoreClients(false);
-        addLog('system', 'On-demand scan completed. No additional remote clients found.');
+      } catch (e) {
+        console.error('Error loading persistent clients:', e);
       }
-    } catch (err: any) {
-      console.error("On-demand paginated scan failed:", err);
-      addLog('system', `On-demand paging error: ${err.message || 'database exception'}`);
-    } finally {
-      setIsLoadingMoreClients(false);
     }
-  };
+    return INITIAL_CLIENTS_ROSTER;
+  });
 
-  // Master local legal matters
-  const [matters, setMatters] = useState<Matter[]>([
-    {
-      id: 'm-0',
-      title: 'Watson v. Watson — FL-100 Marriage Dissolution & Custody Action',
-      caseNumber: 'FL-2026-09281',
-      clientId: 'c-0',
-      clientName: 'Don Watson',
-      practiceArea: 'Family Law',
-      status: 'active',
-      billingRate: 350,
-      billedHours: 8.5,
-      description: 'FL-100 Dissolution of Marriage Petition filed for Don Watson under CA Family Code Section 300 in Superior Court of California, County of Orange. Includes party details, cover sheet declaration, child custody terms, and community asset disclosures.',
-      createdAt: '2026-06-01T08:30:00Z',
-      tasks: [
-        { id: 'wt-1', title: 'Verify party details & complete FL-100 Petition Draft', completed: true, dueDate: '2026-06-02' },
-        { id: 'wt-2', title: 'Cross-reference FL-100 fields & verify party data', completed: true, dueDate: '2026-06-05' },
-        { id: 'wt-3', title: 'Issue Bates-cited FL-110 Summons & Serve Respondent', completed: false, dueDate: '2026-06-15' }
-      ],
-      riskAssessment: 'High-net-worth dissolution with minor children. CA Family Code Section 300 residency requirements fully satisfied.'
-    },
-    {
-      id: 'm-1',
-      title: 'Miller Chapter 7 Liquidation Petition Filing',
-      caseNumber: 'L-4821-2026',
-      clientId: 'c-3',
-      clientName: 'Samuel Miller',
-      practiceArea: 'Bankruptcy',
-      status: 'pending',
-      billingRate: 275,
-      billedHours: 4,
-      description: 'Preparing standard filing schedules A through J for Bankruptcy Court. Samuel represents low median individual income streams, demanding standard liquidation relief.',
-      createdAt: '2026-05-18T11:15:00Z',
-      tasks: [
-        { id: 'mt-1', title: 'Open formal practice matter and establish files', completed: true, dueDate: '2026-05-18' },
-        { id: 'mt-2', title: 'Verify absolute asset valuation index', completed: false, dueDate: '2026-05-25' },
-        { id: 'mt-3', title: 'Compile credit counselling certificates', completed: false, dueDate: '2026-06-01' }
-      ],
-      riskAssessment: 'Standard unsecured debt level. No primary real estate prevents foreclosure complexity. Strong candidate for fast discharge.'
-    },
-    {
-      id: 'm-2',
-      title: 'I-589 Asylum Briefing representing Rodriguez',
-      caseNumber: 'L-8973-2026',
-      clientId: 'c-2',
-      clientName: 'Mateo Rodriguez',
-      practiceArea: 'Immigration',
-      status: 'active',
-      billingRate: 250,
-      billedHours: 12,
-      description: 'Assembling formal narrative declaration representing Rodriguez fleeing social targeted persecution. Verifying country of origin guidelines and arranging evidentiary reports.',
-      createdAt: '2026-04-15T10:00:00Z',
-      tasks: [
-        { id: 'mt-4', title: 'Compile asylum narrative details', completed: true, dueDate: '2026-04-20' },
-        { id: 'mt-5', title: 'Draft asylum Form I-589 petition', completed: true, dueDate: '2026-04-28' },
-        { id: 'mt-6', title: 'Audit country of origin legal databases', completed: false, dueDate: '2026-05-30' },
-        { id: 'mt-7', title: 'Coordinate interview mock session', completed: false, dueDate: '2026-06-10' }
-      ],
-      riskAssessment: 'Strong evidentiary brief with documented direct threats. Requires detailed chronological fact translation and credential checks.'
+  // Master local legal matters with local persistence
+  const [matters, setMatters] = useState<Matter[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('l23_persistent_matters_v2');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {
+        console.error('Error loading persistent matters:', e);
+      }
     }
-  ]);
+    return INITIAL_MATTERS_ROSTER;
+  });
 
-  // Master document generated state list
-  const [generatedDocs, setGeneratedDocs] = useState<GeneratedDocument[]>([
-    {
-      id: 'doc-watson-fl100',
-      title: 'FL-100 Petition for Dissolution of Marriage — Don Watson',
-      clientId: 'c-0',
-      clientName: 'Don Watson',
-      templateId: 'fl_100_dissolution',
-      content: `SUPERIOR COURT OF CALIFORNIA, COUNTY OF ORANGE
+  // Master document generated state list with local persistence
+  const [generatedDocs, setGeneratedDocs] = useState<GeneratedDocument[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('l23_persistent_docs_v2');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {
+        console.error('Error loading persistent docs:', e);
+      }
+    }
+    return [
+      {
+        id: 'doc-watson-fl100',
+        title: 'FL-100 Petition for Dissolution of Marriage — Don Watson',
+        clientId: 'c-0',
+        clientName: 'Don Watson',
+        templateId: 'fl_100_dissolution',
+        content: `SUPERIOR COURT OF CALIFORNIA, COUNTY OF ORANGE
 341 The City Drive South, Orange, CA 92868
 CASE NUMBER: FL-2026-09281
 
@@ -339,82 +185,146 @@ I declare under penalty of perjury under the laws of the State of California tha
 
 Filing Date: June 1, 2026
 Petitioner Signature: Don Watson`,
-      generatedAt: '2026-06-01T09:00:00Z'
-    }
-  ]);
+        generatedAt: '2026-06-01T09:00:00Z'
+      }
+    ];
+  });
 
   // Master legal AI messages thread
   const [chatThread, setChatThread] = useState<LegalMessage[]>([]);
 
-  // Master client evidence files lists
-  const [evidenceFiles, setEvidenceFiles] = useState<EvidenceFile[]>([
-    {
-      id: 'ev-1',
-      name: 'CreditCard_Liabilities_SamuelMiller.pdf',
-      size: '2.4 MB',
-      mimeType: 'application/pdf',
-      uploadedAt: '2026-05-18T11:20:00Z',
-      clientId: 'c-3',
-      clientName: 'Samuel Miller',
-      matterId: 'm-1',
-      matterTitle: 'Miller Chapter 7 Liquidation Petition Filing',
-      fileCategory: 'Bankruptcy Assets & Debt Ledger',
-      extractedClientName: 'Samuel Miller',
-      duressLevel: 'Medium',
-      summary: 'Comprehensive unsecured liabilities statement listing consumer credit cards and emergency hospital medical debt obligations.',
-      extractedFacts: [
-        'Total sum of unsecured claims is $85,320 across 4 distinct creditors.',
-        'Emergency surgical treatment bills account for over 60% of outstanding debt.',
-        'A $4,500 active loan lien operates against petitioner’s personal light truck.',
-        'Household income evaluated is $3,140 net, placing client under bankruptcy state median limits.'
-      ],
-      rawTextSimulated: `ORANGE COUNTY BANKRUPTCY EVIDENCE AUDIT SHEET\n\nDebtor Applicant: Samuel Miller\nCase Filing Type: Chapter 13 vs Chapter 7 Liquidation Petition\n\nCREDITOR DEBT INDICES:\n1. APEX CREDIT REVOLVER - DEBT OUTSTANDING: $24,500\n2. EMER SURG RECONSTRUCTION (ORANGE COUNTY GENERAL HOSPITAL) - BAL: $51,120\n3. PERSONAL TRANSPORT UTILITY TRUCK - LIEN BALANCE VERIFIED: $4,500\n4. UNSECURED CONSUMER LINE CARDS (CHASE VISA CARD) - BAL: $9,700\n\nESTIMATED MONTHLY HOUSEHOLD NET INCOME: $3,140\n\nThis material lists unsecured obligations, household income details, and high-priority emergency surgeon bills which constitute materials of debt. Evaluated net income is placed safely under state median limits.`,
-      status: 'scanned'
-    },
-    {
-      id: 'ev-2',
-      name: 'Cartel_Threat_Warning_MateoRodriguez.txt',
-      size: '420 KB',
-      mimeType: 'text/plain',
-      uploadedAt: '2026-04-15T10:15:00Z',
-      clientId: 'c-2',
-      clientName: 'Mateo Rodriguez',
-      matterId: 'm-2',
-      matterTitle: 'I-589 Asylum Briefing representing Rodriguez',
-      fileCategory: 'Immigration Persecution Warning',
-      extractedClientName: 'Mateo Rodriguez',
-      duressLevel: 'High',
-      summary: 'Digitized document text depicting direct written extortion and physical safety warnings issued under cartel authority at his local bread depot.',
-      extractedFacts: [
-        'Primary extortion threat warning note received on April 4, 2024.',
-        'Refusal to comply risks forced trade closure, physical intimidation or extreme direct harm.',
-        'Claimant listed as active political baking guild organizer, establishing membership in a targeted social group.',
-        'Local police response registered but explicitly lacked resources for physical protective watch.'
-      ],
-      rawTextSimulated: `TRANSCRIPTION OF EXTORTION THREAT DIRECTIVE RECOVERED ON APRIL 4, 2024\n\nRecipient: Mateo Rodriguez, Local Baker Union Organizer\nLocation of recovery: Regional bread product distribution deck\n\nTRANSCRIBED WARNING NOTATION:\n"This note serves as final notice: you must pay a monthly safety quota of $800 to our regional operations team. If you refuse to comply, we will shut down your bakery depot, and take immediate severe actions against your workplace. Do not contact any authorities."\n\nLAW ENFORCEMENT SYNOPSIS:\nClient petition was registered under municipal file #E-9482 on April 5, 2024. Local police officers issued a formal incident report acknowledging the extortion notes, but explicitly confirmed they lack standard protective guard assets or resources to schedule on-site patrols.`,
-      status: 'scanned'
-    },
-    {
-      id: 'ev-3',
-      name: 'Marital_Home_Deed_OrangeCounty.docx',
-      size: '4.8 MB',
-      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      uploadedAt: '2026-04-10T14:30:00Z',
-      clientId: 'c-1',
-      clientName: 'Eleanor Vance',
-      fileCategory: 'Property Title Deed',
-      extractedClientName: 'Eleanor Vance',
-      duressLevel: 'Low',
-      summary: 'Certified Orange County residential deed outlining communal property share and separate inheritance allocations of Eleanor Vance and Bradley Vance.',
-      extractedFacts: [
-        'Townhouse title registered under joint names as community property in March 2018.',
-        'Purchase supported by joint savings accounts, establishing marital assets guidelines CA Civ. Code.',
-        'Separate account holdings portfolio established solely via personal family bequest, verified as separate property asset.'
-      ],
-      rawTextSimulated: `ORANGE COUNTY CLERK AND RECORDER APARTMENT LAND PROPERTY DEED EXCERPT\n\nRecording Date: March 14, 2018\nRecorded Book: CA-1829-948\n\nDECLARATION OF LAND TRANSFERS AND TITLES:\nMarital residence situated in Orange County is hereby registered as a community property estate under the joint legal names of Eleanor Vance and Bradley Vance.\n\nFINANCING MEMORANDUM DATA:\n- The purchase transaction of the apartment property was executed utilizing joint savings certificate accounts.\n- Personal portfolio holdings, municipal bonds, and the separate liquid reserve account are confirmed to be personal family bequests granted solely to Eleanor Vance. They operate as separate property assets and separate holdings portfolios.`,
-      status: 'scanned'
+  // Master client evidence files lists with local persistence
+  const [evidenceFiles, setEvidenceFiles] = useState<EvidenceFile[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('l23_persistent_evidence_v2');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {
+        console.error('Error loading persistent evidence:', e);
+      }
     }
-  ]);
+    return [
+      {
+        id: 'ev-1',
+        name: 'CreditCard_Liabilities_SamuelMiller.pdf',
+        size: '2.4 MB',
+        mimeType: 'application/pdf',
+        uploadedAt: '2026-05-18T11:20:00Z',
+        clientId: 'c-3',
+        clientName: 'Samuel Miller',
+        matterId: 'm-1',
+        matterTitle: 'Miller Chapter 7 Liquidation Petition Filing',
+        fileCategory: 'Bankruptcy Assets & Debt Ledger',
+        extractedClientName: 'Samuel Miller',
+        duressLevel: 'Medium',
+        summary: 'Comprehensive unsecured liabilities statement listing consumer credit cards and emergency hospital medical debt obligations.',
+        extractedFacts: [
+          'Total sum of unsecured claims is $85,320 across 4 distinct creditors.',
+          'Emergency surgical treatment bills account for over 60% of outstanding debt.',
+          'A $4,500 active loan lien operates against petitioner’s personal light truck.',
+          'Household income evaluated is $3,140 net, placing client under bankruptcy state median limits.'
+        ],
+        rawTextSimulated: `ORANGE COUNTY BANKRUPTCY EVIDENCE AUDIT SHEET\n\nDebtor Applicant: Samuel Miller\nCase Filing Type: Chapter 13 vs Chapter 7 Liquidation Petition\n\nCREDITOR DEBT INDICES:\n1. APEX CREDIT REVOLVER - DEBT OUTSTANDING: $24,500\n2. EMER SURG RECONSTRUCTION (ORANGE COUNTY GENERAL HOSPITAL) - BAL: $51,120\n3. PERSONAL TRANSPORT UTILITY TRUCK - LIEN BALANCE VERIFIED: $4,500\n4. UNSECURED CONSUMER LINE CARDS (CHASE VISA CARD) - BAL: $9,700\n\nESTIMATED MONTHLY HOUSEHOLD NET INCOME: $3,140\n\nThis material lists unsecured obligations, household income details, and high-priority emergency surgeon bills which constitute materials of debt. Evaluated net income is placed safely under state median limits.`,
+        status: 'scanned'
+      },
+      {
+        id: 'ev-2',
+        name: 'Cartel_Threat_Warning_MateoRodriguez.txt',
+        size: '420 KB',
+        mimeType: 'text/plain',
+        uploadedAt: '2026-04-15T10:15:00Z',
+        clientId: 'c-2',
+        clientName: 'Mateo Rodriguez',
+        matterId: 'm-2',
+        matterTitle: 'I-589 Asylum Briefing representing Rodriguez',
+        fileCategory: 'Immigration Persecution Warning',
+        extractedClientName: 'Mateo Rodriguez',
+        duressLevel: 'High',
+        summary: 'Digitized document text depicting direct written extortion and physical safety warnings issued under cartel authority at his local bread depot.',
+        extractedFacts: [
+          'Primary extortion threat warning note received on April 4, 2024.',
+          'Refusal to comply risks forced trade closure, physical intimidation or extreme direct harm.',
+          'Claimant listed as active political baking guild organizer, establishing membership in a targeted social group.',
+          'Local police response registered but explicitly lacked resources for physical protective watch.'
+        ],
+        rawTextSimulated: `TRANSCRIPTION OF EXTORTION THREAT DIRECTIVE RECOVERED ON APRIL 4, 2024\n\nRecipient: Mateo Rodriguez, Local Baker Union Organizer\nLocation of recovery: Regional bread product distribution deck\n\nTRANSCRIBED WARNING NOTATION:\n"This note serves as final notice: you must pay a monthly safety quota of $800 to our regional operations team. If you refuse to comply, we will shut down your bakery depot, and take immediate severe actions against your workplace. Do not contact any authorities."\n\nLAW ENFORCEMENT SYNOPSIS:\nClient petition was registered under municipal file #E-9482 on April 5, 2024. Local police officers issued a formal incident report acknowledging the extortion notes, but explicitly confirmed they lack standard protective guard assets or resources to schedule on-site patrols.`,
+        status: 'scanned'
+      },
+      {
+        id: 'ev-3',
+        name: 'Marital_Home_Deed_OrangeCounty.docx',
+        size: '4.8 MB',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        uploadedAt: '2026-04-10T14:30:00Z',
+        clientId: 'c-1',
+        clientName: 'Eleanor Vance',
+        fileCategory: 'Property Title Deed',
+        extractedClientName: 'Eleanor Vance',
+        duressLevel: 'Low',
+        summary: 'Certified Orange County residential deed outlining communal property share and separate inheritance allocations of Eleanor Vance and Bradley Vance.',
+        extractedFacts: [
+          'Townhouse title registered under joint names as community property in March 2018.',
+          'Purchase supported by joint savings accounts, establishing marital assets guidelines CA Civ. Code.',
+          'Separate account holdings portfolio established solely via personal family bequest, verified as separate property asset.'
+        ],
+        rawTextSimulated: `ORANGE COUNTY CLERK AND RECORDER APARTMENT LAND PROPERTY DEED EXCERPT\n\nRecording Date: March 14, 2018\nRecorded Book: CA-1829-948\n\nDECLARATION OF LAND TRANSFERS AND TITLES:\nMarital residence situated in Orange County is hereby registered as a community property estate under the joint legal names of Eleanor Vance and Bradley Vance.\n\nFINANCING MEMORANDUM DATA:\n- The purchase transaction of the apartment property was executed utilizing joint savings certificate accounts.\n- Personal portfolio holdings, municipal bonds, and the separate liquid reserve account are confirmed to be personal family bequests granted solely to Eleanor Vance. They operate as separate property assets and separate holdings portfolios.`,
+        status: 'scanned'
+      }
+    ];
+  });
+
+  // Master client directory pagination states
+  const [lastClientSnapshot, setLastClientSnapshot] = useState<any>(null);
+  const [hasMoreClients, setHasMoreClients] = useState<boolean>(false);
+  const [clientsPageSize] = useState<number>(50); // Generous buffer to show all clients
+  const [isLoadingMoreClients, setIsLoadingMoreClients] = useState<boolean>(false);
+
+  // Dynamic pagination function to load more clients from cloud on demand
+  const loadMoreClients = async () => {
+    if (isLoadingMoreClients || !hasMoreClients) return;
+    setIsLoadingMoreClients(true);
+    addLog('system', 'Requesting client directory from cloud database...');
+    try {
+      const clientsRef = collection(db, 'clients');
+      let q;
+      if (lastClientSnapshot) {
+        q = query(clientsRef, orderBy('name'), startAfter(lastClientSnapshot), limit(clientsPageSize));
+      } else {
+        q = query(clientsRef, orderBy('name'), limit(clientsPageSize));
+      }
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const nextClients: Client[] = [];
+        snap.forEach(docSnap => {
+          nextClients.push(docSnap.data() as Client);
+        });
+        setClients(prev => {
+          const map = new Map<string, Client>();
+          prev.forEach(c => map.set(c.id, c));
+          nextClients.forEach(c => map.set(c.id, c));
+          return Array.from(map.values());
+        });
+        setLastClientSnapshot(snap.docs[snap.docs.length - 1]);
+        if (snap.docs.length < clientsPageSize) {
+          setHasMoreClients(false);
+          addLog('system', `Loaded all ${snap.docs.length} remaining clients. Complete client directory synced.`);
+        } else {
+          addLog('system', `Successfully cached ${snap.docs.length} client directory records.`);
+        }
+      } else {
+        setHasMoreClients(false);
+        addLog('system', 'Client directory scan completed.');
+      }
+    } catch (err: any) {
+      console.error("On-demand paginated scan failed:", err);
+      addLog('system', `Client scan error: ${err.message || 'database exception'}`);
+    } finally {
+      setIsLoadingMoreClients(false);
+    }
+  };
 
   // 1. Progressive AI Agent Stance / Relationship HUD Metrics
   const [agentProgressList, setAgentProgressList] = useState<AgentProgress[]>([
@@ -457,18 +367,60 @@ Petitioner Signature: Don Watson`,
   ]);
 
   // 2. Active secure Jitsi consultation sessions logs
-  const [consultations, setConsultations] = useState<ConsultationSession[]>([
-    {
-      id: 'call-1',
-      clientId: 'c-3',
-      clientName: 'Samuel Miller',
-      roomName: 'L23-Chapter7-Miller',
-      meetingType: 'Deposition',
-      scheduledFor: '02:30 PM',
-      status: 'concluded',
-      notes: 'Reviewed unsecured creditor assets ledger. Verified no secondary foreclosure triggers are active.'
+  const [consultations, setConsultations] = useState<ConsultationSession[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('l23_persistent_consultations_v2');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {}
     }
-  ]);
+    return [
+      {
+        id: 'call-1',
+        clientId: 'c-3',
+        clientName: 'Samuel Miller',
+        roomName: 'L23-Chapter7-Miller',
+        meetingType: 'Deposition',
+        scheduledFor: '02:30 PM',
+        status: 'concluded',
+        notes: 'Reviewed unsecured creditor assets ledger. Verified no secondary foreclosure triggers are active.'
+      }
+    ];
+  });
+
+  // AUTO-SAVE PERSISTENCE HOOKS: Guarantee zero data loss when app updates or reloads
+  useEffect(() => {
+    if (typeof window !== 'undefined' && clients.length > 0) {
+      localStorage.setItem('l23_persistent_clients_v2', JSON.stringify(clients));
+    }
+  }, [clients]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && matters.length > 0) {
+      localStorage.setItem('l23_persistent_matters_v2', JSON.stringify(matters));
+    }
+  }, [matters]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && generatedDocs.length > 0) {
+      localStorage.setItem('l23_persistent_docs_v2', JSON.stringify(generatedDocs));
+    }
+  }, [generatedDocs]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && evidenceFiles.length > 0) {
+      localStorage.setItem('l23_persistent_evidence_v2', JSON.stringify(evidenceFiles));
+    }
+  }, [evidenceFiles]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && consultations.length > 0) {
+      localStorage.setItem('l23_persistent_consultations_v2', JSON.stringify(consultations));
+    }
+  }, [consultations]);
 
   // Periodically check api connection health
   useEffect(() => {
@@ -556,9 +508,8 @@ Petitioner Signature: Don Watson`,
           // DATABASE ALREADY HAS DATA -> HYDRATE LOCAL CACHE FROM THE CLOUD
           setSyncMessage('Syncing data from persistent cloud memory...');
           
-          // Hydrate Clients with On-Demand Pagination instead of full-table dumps
-          const firstPageQuery = query(collection(db, 'clients'), orderBy('name'), limit(clientsPageSize));
-          const clientsSnap = await getDocs(firstPageQuery).catch(err => {
+          // HYDRATE AND MERGE CLIENTS: Retrieve all remote client documents
+          const clientsSnap = await getDocs(collection(db, 'clients')).catch(err => {
             handleFirestoreError(err, OperationType.LIST, 'clients');
             throw err;
           });
@@ -567,18 +518,18 @@ Petitioner Signature: Don Watson`,
           clientsSnap.forEach(snap => {
             remoteClients.push(snap.data() as Client);
           });
-          setClients(remoteClients);
+
+          // Merge local clients with remote clients without losing any
+          setClients(prev => {
+            const map = new Map<string, Client>();
+            // Add all current/initial clients
+            prev.forEach(c => map.set(c.id, c));
+            // Layer in all remote Firestore clients
+            remoteClients.forEach(c => map.set(c.id, c));
+            return Array.from(map.values());
+          });
           
-          if (!clientsSnap.empty) {
-            setLastClientSnapshot(clientsSnap.docs[clientsSnap.docs.length - 1]);
-            if (clientsSnap.docs.length < clientsPageSize) {
-              setHasMoreClients(false);
-            } else {
-              setHasMoreClients(true);
-            }
-          } else {
-            setHasMoreClients(false);
-          }
+          setHasMoreClients(false);
           
           // Hydrate Matters
           const mattersSnap = await getDocs(collection(db, 'matters'));
@@ -586,7 +537,12 @@ Petitioner Signature: Don Watson`,
           mattersSnap.forEach(snap => {
             remoteMatters.push(snap.data() as Matter);
           });
-          setMatters(remoteMatters);
+          setMatters(prev => {
+            const map = new Map<string, Matter>();
+            prev.forEach(m => map.set(m.id, m));
+            remoteMatters.forEach(m => map.set(m.id, m));
+            return Array.from(map.values());
+          });
           
           // Hydrate Generated Documents
           const docsSnap = await getDocs(collection(db, 'generatedDocs'));
@@ -594,7 +550,14 @@ Petitioner Signature: Don Watson`,
           docsSnap.forEach(snap => {
             remoteDocs.push(snap.data() as GeneratedDocument);
           });
-          setGeneratedDocs(remoteDocs);
+          if (remoteDocs.length > 0) {
+            setGeneratedDocs(prev => {
+              const map = new Map<string, GeneratedDocument>();
+              prev.forEach(d => map.set(d.id, d));
+              remoteDocs.forEach(d => map.set(d.id, d));
+              return Array.from(map.values());
+            });
+          }
           
           // Hydrate Evidence Files
           const evidenceSnap = await getDocs(collection(db, 'evidenceFiles'));
@@ -602,7 +565,14 @@ Petitioner Signature: Don Watson`,
           evidenceSnap.forEach(snap => {
             remoteEvidence.push(snap.data() as EvidenceFile);
           });
-          setEvidenceFiles(remoteEvidence);
+          if (remoteEvidence.length > 0) {
+            setEvidenceFiles(prev => {
+              const map = new Map<string, EvidenceFile>();
+              prev.forEach(e => map.set(e.id, e));
+              remoteEvidence.forEach(e => map.set(e.id, e));
+              return Array.from(map.values());
+            });
+          }
           
           // Hydrate Chat Thread
           const chatSnap = await getDocs(collection(db, 'chatThread'));
@@ -628,9 +598,16 @@ Petitioner Signature: Don Watson`,
           consultSnap.forEach(snap => {
             remoteConsultations.push(snap.data() as ConsultationSession);
           });
-          setConsultations(remoteConsultations);
+          if (remoteConsultations.length > 0) {
+            setConsultations(prev => {
+              const map = new Map<string, ConsultationSession>();
+              prev.forEach(s => map.set(s.id, s));
+              remoteConsultations.forEach(s => map.set(s.id, s));
+              return Array.from(map.values());
+            });
+          }
           
-          addLog('system', 'Workspace persistent storage synced with Firestore cloud database.');
+          addLog('system', `Workspace persistent cloud storage verified. ${remoteClients.length} clients loaded from Firestore.`);
         }
         setDbSyncStatus('synced');
         setSyncMessage('Persistent memory synced live');
@@ -638,7 +615,7 @@ Petitioner Signature: Don Watson`,
         console.error("Firestore sync failed:", err);
         setDbSyncStatus('error');
         setSyncMessage('Sync offline. Local memory active.');
-        addLog('system', `Cloud Sync offline: operating in local fallback state (${err.message || 'database error'})`);
+        addLog('system', `Cloud Sync operating in resilient local mode (${err.message || 'database status'})`);
       }
     };
     
@@ -699,28 +676,34 @@ Petitioner Signature: Don Watson`,
     return false;
   };
 
-  const handleAddClient = (newClient: Omit<Client, 'id' | 'createdAt'>) => {
+  const handleAddClient = (newClient: Omit<Client, 'id' | 'createdAt'> | Client) => {
     if (checkStorageLocked('add new client profile')) return;
     const client: Client = {
       ...newClient,
-      id: `c-${clients.length + 1}`,
-      createdAt: new Date().toISOString()
+      id: (newClient as any).id || `c-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      createdAt: (newClient as any).createdAt || new Date().toISOString()
     };
-    setClients(prev => [...prev, client]);
-    addLog('client', `New Client record created for ${client.name} (${client.practiceArea}).`);
+    setClients(prev => {
+      const filtered = prev.filter(c => c.id !== client.id);
+      return [client, ...filtered];
+    });
+    addLog('client', `Client record confirmed: ${client.name} (${client.practiceArea || 'General'}).`);
     setDoc(doc(db, 'clients', client.id), client).catch(err => {
       handleFirestoreError(err, OperationType.WRITE, `clients/${client.id}`);
     });
   };
 
-  const handleAddMatter = (newMatter: Omit<Matter, 'id' | 'createdAt'>) => {
+  const handleAddMatter = (newMatter: Omit<Matter, 'id' | 'createdAt'> | Matter) => {
     if (checkStorageLocked('open new legal case matter')) return;
     const matter: Matter = {
       ...newMatter,
-      id: `m-${matters.length + 1}`,
-      createdAt: new Date().toISOString()
+      id: (newMatter as any).id || `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      createdAt: (newMatter as any).createdAt || new Date().toISOString()
     };
-    setMatters(prev => [...prev, matter]);
+    setMatters(prev => {
+      const filtered = prev.filter(m => m.id !== matter.id);
+      return [matter, ...filtered];
+    });
     addLog('matter', `New Matter opened: ${matter.title} (${matter.caseNumber}) linked to ${matter.clientName}.`);
     setDoc(doc(db, 'matters', matter.id), matter).catch(err => {
       handleFirestoreError(err, OperationType.WRITE, `matters/${matter.id}`);
@@ -738,8 +721,11 @@ Petitioner Signature: Don Watson`,
 
   const handleAddGeneratedDoc = (docData: GeneratedDocument) => {
     if (checkStorageLocked('save generated legal document')) return;
-    setGeneratedDocs(prev => [...prev, docData]);
-    addLog('document', `AI automation drafted standard file: "${docData.title}" for Client ${docData.clientName}.`);
+    setGeneratedDocs(prev => {
+      const filtered = prev.filter(d => d.id !== docData.id);
+      return [docData, ...filtered];
+    });
+    addLog('document', `Legal document saved: "${docData.title}" for Client ${docData.clientName}.`);
     setDoc(doc(db, 'generatedDocs', docData.id), docData).catch(err => {
       handleFirestoreError(err, OperationType.WRITE, `generatedDocs/${docData.id}`);
     });
@@ -747,8 +733,11 @@ Petitioner Signature: Don Watson`,
 
   const handleAddEvidenceFile = (file: EvidenceFile) => {
     if (checkStorageLocked('register client evidence file')) return;
-    setEvidenceFiles(prev => [...prev, file]);
-    addLog('document', `New client evidence file compiled & OCR scanned: "${file.name}" for Client ${file.clientName}.`);
+    setEvidenceFiles(prev => {
+      const filtered = prev.filter(f => f.id !== file.id);
+      return [file, ...filtered];
+    });
+    addLog('document', `Client evidence file indexed & OCR scanned: "${file.name}" for Client ${file.clientName}.`);
     setDoc(doc(db, 'evidenceFiles', file.id), file).catch(err => {
       handleFirestoreError(err, OperationType.WRITE, `evidenceFiles/${file.id}`);
     });
@@ -1041,6 +1030,10 @@ Petitioner Signature: Don Watson`,
               isDesktopMode={isDesktopMode}
               setIsDesktopMode={setIsDesktopMode}
               onOpenShortcuts={() => setShowShortcutsGuide(true)}
+              onOpenOmniUpload={() => {
+                setShowOmniUploadModal(true);
+                addLog('system', 'Omni-Upload and Bilingual Hub modal triggered.');
+              }}
               onOpenResearch={() => {
                 setShowResearchDrawer(true);
                 addLog('system', 'Judicial research portal triggered from sidebar navigation hub.');
@@ -1088,7 +1081,31 @@ Petitioner Signature: Don Watson`,
                 </div>
                 
                 {/* Header Tray status tags */}
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
+                  {/* Universal Document Upload & Spanish Hub Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowOmniUploadModal(true);
+                      addLog('system', 'Universal document upload and Spanish translation center opened.');
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-900/60 to-indigo-900/60 hover:from-purple-800/80 hover:to-indigo-800/80 border border-purple-500/50 hover:border-purple-400 text-purple-200 rounded-xl text-xs font-mono font-bold uppercase transition-all cursor-pointer shadow-[0_0_12px_rgba(168,85,247,0.2)]"
+                    title="Upload client intake sheets, evidence, contracts and translate to Spanish / extract to English"
+                  >
+                    <UploadCloud className="w-3.5 h-3.5 text-purple-300 animate-pulse" />
+                    <span className="hidden sm:inline">Upload Docs</span>
+                    <span className="bg-purple-500/20 text-purple-300 text-[9px] px-1 py-0.5 rounded border border-purple-500/30">ES/EN</span>
+                  </button>
+
+                  {/* Google Translate bar in header */}
+                  <GoogleTranslateBar
+                    currentLanguage={currentAppLanguage}
+                    onLanguageChange={(lang) => {
+                      setCurrentAppLanguage(lang);
+                      addLog('system', `Global language perspective switched to: ${lang.toUpperCase()}`);
+                    }}
+                  />
+
                   <button
                     type="button"
                     onClick={() => setIsZenEntranceMode(true)}
@@ -1178,7 +1195,7 @@ Petitioner Signature: Don Watson`,
               </header>
 
               {/* Dynamic scroll view wrapper */}
-              <div className="flex-1 overflow-y-auto p-8 relative">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 relative min-h-0">
                 <AnimatePresence mode="wait">
                   
                   {activeTab === 'dashboard' && (
@@ -1200,6 +1217,13 @@ Petitioner Signature: Don Watson`,
                     />
                   )}
 
+                  {activeTab === 'workspace' && (
+                    <GoogleWorkspaceTab
+                      key="workspace"
+                      onNotify={(_type, msg) => addLog('system', `[Workspace] ${msg}`)}
+                    />
+                  )}
+
                   {activeTab === 'clients' && (
                     <ClientsTab
                       key="clients"
@@ -1208,6 +1232,7 @@ Petitioner Signature: Don Watson`,
                       loadMoreClients={loadMoreClients}
                       hasMoreClients={hasMoreClients}
                       isLoadingMoreClients={isLoadingMoreClients}
+                      onOpenOmniUpload={() => setShowOmniUploadModal(true)}
                     />
                   )}
 
@@ -1355,6 +1380,13 @@ Petitioner Signature: Don Watson`,
               <div className="p-2 max-h-64 overflow-y-auto space-y-1">
                 {[
                   { text: '🎯 Go To Dashboard overview', tab: 'dashboard' },
+                  { text: '✨ Google Workspace Hub (Gmail, Calendar, Tasks, Forms, Meet, Keep)', tab: 'workspace' },
+                  { text: '✉️ Check and Compose Gmail messages', tab: 'workspace' },
+                  { text: '📅 Schedule Google Calendar Hearings & Events', tab: 'workspace' },
+                  { text: '✅ Manage Google Tasks & Litigation Deadlines', tab: 'workspace' },
+                  { text: '📝 Google Forms Intake Questionnaires', tab: 'workspace' },
+                  { text: '📹 Launch Google Meet Video Conference Space', tab: 'workspace' },
+                  { text: '📌 Case Scratchpad & Google Keep Notes', tab: 'workspace' },
                   { text: '👥 Handle Case Client Ledger', tab: 'clients' },
                   { text: '💼 Review Legal Litigation Matters', tab: 'matters' },
                   { text: '📄 Synthesize Documents & run AI OCR Scanners', tab: 'documents' },
@@ -1582,6 +1614,33 @@ Petitioner Signature: Don Watson`,
         clients={clients}
         onNavigateToTab={(tab) => {
           setActiveTab(tab);
+        }}
+      />
+
+      {/* Universal Document Upload & Spanish/English AI Hub Modal */}
+      <OmniUploadModal
+        isOpen={showOmniUploadModal}
+        onClose={() => setShowOmniUploadModal(false)}
+        clients={clients}
+        matters={matters}
+        onAddClient={(newClient) => {
+          handleAddClient(newClient);
+        }}
+        onAddMatter={(newMatter) => {
+          handleAddMatter(newMatter);
+        }}
+        onAddEvidenceFile={(file) => {
+          handleAddEvidenceFile(file);
+        }}
+        onAddGeneratedDoc={(doc) => {
+          handleAddGeneratedDoc(doc);
+        }}
+        onNotify={(type, message) => {
+          addLog(type, message);
+        }}
+        onOpenIntakeModal={() => {
+          setShowOmniUploadModal(false);
+          setShowClientIntakeGeneratorModal(true);
         }}
       />
 

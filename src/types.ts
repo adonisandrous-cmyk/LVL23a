@@ -15,7 +15,7 @@ export interface Matter {
   caseNumber: string;
   clientId: string;
   clientName: string;
-  practiceArea: 'Family Law' | 'Immigration' | 'Bankruptcy' | 'General Practice';
+  practiceArea: 'Family Law' | 'Immigration' | 'Bankruptcy' | 'General Practice' | 'Corporate' | 'Estate Planning' | string;
   status: 'active' | 'pending' | 'completed';
   billingRate: number;
   billedHours: number;
@@ -118,13 +118,39 @@ export interface EvidenceFile {
   clientName: string;
   matterId?: string;
   matterTitle?: string;
-  fileCategory: string; // 'Hospital invoice', 'Death warning list', 'Bank statements ledger', etc.
+  fileCategory: string;
   extractedClientName: string;
   duressLevel: 'High' | 'Medium' | 'Low' | 'N/A';
   summary: string;
   extractedFacts: string[];
   rawTextSimulated?: string;
   status: 'scanned' | 'processing' | 'failed';
+}
+
+export interface LedgerEntry {
+  id: string;
+  date: string;
+  type: 'trust_deposit' | 'trust_disbursement' | 'invoice_issued' | 'payment_received' | 'expense' | 'fee_earned';
+  description: string;
+  referenceNumber: string;
+  category: 'IOLTA Trust' | 'Operating Account' | 'Filing Fee' | 'Retainer' | 'Hourly Billing';
+  amount: number;
+  balanceAfter: number;
+  trustBalanceAfter: number;
+  status: 'cleared' | 'pending' | 'processing';
+  recordedBy: string;
+}
+
+export interface ClientLedger {
+  clientId: string;
+  trustBalance: number;
+  operatingBalance: number;
+  totalInvoiced: number;
+  totalPaid: number;
+  unbilledHours: number;
+  hourlyRate: number;
+  lastBillingDate: string;
+  entries: LedgerEntry[];
 }
 
 

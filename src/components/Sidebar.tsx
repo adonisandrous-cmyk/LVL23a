@@ -38,6 +38,7 @@ import {
   DEFAULT_TARGET_FOLDER_ID,
   DEFAULT_ACCOUNT_EMAIL
 } from '../services/driveSyncService';
+import level23Logo from '../assets/images/level23_phoenix_logo_1786736100367.jpg';
 
 interface SidebarProps {
   activeTab: string;
@@ -50,6 +51,7 @@ interface SidebarProps {
   setIsDesktopMode?: (val: boolean) => void;
   onOpenShortcuts?: () => void;
   onOpenResearch?: () => void;
+  onOpenOmniUpload?: () => void;
 }
 
 export default function Sidebar({
@@ -62,7 +64,8 @@ export default function Sidebar({
   isDesktopMode = false,
   setIsDesktopMode,
   onOpenShortcuts,
-  onOpenResearch
+  onOpenResearch,
+  onOpenOmniUpload
 }: SidebarProps) {
   const [driveSync, setDriveSync] = useState<DriveSyncState>(getDriveSyncState());
   const [isToastDismissed, setIsToastDismissed] = useState(false);
@@ -96,6 +99,7 @@ export default function Sidebar({
 
   const sidebarItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'workspace', label: 'Workspace Hub', icon: Sparkles, badge: 'Google' },
     { id: 'clients', label: 'Clients', icon: Users },
     { id: 'matters', label: 'Matters', icon: Briefcase },
     { id: 'documents', label: 'Documents', icon: FileText },
@@ -111,33 +115,17 @@ export default function Sidebar({
 
   return (
     <aside id="sidebar-container" className="w-64 h-full max-h-full min-h-0 overflow-hidden bg-[#090d16] border-r border-[#1e293b] flex flex-col justify-between select-none shrink-0 relative">
-      {/* Sidebar Header Brand with Custom Level 23 Geometric Badge */}
+      {/* Sidebar Header Brand with Official Level 23 Phoenix Logo */}
       <div className="p-3 border-b border-[#1e293b]/60 bg-[#070b13]/80 shrink-0 space-y-2">
         <div className="flex items-center gap-2.5">
-          {/* Level 23 Geometric Shield Logo */}
-          <div className="relative w-10 h-10 flex items-center justify-center shrink-0">
-            <div className="absolute inset-0 bg-radial-gradient from-[#dfb76c]/15 via-[#b38627]/5 to-transparent rounded-full animate-pulse filter blur-md"></div>
-            
-            <svg id="level-23-logo-svg" viewBox="0 0 120 120" className="w-8 h-8 relative z-10 filter drop-shadow-[0_2px_8px_rgba(223,183,108,0.35)]">
-              <defs>
-                <linearGradient id="brandGold" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#fce093" />
-                  <stop offset="50%" stopColor="#dfb76c" />
-                  <stop offset="100%" stopColor="#b38627" />
-                </linearGradient>
-                <linearGradient id="goldAccent" x1="0%" y1="100%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#dfb76c" />
-                  <stop offset="100%" stopColor="#fce093" />
-                </linearGradient>
-              </defs>
-              <polygon points="60,10 105,35 105,85 60,110 15,85 15,35" fill="none" stroke="url(#brandGold)" strokeWidth="4" strokeLinejoin="round" />
-              <polygon points="60,18 97,40 97,80 60,102 23,80 23,40" fill="#020203" stroke="rgba(223,183,108,0.25)" strokeWidth="2" strokeLinejoin="round" opacity="0.95" />
-              <g fill="url(#brandGold)">
-                <text x="32" y="74" fontSize="35" fontWeight="900" fontFamily='"Americana BT", "Cinzel", "Playfair Display", Georgia, serif' fill="url(#brandGold)" letterSpacing="-2">L</text>
-                <text x="56" y="74" fontSize="35" fontWeight="900" fontFamily='"Americana BT", "Cinzel", "Playfair Display", Georgia, serif' fill="url(#goldAccent)" letterSpacing="-2">23</text>
-              </g>
-              <path d="M 45,85 L 75,85 M 60,81 L 60,89" stroke="url(#brandGold)" strokeWidth="2" strokeLinecap="round" />
-            </svg>
+          {/* Level 23 Phoenix Logo Badge */}
+          <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-[#dfb76c]/40 bg-[#02050e] flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(223,183,108,0.25)]">
+            <img
+              src={level23Logo}
+              alt="Level 23 Official Logo"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover"
+            />
           </div>
 
           <div className="text-left space-y-0.5 min-w-0 flex-1">
@@ -383,6 +371,19 @@ export default function Sidebar({
             </button>
           )}
         </div>
+
+        {/* Upload & Translate Docs Button */}
+        {onOpenOmniUpload && (
+          <button
+            id="btn-sidebar-omni-upload"
+            onClick={onOpenOmniUpload}
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-[0.98] text-white font-extrabold rounded-lg text-[10px] uppercase transition-all shadow-[0_0_12px_rgba(168,85,247,0.3)] cursor-pointer border border-purple-400/40"
+            title="Upload Legal Documents & Translate Intake to Spanish / English"
+          >
+            <Sparkles className="w-3.5 h-3.5 shrink-0 text-purple-200" />
+            <span>Upload & Translate Docs</span>
+          </button>
+        )}
 
         {/* Client Intake Generator Button */}
         <button

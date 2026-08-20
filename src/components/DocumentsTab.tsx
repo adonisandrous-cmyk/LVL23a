@@ -40,11 +40,13 @@ import {
   Printer,
   ZoomIn,
   ZoomOut,
-  X
+  X,
+  Languages
 } from 'lucide-react';
 import { Client, DocumentTemplate, GeneratedDocument, Matter, EvidenceFile } from '../types';
 import { ALL_DOCUMENT_TEMPLATES, ALL_COURT_FORM_SCHEMAS, CourtFormSchema } from '../data/legalFormsCatalog';
 import LegalFormsTemplateManager from './LegalFormsTemplateManager';
+import OmniUploadModal from './OmniUploadModal';
 import { initAuth, googleSignIn, logout, getAccessToken } from '../lib/driveAuth';
 
 interface DocumentsTabProps {
@@ -84,6 +86,7 @@ export default function DocumentsTab({
   // 1. Primary Workspace Screens
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'synthesis' | 'evidence_room' | 'judicial_mapper' | 'template_builder' | 'forms_manager' | 'drive_portal'>('forms_manager');
   const [draftingModel, setDraftingModel] = useState<string>('default');
+  const [showTabOmniUpload, setShowTabOmniUpload] = useState<boolean>(false);
 
   // Google Drive Integration States
   const [googleUser, setGoogleUser] = useState<any>(null);
@@ -1569,6 +1572,17 @@ Respectfully submitted,
       <div className="flex bg-[#0a101b] border-2 border-[#1e293b] p-1.5 justify-between items-center gap-3 select-none flex-wrap">
         
         <div className="flex gap-3 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setShowTabOmniUpload(true)}
+            className="px-4 py-2 text-xs font-mono font-extrabold uppercase transition-all flex items-center gap-1.5 cursor-pointer bg-gradient-to-r from-purple-900/60 to-indigo-900/60 hover:from-purple-800 hover:to-indigo-800 text-purple-200 border border-purple-500/50 shadow-[0_0_12px_rgba(168,85,247,0.25)]"
+            title="Upload any document, intake sheet, or evidence file and translate to Spanish / extract data"
+          >
+            <UploadCloud className="w-4.5 h-4.5 text-purple-300 animate-pulse" />
+            <span>Upload & Translate Hub</span>
+            <span className="bg-purple-500/30 text-[9px] px-1 py-0.5 rounded text-purple-200">ES/EN</span>
+          </button>
+
           <button
             type="button"
             onClick={() => {
@@ -4138,6 +4152,22 @@ Respectfully submitted,
           </div>
         </div>
       )}
+
+      {/* Omni Upload & Spanish / English Hub Modal */}
+      <OmniUploadModal
+        isOpen={showTabOmniUpload}
+        onClose={() => setShowTabOmniUpload(false)}
+        clients={clients}
+        matters={matters}
+        onAddEvidenceFile={(file) => {
+          onAddEvidenceFile(file);
+          setSelectedEvidence(file);
+          setActiveWorkspaceTab('evidence_room');
+        }}
+        onAddGeneratedDoc={(doc) => {
+          onAddGeneratedDoc(doc);
+        }}
+      />
 
     </div>
   );

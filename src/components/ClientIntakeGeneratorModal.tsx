@@ -26,7 +26,8 @@ import {
   ChevronRight,
   AlertCircle,
   User,
-  HardDrive
+  HardDrive,
+  Languages
 } from 'lucide-react';
 import { Client, Matter, GeneratedDocument } from '../types';
 import { getAccessToken } from '../lib/driveAuth';
@@ -211,6 +212,10 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<'Immigration' | 'Family Law' | 'General' | 'Custom'>('General');
   const [activeFormSchema, setActiveFormSchema] = useState<IntakeFormSchema>(DEFAULT_SCHEMAS['General']);
+  const [englishSchemaCache, setEnglishSchemaCache] = useState<IntakeFormSchema>(DEFAULT_SCHEMAS['General']);
+  const [spanishSchemaCache, setSpanishSchemaCache] = useState<IntakeFormSchema | null>(null);
+  const [currentLanguage, setCurrentLanguage] = useState<'en' | 'es'>('en');
+  const [isTranslatingForm, setIsTranslatingForm] = useState<boolean>(false);
   const [isGeneratingSchema, setIsGeneratingSchema] = useState<boolean>(false);
 
   // Custom User Request Prompt
@@ -226,6 +231,7 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
   const [isExportingDrive, setIsExportingDrive] = useState<boolean>(false);
   const [isCreatingClientCard, setIsCreatingClientCard] = useState<boolean>(false);
   const [isExtractingData, setIsExtractingData] = useState<boolean>(false);
+  const [isExtractingSpanish, setIsExtractingSpanish] = useState<boolean>(false);
 
   // Status & Success Banner State
   const [notification, setNotification] = useState<{
@@ -239,8 +245,67 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
   // Raw Email / Drive Document Text Parser State (for extraction)
   const [showExtractionInputModal, setShowExtractionInputModal] = useState<boolean>(false);
   const [rawExtractionText, setRawExtractionText] = useState<string>('');
+  const [spanishExtractionResult, setSpanishExtractionResult] = useState<any | null>(null);
 
   if (!isOpen) return null;
+
+  // Toggle Language between English and Spanish with AI Translation
+  const handleToggleLanguage = async (targetLang: 'en' | 'es') => {
+    if (targetLang === currentLanguage) return;
+
+    if (targetLang === 'en') {
+      setCurrentLanguage('en');
+      setActiveFormSchema(englishSchemaCache);
+      setNotification({
+        type: 'info',
+        title: 'Switched to English Master Form',
+        message: 'Active form schema is displayed in standard English legal format.'
+      });
+      return;
+    }
+
+    // Translating to Spanish
+    if (spanishSchemaCache) {
+      setCurrentLanguage('es');
+      setActiveFormSchema(spanishSchemaCache);
+      setNotification({
+        type: 'success',
+        title: 'Formulario Traducido al Español',
+        message: 'El formulario de admisión ahora está completamente en español y listo para enviarse al cliente.'
+      });
+      return;
+    }
+
+    setIsTranslatingForm(true);
+    try {
+      const res = await fetch('/api/gemini/translate-form', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          formSchema: activeFormSchema,
+          targetLanguage: 'es'
+        })
+      });
+
+      const data = await res.json();
+      if (data.success && data.translatedSchema) {
+        setSpanishSchemaCache(data.translatedSchema);
+        setActiveFormSchema(data.translatedSchema);
+        setCurrentLanguage('es');
+        setNotification({
+          type: 'success',
+          title: '🇪🇸 Formulario Traducido al Español Exitosamente',
+          message: 'Todos los títulos, secciones, preguntas y opciones se han traducido al español con precisión jurídica.'
+        });
+      } else {
+        throw new Error(data.error || 'Failed to translate form');
+      }
+    } catch (err: any) {
+      alert('Error translating form to Spanish: ' + err.message);
+    } finally {
+      setIsTranslatingForm(false);
+    }
+  };
 
   // Handle Category Selection Change
   const handleSelectCategory = async (cat: 'Immigration' | 'Family Law' | 'General' | 'Custom') => {
@@ -248,10 +313,13 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
     setNotification(null);
     setFieldValues({});
     setIsAutoFilledSample(false);
+    setCurrentLanguage('en');
+    setSpanishSchemaCache(null);
 
     // If local schema exists, load immediately
     const baseSchema = DEFAULT_SCHEMAS[cat] || DEFAULT_SCHEMAS['Custom'];
     setActiveFormSchema(baseSchema);
+    setEnglishSchemaCache(baseSchema);
 
     // Trigger AI Generation to enrich schema or keep default
     setIsGeneratingSchema(true);
@@ -264,11 +332,71 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
       const data = await res.json();
       if (data.success && data.formSchema && data.formSchema.sections) {
         setActiveFormSchema(data.formSchema);
+        setEnglishSchemaCache(data.formSchema);
       }
     } catch (err) {
       console.warn('Using robust fallback schema for intake category:', cat);
     } finally {
       setIsGeneratingSchema(false);
+    }
+  };
+
+  // Extract Returned Spanish Intake and Auto-Translate to English Client Record
+  const handleExtractReturnedSpanishForm = async (spanishText: string) => {
+    if (!spanishText.trim()) return;
+
+    setIsExtractingSpanish(true);
+    setNotification(null);
+
+    try {
+      const res = await fetch('/api/gemini/extract-translated-intake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rawText: spanishText,
+          sourceLanguage: 'Spanish',
+          category: selectedCategory
+        })
+      });
+
+      const data = await res.json();
+      if (data.success && data.extractedData) {
+        const ext = data.extractedData;
+        setSpanishExtractionResult(ext);
+
+        const profile = ext.clientProfile || {};
+        const fieldMap = ext.extractedFieldMap || {};
+
+        // Populate field values with the extracted data
+        const newValues: Record<string, string> = { ...fieldValues };
+        if (profile.name) newValues['client_name'] = profile.name;
+        if (profile.email) newValues['email_address'] = profile.email;
+        if (profile.phone) newValues['phone_number'] = profile.phone;
+        if (profile.address) newValues['residential_address'] = profile.address;
+
+        Object.keys(fieldMap).forEach(k => {
+          newValues[k] = fieldMap[k];
+        });
+
+        if (profile.intakeNotesEnglish) {
+          newValues['incident_summary'] = profile.intakeNotesEnglish;
+          newValues['dispute_summary'] = profile.intakeNotesEnglish;
+        }
+
+        setFieldValues(newValues);
+        setNotification({
+          type: 'success',
+          title: '📥 Spanish Intake Extracted & Translated to English!',
+          message: `Successfully translated answers from ${profile.name || 'Client'} and populated English intake fields & case summary.`
+        });
+      } else {
+        throw new Error(data.error || 'Failed to extract Spanish responses');
+      }
+    } catch (err: any) {
+      alert('Error extracting Spanish intake: ' + err.message);
+    } finally {
+      setIsExtractingSpanish(false);
+      setShowExtractionInputModal(false);
     }
   };
 
@@ -658,25 +786,63 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-black uppercase tracking-wider text-white font-mono">
-                  Client Intake Generator
+                  Client Intake Generator & Translator
                 </h2>
                 <span className="text-[9px] font-mono font-bold uppercase px-2 py-0.5 bg-gradient-to-r from-teal-500 to-emerald-400 text-[#090d16] rounded-full shadow-sm">
                   ⚡ AI Powered Engine
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 font-mono">
-                Select practice area or request custom intake fields with AI generation & Google Workspace sync.
+                Select practice area, translate form to Spanish, or extract returned Spanish intake into English client records.
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 bg-[#070b13] border border-slate-800 hover:border-slate-600 text-slate-400 hover:text-white rounded-lg transition-all cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Google Translate Instant Toggle Bar */}
+            <div className="flex items-center gap-1 bg-[#070b13] border border-purple-500/40 rounded-xl p-1 shadow-sm">
+              <button
+                type="button"
+                onClick={() => handleToggleLanguage('es')}
+                disabled={isTranslatingForm}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                  currentLanguage === 'es'
+                    ? 'bg-purple-500/30 text-purple-200 border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.3)]'
+                    : 'bg-transparent text-slate-400 hover:text-slate-200'
+                }`}
+                title="Translate this complete intake form to Spanish with certified legal precision"
+              >
+                {isTranslatingForm ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
+                ) : (
+                  <Globe className="w-3.5 h-3.5 text-purple-400" />
+                )}
+                <span>🇪🇸 Traducir a Español</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleToggleLanguage('en')}
+                disabled={isTranslatingForm}
+                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                  currentLanguage === 'en'
+                    ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40'
+                    : 'bg-transparent text-slate-400 hover:text-slate-200'
+                }`}
+                title="Switch back to English Master Form"
+              >
+                <span>🇺🇸 English</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 bg-[#070b13] border border-slate-800 hover:border-slate-600 text-slate-400 hover:text-white rounded-lg transition-all cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* MODAL BODY */}
@@ -1026,41 +1192,77 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
             </div>
           </div>
 
-          {/* EXTRACTION PANEL FOR GMAIL & DRIVE SUBMISSIONS */}
+          {/* EXTRACTION PANEL FOR GMAIL, DRIVE & SPANISH FORM RESPONSES */}
           {showExtractionInputModal ? (
-            <div className="bg-[#0b1322] border border-sky-500/40 p-4 rounded-xl space-y-3">
-              <div className="flex items-center justify-between text-xs font-mono font-extrabold text-sky-300 uppercase">
-                <span>Extract Client Intake Data from Gmail Email or Drive Submission</span>
+            <div className="bg-[#0b1322] border-2 border-purple-500/40 p-4 rounded-xl space-y-3">
+              <div className="flex items-center justify-between text-xs font-mono font-extrabold text-purple-300 uppercase">
+                <span className="flex items-center gap-1.5">
+                  <Languages className="w-4 h-4 text-purple-400" />
+                  Extract Returned Spanish Intake Form & Translate to English Client Record
+                </span>
                 <button type="button" onClick={() => setShowExtractionInputModal(false)} className="text-slate-400 hover:text-white">
                   <X className="w-4 h-4" />
                 </button>
               </div>
+              <p className="text-[11px] text-slate-300 font-sans">
+                Paste the returned Spanish questionnaire responses or email text below. The AI will extract all client answers, translate them accurately into English legal terminology, and auto-populate the client profile and case notes.
+              </p>
               <textarea
                 value={rawExtractionText}
                 onChange={(e) => setRawExtractionText(e.target.value)}
-                placeholder="Paste incoming client email body from Gmail or shared Google Drive document text here..."
-                rows={3}
-                className="w-full bg-[#050811] border border-slate-800 text-xs font-mono text-slate-200 p-2.5 rounded-lg outline-none focus:border-sky-400 resize-none"
+                placeholder="Ejemplo: Nombre Completo: Don Watson. Teléfono: +1 (949) 555-0198. Correo: don.watson@watsontech.com. Resumen del Asunto: Petición de disolución del matrimonio según el Código de Familia de California..."
+                rows={4}
+                className="w-full bg-[#050811] border border-purple-500/30 text-xs font-mono text-slate-200 p-2.5 rounded-lg outline-none focus:border-purple-400 resize-none"
               />
-              <button
-                type="button"
-                onClick={() => handleExtractFromGmailOrDrive(rawExtractionText)}
-                disabled={isExtractingData || !rawExtractionText.trim()}
-                className="w-full py-2 bg-gradient-to-r from-sky-500 to-sky-400 text-[#090d16] font-mono text-xs font-black uppercase rounded-lg cursor-pointer flex items-center justify-center gap-2"
-              >
-                {isExtractingData ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
-                <span>Extract Data & Auto-Populate Client Cards & Forms</span>
-              </button>
+
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sampleSpanish = `Nombre del Cliente: Juan Carlos Morales\nTeléfono: (555) 349-8821\nCorreo Electrónico: juan.morales@correo.com\nDirección Residencial: 742 Calle Magnolia, Los Angeles, CA 90024\nMotivo de Consulta: Solicitud de ajuste de estatus migratorio I-485 a través de petición familiar. Entrada a los Estados Unidos con visa B2 en marzo de 2021. Sin antecedentes penales.\nCónyuge: María Elena Morales`;
+                    setRawExtractionText(sampleSpanish);
+                  }}
+                  className="px-2.5 py-1 bg-purple-500/10 border border-purple-500/30 text-purple-300 text-[10.5px] font-mono rounded cursor-pointer hover:bg-purple-500/20"
+                >
+                  ⚡ Load Sample Spanish Response
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleExtractFromGmailOrDrive(rawExtractionText)}
+                    disabled={isExtractingData || !rawExtractionText.trim()}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono text-xs font-bold uppercase rounded-lg cursor-pointer"
+                  >
+                    {isExtractingData ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Standard Extract'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleExtractReturnedSpanishForm(rawExtractionText)}
+                    disabled={isExtractingSpanish || !rawExtractionText.trim()}
+                    className="px-4 py-1.5 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-400 hover:to-indigo-400 text-white font-mono text-xs font-black uppercase rounded-lg cursor-pointer flex items-center gap-1.5 shadow-md"
+                  >
+                    {isExtractingSpanish ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    <span>Translate & Extract in English</span>
+                  </button>
+                </div>
+              </div>
             </div>
           ) : (
-            <div className="flex items-center justify-between px-1">
+            <div className="flex items-center justify-between px-1 bg-[#0b1322] border border-purple-500/20 p-2.5 rounded-xl">
+              <div className="flex items-center gap-2">
+                <Languages className="w-4 h-4 text-purple-400 shrink-0" />
+                <span className="text-xs font-mono text-purple-200">
+                  Client returned intake in Spanish?
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowExtractionInputModal(true)}
-                className="text-xs font-mono text-sky-400 hover:underline flex items-center gap-1.5 cursor-pointer"
+                className="px-3 py-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 text-xs font-mono font-bold rounded-lg cursor-pointer flex items-center gap-1.5 transition-all"
               >
-                <Mail className="w-3.5 h-3.5 text-sky-400" />
-                <span>📥 Extract Data from Incoming Gmail Email or Drive Response</span>
+                <span>📥 Extract Spanish Intake & Translate to English Record</span>
               </button>
             </div>
           )}
