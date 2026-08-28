@@ -316,7 +316,7 @@ export default function ClientsTab({
 
   // Fallback / Standalone simulated files database
   const [simulatedFiles, setSimulatedFiles] = useState<Record<string, { name: string; content: string; size: string; type: string; date: string }[]>>(() => {
-    const saved = localStorage.getItem('l23_simulated_client_files');
+    const saved = localStorage.getItem('l23_simulated_client_files_v3');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -325,13 +325,12 @@ export default function ClientsTab({
     }
     return {
       'c-1': [
-        { name: 'Intake_Record.md', type: 'Markdown', size: '2.4 KB', date: '2026-06-10', content: '### Eleanor Vance Intake Details\n\nClient Eleanor Vance seeks assistance regarding joint custody dissolution under CA codes.\nSeparation date was reported as April 10th. Marriage date was July 2nd, 2012. Two minor children are involved.\nShe seeks spousal support limits audit and partition of cooperative townhouse asset.' },
-        { name: 'Contact_Card.vcf', type: 'VCard', size: '0.6 KB', date: '2026-06-10', content: 'BEGIN:VCARD\nVERSION:3.0\nN:Vance;Eleanor;;;\nFN:Eleanor Vance\nEMAIL:eleanor.vance@gmail.com\nTEL:+1 (415) 304-9271\nORG:Level 23 Client\nEND:VCARD' },
-        { name: 'Assets_Division_Schedule.txt', type: 'Text Document', size: '1.2 KB', date: '2026-06-11', content: '1. Cooperative Townhouse Unit 12-A - Community Asset.\n2. Spousal support claims: Pending audit.' }
+        { name: 'Intake_Record_JaneDoe.md', type: 'Markdown', size: '1.4 KB', date: '2026-08-01', content: '### Jane Doe Intake Details\n\nStandard Client Intake Placeholder Record.\nReady for replacement or onboarding of active client.' },
+        { name: 'Contact_Card.vcf', type: 'VCard', size: '0.6 KB', date: '2026-08-01', content: 'BEGIN:VCARD\nVERSION:3.0\nN:Doe;Jane;;;\nFN:Jane Doe\nEMAIL:jane.doe@example.com\nTEL:+1 (555) 019-2831\nORG:Level 23 Client\nEND:VCARD' }
       ],
       'c-2': [
-        { name: 'Sarah_Jenkins_Intake_Record.md', type: 'Markdown', size: '1.8 KB', date: '2026-06-11', content: '### Sarah Jenkins Case Notes\n\nMarriage Date: June 18, 2015.\nSeparation Date: May 15, 2025.' },
-        { name: 'Sarah_Jenkins_Contact_Card.vcf', type: 'VCard', size: '0.6 KB', date: '2026-06-11', content: 'BEGIN:VCARD\nVERSION:3.0\nN:Jenkins;Sarah;;;\nFN:Sarah Jenkins\nEMAIL:sarah.j@gmail.com\nTEL:+1 (415) 882-1049\nORG:Level 23 Client\nEND:VCARD' }
+        { name: 'Intake_Record_JohnDoe.md', type: 'Markdown', size: '1.4 KB', date: '2026-08-01', content: '### John Doe Intake Details\n\nStandard Client Intake Placeholder Record.\nReady for replacement or onboarding of active client.' },
+        { name: 'Contact_Card.vcf', type: 'VCard', size: '0.6 KB', date: '2026-08-01', content: 'BEGIN:VCARD\nVERSION:3.0\nN:Doe;John;;;\nFN:John Doe\nEMAIL:john.doe@example.com\nTEL:+1 (555) 019-2832\nORG:Level 23 Client\nEND:VCARD' }
       ]
     };
   });
@@ -339,7 +338,7 @@ export default function ClientsTab({
   // Save simulated files to localStorage
   const saveSimulated = (updated: Record<string, any>) => {
     setSimulatedFiles(updated);
-    localStorage.setItem('l23_simulated_client_files', JSON.stringify(updated));
+    localStorage.setItem('l23_simulated_client_files_v3', JSON.stringify(updated));
   };
 
   // Poll Local Editor Bridge for changes
@@ -674,59 +673,41 @@ END:VCARD`;
     if (extractedCardFields[client.id]) {
       return extractedCardFields[client.id];
     }
-    // Fallback parsed defaults matching exact Google Drive Client Intake Cards
-    if (client.id === 'c-0' || client.name.includes('Don Watson')) {
+    // Fallback parsed defaults for standard placeholders
+    if (client.name.includes('Jane Doe')) {
       return {
-        'Full Legal Name': 'Don Watson',
-        'Date of Birth / Age': 'November 14, 1982 (Age 43)',
-        'Residential Address': '1420 Newport Center Dr, Suite 500, Newport Beach, CA 92660',
-        'Phone Number': '+1 (949) 555-0198',
-        'Email Address': 'don.watson@watsontech.com',
-        'Occupation / Employer': 'Chief Technology Officer, WatsonTech Systems Inc.',
-        'Spouse / Opposing Party': 'Clara Watson (Age 41 | 780 Coast Hwy, Laguna Beach, CA 92651)',
-        'Date of Marriage / Entry Date': 'June 15, 2012 (Newport Beach, CA)',
-        'Date of Separation / Visa Class': 'April 10, 2026',
-        'Filing Court / County Jurisdiction': 'Superior Court of CA, County of Orange (341 The City Drive South, Orange, CA)',
-        'Minor Children & DOBs': 'Ethan Watson (DOB: 08/10/2016), Chloe Watson (DOB: 12/05/2019)',
-        'Requested Custody & Relief': 'Joint Legal & Primary Physical Custody to Petitioner; Partition of Assets & Support Audit',
-        'Community Assets & Debts': 'Newport Beach Residence ($1.4M val), WatsonTech equity holdings acquired during marriage',
-        'Primary Legal Risks & Next Steps': 'Issue FL-110 Summons; File Preliminary Disclosures; CA Family Code 300 6-mo residency satisfied'
+        'Full Legal Name': 'Jane Doe',
+        'Date of Birth / Age': 'Standard Client Placeholder',
+        'Residential Address': '100 Main Street, Suite 200, Santa Ana, CA 92701',
+        'Phone Number': client.phone || '+1 (555) 019-2831',
+        'Email Address': client.email || 'jane.doe@example.com',
+        'Occupation / Employer': 'Client Intake Record',
+        'Spouse / Opposing Party': 'John Doe',
+        'Date of Marriage / Entry Date': 'August 1, 2020',
+        'Date of Separation / Visa Class': 'August 1, 2026',
+        'Filing Court / County Jurisdiction': 'Superior Court of CA, County of Orange',
+        'Minor Children & DOBs': 'Pending Intake Disclosure',
+        'Requested Custody & Relief': 'Standard Dissolution / Legal Action',
+        'Community Assets & Debts': 'Pending Disclosure',
+        'Primary Legal Risks & Next Steps': 'Complete initial client intake documentation and review pleading drafts'
       };
     }
-    if (client.id === 'c-1' || client.name.includes('Eleanor Vance')) {
+    if (client.name.includes('John Doe')) {
       return {
-        'Full Legal Name': 'Eleanor Vance',
-        'Date of Birth / Age': 'March 18, 1988 (Age 38)',
-        'Residential Address': '450 Sutter St, Suite 1200, San Francisco, CA 94108',
-        'Phone Number': '+1 (415) 304-9271',
-        'Email Address': 'eleanor.vance@gmail.com',
-        'Occupation / Employer': 'Architectural Designer, San Francisco, CA',
-        'Spouse / Opposing Party': 'Bradley Jenkins',
-        'Date of Marriage / Entry Date': 'July 2, 2012',
-        'Date of Separation / Visa Class': 'April 10, 2026',
-        'Filing Court / County Jurisdiction': 'Superior Court of CA, County of San Francisco',
-        'Minor Children & DOBs': 'Two minor children involved',
-        'Requested Custody & Relief': 'Joint Custody & Spousal Support Limit Audit; Partition of Townhouse',
-        'Community Assets & Debts': 'Cooperative Townhouse asset, Joint bank accounts',
-        'Primary Legal Risks & Next Steps': 'Draft Fl-100 Petition & FL-105 Custody Declaration'
-      };
-    }
-    if (client.id === 'c-2' || client.name.includes('Mateo Rodriguez')) {
-      return {
-        'Full Legal Name': 'Mateo Rodriguez',
-        'Date of Birth / Age': 'August 24, 1994 (Age 31)',
-        'Residential Address': '1820 Telegraph Ave, Oakland, CA 94612',
-        'Phone Number': '+1 (510) 902-8344',
-        'Email Address': 'm.rodriguez@fastmail.com',
-        'Occupation / Employer': 'Community Organizer / Freelance Journalist',
-        'Spouse / Opposing Party': 'Single / N/A (USCIS Respondent)',
-        'Date of Marriage / Entry Date': 'Entry Date: February 12, 2026',
-        'Date of Separation / Visa Class': 'Visa Class: B2 / Affirmative I-589 Asylum',
-        'Filing Court / County Jurisdiction': 'USCIS Executive Office for Immigration Review (EOIR San Francisco)',
-        'Minor Children & DOBs': 'None reported',
-        'Requested Custody & Relief': 'Form I-589 Asylum & Withholding of Removal; Form I-765 EAD',
-        'Community Assets & Debts': 'N/A',
-        'Primary Legal Risks & Next Steps': 'Submit Form I-589 within 1-year filing deadline; Attach Threat Evidence & Country Reports'
+        'Full Legal Name': 'John Doe',
+        'Date of Birth / Age': 'Standard Client Placeholder',
+        'Residential Address': '200 Coastal Way, Newport Beach, CA 92660',
+        'Phone Number': client.phone || '+1 (555) 019-2832',
+        'Email Address': client.email || 'john.doe@example.com',
+        'Occupation / Employer': 'Client Intake Record',
+        'Spouse / Opposing Party': 'Jane Doe',
+        'Date of Marriage / Entry Date': 'August 1, 2020',
+        'Date of Separation / Visa Class': 'August 1, 2026',
+        'Filing Court / County Jurisdiction': 'Superior Court of CA, County of Orange',
+        'Minor Children & DOBs': 'Pending Intake Disclosure',
+        'Requested Custody & Relief': 'Standard Legal Action',
+        'Community Assets & Debts': 'Pending Disclosure',
+        'Primary Legal Risks & Next Steps': 'Complete initial client intake documentation and review pleading drafts'
       };
     }
     // Generic auto-parsed representation from client properties & intake notes

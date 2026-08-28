@@ -52,6 +52,7 @@ interface SidebarProps {
   onOpenShortcuts?: () => void;
   onOpenResearch?: () => void;
   onOpenOmniUpload?: () => void;
+  onOpenGoogleHosting?: () => void;
 }
 
 export default function Sidebar({
@@ -65,7 +66,8 @@ export default function Sidebar({
   setIsDesktopMode,
   onOpenShortcuts,
   onOpenResearch,
-  onOpenOmniUpload
+  onOpenOmniUpload,
+  onOpenGoogleHosting
 }: SidebarProps) {
   const [driveSync, setDriveSync] = useState<DriveSyncState>(getDriveSyncState());
   const [isToastDismissed, setIsToastDismissed] = useState(false);
@@ -371,6 +373,19 @@ export default function Sidebar({
             </button>
           )}
         </div>
+
+        {/* Google Cloud & PWA Hub Button */}
+        {onOpenGoogleHosting && (
+          <button
+            id="btn-sidebar-google-hosting"
+            onClick={onOpenGoogleHosting}
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-gradient-to-r from-blue-950/80 via-slate-900 to-teal-950/80 hover:from-blue-900 hover:to-teal-900 text-teal-300 font-extrabold rounded-lg text-[10px] uppercase transition-all shadow-sm cursor-pointer border border-teal-500/30"
+            title="Google Cloud Run Deploy, PWA Installation & Desktop Bridge"
+          >
+            <Laptop className="w-3.5 h-3.5 shrink-0 text-teal-400" />
+            <span>Google App & PWA Hub</span>
+          </button>
+        )}
 
         {/* Upload & Translate Docs Button */}
         {onOpenOmniUpload && (

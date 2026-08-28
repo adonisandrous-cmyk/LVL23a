@@ -110,9 +110,9 @@ const DEFAULT_SCHEMAS: Record<string, IntakeFormSchema> = {
       {
         sectionTitle: '1. Client Contact & Case Identity',
         fields: [
-          { id: 'client_name', label: 'Client Full Name', type: 'text', required: true, placeholder: 'e.g., Eleanor Vance' },
+          { id: 'client_name', label: 'Client Full Name', type: 'text', required: true, placeholder: 'e.g., Jane Doe' },
           { id: 'client_contact', label: 'Phone Number & Email Address', type: 'text', required: true, placeholder: '(555) 019-2834 | client@example.com' },
-          { id: 'opposing_party', label: 'Spouse / Opposing Party Full Name', type: 'text', required: true, placeholder: 'e.g., Bradley Jenkins' }
+          { id: 'opposing_party', label: 'Spouse / Opposing Party Full Name', type: 'text', required: true, placeholder: 'e.g., John Doe' }
         ]
       },
       {
@@ -482,15 +482,15 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
       sampleValues['i94_exp'] = '2020-05-04';
       sampleValues['prior_petitions'] = 'Prior I-130 filed by U.S. Citizen spouse in 2024; pending at California Service Center.';
       sampleValues['immigration_goal'] = 'Adjustment of Status (Green Card)';
-      sampleValues['spouse_family_info'] = 'Spouse: Carlos Rodriguez (U.S. Citizen). Minor Child: Mateo Rodriguez (Age 4, born in CA).';
+      sampleValues['spouse_family_info'] = 'Spouse: U.S. Citizen spouse. Minor Children: Two.';
     } else if (selectedCategory === 'Family Law') {
-      sampleValues['client_name'] = 'Eleanor Vance';
-      sampleValues['client_contact'] = '(714) 555-0192 | eleanor.vance@example.com';
-      sampleValues['opposing_party'] = 'Bradley Jenkins';
+      sampleValues['client_name'] = 'Jane Doe';
+      sampleValues['client_contact'] = '(714) 555-0192 | jane.doe@example.com';
+      sampleValues['opposing_party'] = 'John Doe';
       sampleValues['date_marriage'] = '2015-06-18';
       sampleValues['date_separation'] = '2025-05-15';
       sampleValues['marriage_location'] = 'Orange, California';
-      sampleValues['minor_children'] = 'Child 1: Lucas Vance (DOB: 2017-03-12); Child 2: Sophia Vance (DOB: 2020-09-22).';
+      sampleValues['minor_children'] = 'Two minor children.';
       sampleValues['custody_preference'] = 'Joint Legal, Primary Physical to Petitioner with Visitation';
       sampleValues['real_estate_assets'] = 'Community home in Orange County (Market value $850k, Mortgage balance $420k); Chase Joint Savings ($45k).';
       sampleValues['spousal_support_req'] = 'Temporary & Permanent Spousal Support Requested';
@@ -857,7 +857,7 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
                   Select Client for AI Engagement & Intake Auto-Fill
                 </span>
                 <span className="text-[10px] text-slate-400 font-sans">
-                  Select an existing client record (e.g. Don Watson) to target with AI generation
+                  Select an existing client record (e.g. Jane Doe) to target with AI generation
                 </span>
               </div>
             </div>
@@ -867,23 +867,23 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
                 const selectedName = e.target.value;
                 const client = clients?.find(c => c.name === selectedName);
                 if (client) {
-                  if (client.name.includes('Don Watson')) {
+                  if (client.name.includes('Jane Doe')) {
                     handleSelectCategory('Family Law');
                     setFieldValues({
-                      client_name: 'Don Watson',
-                      dob: '11/14/1982',
-                      address: '1420 Newport Center Dr, Suite 500, Newport Beach, CA 92660',
-                      email: 'don.watson@watsontech.com',
-                      phone: '+1 (949) 555-0198',
-                      respondent_name: 'Clara Watson',
-                      respondent_dob: '04/22/1985',
-                      respondent_address: '780 Coast Hwy, Laguna Beach, CA 92651',
+                      client_name: 'Jane Doe',
+                      dob: '11/14/1985',
+                      address: '100 Main Street, Suite 200, Santa Ana, CA 92701',
+                      email: 'jane.doe@example.com',
+                      phone: '+1 (555) 019-2831',
+                      respondent_name: 'John Doe',
+                      respondent_dob: '04/22/1983',
+                      respondent_address: '200 Coastal Way, Newport Beach, CA 92660',
                       jurisdictional_basis: 'California Family Code Section 300 (6 Mo CA / 3 Mo Orange County verified)',
                       county_filing: 'Superior Court of California, County of Orange',
                       marriage_date: '06/15/2012',
                       separation_date: '04/10/2026',
-                      children: 'Ethan Watson (DOB: 08/10/2016), Chloe Watson (DOB: 12/05/2019)',
-                      custody_preference: 'Joint Legal Custody & Primary Physical Custody to Don Watson',
+                      children: 'Minor children declared in confidential disclosure',
+                      custody_preference: 'Joint Legal Custody & Primary Physical Custody to Jane Doe',
                       matter_summary: 'FL-100 Dissolution of Marriage Petition under CA Fam Code § 300'
                     });
                     setIsAutoFilledSample(true);
@@ -1210,7 +1210,7 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
               <textarea
                 value={rawExtractionText}
                 onChange={(e) => setRawExtractionText(e.target.value)}
-                placeholder="Ejemplo: Nombre Completo: Don Watson. Teléfono: +1 (949) 555-0198. Correo: don.watson@watsontech.com. Resumen del Asunto: Petición de disolución del matrimonio según el Código de Familia de California..."
+                placeholder="Ejemplo: Nombre Completo: Jane Doe. Teléfono: +1 (555) 019-2831. Correo: jane.doe@example.com. Resumen del Asunto: Petición de disolución del matrimonio según el Código de Familia de California..."
                 rows={4}
                 className="w-full bg-[#050811] border border-purple-500/30 text-xs font-mono text-slate-200 p-2.5 rounded-lg outline-none focus:border-purple-400 resize-none"
               />

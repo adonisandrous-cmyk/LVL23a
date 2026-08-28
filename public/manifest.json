@@ -1,0 +1,28 @@
+{
+  "name": "LEVEL 23 Legal AI Suite",
+  "short_name": "Level 23",
+  "description": "Enterprise AI Legal Practice Management with Gemini 3.7 Intelligence, Real-Time Case Analytics, and Automated Litigation Drafting",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#060a12",
+  "theme_color": "#090d16",
+  "lang": "en-US",
+  "dir": "ltr",
+  "categories": ["productivity", "business", "legal", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

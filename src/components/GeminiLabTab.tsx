@@ -74,7 +74,7 @@ export default function GeminiLabTab({ systemConnected, onAddMessage }: GeminiLa
       id: "search_grounding",
       title: "Use Google Search Data",
       icon: Search,
-      model: "gemini-3.5-flash",
+      model: "gemini-3.7-flash",
       description: "Verify claims and locate up-to-date rulings with Grounded Real-Time Web Searches and automatic authoritative URL citations.",
       tag: "Grounding",
       badgeColor: "bg-blue-500/10 text-blue-400 border-blue-500/20"
@@ -83,7 +83,7 @@ export default function GeminiLabTab({ systemConnected, onAddMessage }: GeminiLa
       id: "image_editor",
       title: "Create & Edit Images",
       icon: ImageIcon,
-      model: "gemini-3.1-flash-image-preview",
+      model: "gemini-3.1-flash-image",
       description: "Produce evidentiary layouts or edit scanned court material interactively with custom text prompt instructions and canvas state.",
       tag: "Image Edit",
       badgeColor: "bg-purple-500/10 text-purple-400 border-purple-500/20"
@@ -92,7 +92,7 @@ export default function GeminiLabTab({ systemConnected, onAddMessage }: GeminiLa
       id: "high_qual_image",
       title: "Generate High-Quality Images",
       icon: Layers,
-      model: "gemini-3-pro-image-preview",
+      model: "gemini-3.1-flash-image",
       description: "Generate elite high-resolution renders and mock case layouts with native size options spanning 1K, 2K, and 4K resolutions.",
       tag: "Render (1K-4K)",
       badgeColor: "bg-sky-500/10 text-sky-400 border-sky-500/20"
@@ -128,7 +128,7 @@ export default function GeminiLabTab({ systemConnected, onAddMessage }: GeminiLa
       id: "audio_transcribe",
       title: "Transcribe Voice Depositions",
       icon: Mic,
-      model: "gemini-3.5-flash",
+      model: "gemini-3.7-flash",
       description: "Stream microphone audio to record and transcribe oral client testimonials, affidavits, or rough lawyer dictate in seconds.",
       tag: "Speech-to-Text",
       badgeColor: "bg-pink-500/10 text-pink-400 border-pink-500/20"
@@ -1446,7 +1446,7 @@ Construct a formal demand for complete historical bank ledger statements going b
                         <div className="grid grid-cols-3 gap-2 font-mono text-[10px]">
                           {[
                             { tk: "FAST", modelPr: "gemini-3.1-flash-lite", dsc: "Fast Tasks" },
-                            { tk: "GENERAL", modelPr: "gemini-3.5-flash", dsc: "General" },
+                            { tk: "GENERAL", modelPr: "gemini-3.7-flash", dsc: "General" },
                             { tk: "COMPLEX", modelPr: "gemini-3.1-pro-preview", dsc: "Complex Specialist" }
                           ].map((item) => (
                             <button
@@ -1677,7 +1677,7 @@ Construct a formal demand for complete historical bank ledger statements going b
                     <div className="bg-[#060a12] p-5 rounded-xl border border-slate-800 space-y-4">
                       <h4 className="text-xs font-mono font-bold tracking-wider uppercase text-[#dfb76c]">Deposition Transcriber parameters</h4>
                       <p className="text-[11px] text-slate-400">
-                        Record voice depositions directly from your workstation microphone using HTML5 capture. We pipe base64 encoded audio to gemini-3.5-flash for rapid indexing.
+                        Record voice depositions directly from your workstation microphone using HTML5 capture. We pipe base64 encoded audio to gemini-3.7-flash for rapid indexing.
                       </p>
 
                       <div className="flex flex-col gap-2.5">

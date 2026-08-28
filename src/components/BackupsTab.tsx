@@ -76,7 +76,7 @@ export default function BackupsTab({
   const [bridgeFiles, setBridgeFiles] = useState<string[]>([]);
   const [bridgeFolder, setBridgeFolder] = useState<string>('');
   const [isTestingLocalOllama, setIsTestingLocalOllama] = useState(false);
-  const [localOllamaPrompt, setLocalOllamaPrompt] = useState('Verify the Chapter 7 asset list format for Samuel Miller.');
+  const [localOllamaPrompt, setLocalOllamaPrompt] = useState('Verify the Chapter 7 asset list format for client.');
   const [localOllamaReply, setLocalOllamaReply] = useState('');
   const [copiedBridgeScript, setCopiedBridgeScript] = useState(false);
 

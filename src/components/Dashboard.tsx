@@ -117,9 +117,9 @@ export default function Dashboard({
     }
     return [
       { id: 't-1', taskName: 'Submit California Form FL-100 pleading schedule', priority: 'HIGH', completed: false, dueDate: getOffsetDateStr(0) },
-      { id: 't-2', taskName: 'Extract asylum narrative declaration from Mateo Alvarez response', priority: 'HIGH', completed: true, dueDate: getOffsetDateStr(-1) },
-      { id: 't-3', taskName: 'Audit secured asset liability ledger for Samuel Miller bankrupt record', priority: 'MEDIUM', completed: false, dueDate: getOffsetDateStr(1) },
-      { id: 't-4', taskName: 'Draft mutual NDA governing clause for Acme Apex contract', priority: 'LOW', completed: false, dueDate: getOffsetDateStr(3) }
+      { id: 't-2', taskName: 'Extract asylum narrative declaration from client response', priority: 'HIGH', completed: true, dueDate: getOffsetDateStr(-1) },
+      { id: 't-3', taskName: 'Audit secured asset liability ledger for client record', priority: 'MEDIUM', completed: false, dueDate: getOffsetDateStr(1) },
+      { id: 't-4', taskName: 'Draft mutual NDA governing clause for business contract', priority: 'LOW', completed: false, dueDate: getOffsetDateStr(3) }
     ];
   });
 
@@ -129,11 +129,11 @@ export default function Dashboard({
   // Calendar State - Chosen date index & list of scheduled events
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([
-    { id: 'e-1', time: '09:00 AM', title: 'Sarah Jenkins Care Intake Review', clientName: 'Sarah Jenkins', type: 'Intake', dateStr: getOffsetDateStr(0) },
-    { id: 'e-2', time: '11:15 AM', title: 'Chapter 7 Liquidation Counsel', clientName: 'Samuel Miller', type: 'Hearing', dateStr: getOffsetDateStr(0) },
-    { id: 'e-3', time: '02:00 PM', title: 'Asylum Statement Briefing Room', clientName: 'Mateo Alvarez', type: 'Deposition', dateStr: getOffsetDateStr(1) },
-    { id: 'e-4', time: '04:30 PM', title: 'Contract Mutual Clause Sync', clientName: 'Apex Co', type: 'Filing', dateStr: getOffsetDateStr(2) },
-    { id: 'e-5', time: '10:00 AM', title: 'Judicial Council Form Signoff', clientName: 'Sarah Jenkins', type: 'Intake', dateStr: getOffsetDateStr(-1) }
+    { id: 'e-1', time: '09:00 AM', title: 'Jane Doe Intake Review', clientName: 'Jane Doe', type: 'Intake', dateStr: getOffsetDateStr(0) },
+    { id: 'e-2', time: '11:15 AM', title: 'Client Liquidation Counsel', clientName: 'John Doe', type: 'Hearing', dateStr: getOffsetDateStr(0) },
+    { id: 'e-3', time: '02:00 PM', title: 'Case Statement Briefing Room', clientName: 'Jane Doe', type: 'Deposition', dateStr: getOffsetDateStr(1) },
+    { id: 'e-4', time: '04:30 PM', title: 'Contract Mutual Clause Sync', clientName: 'John Doe', type: 'Filing', dateStr: getOffsetDateStr(2) },
+    { id: 'e-5', time: '10:00 AM', title: 'Judicial Council Form Signoff', clientName: 'Jane Doe', type: 'Intake', dateStr: getOffsetDateStr(-1) }
   ]);
 
   // Sync Google Calendar events on mount

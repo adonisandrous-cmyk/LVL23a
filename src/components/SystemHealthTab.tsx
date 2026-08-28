@@ -37,7 +37,7 @@ export default function SystemHealthTab({ logs, onClearLogs }: SystemHealthTabPr
   const [routerConfig, setRouterConfig] = useState<any>({
     strategy: "DYNAMIC_LLM_EVALUATOR",
     freeModel: "google/gemma-4-31b-it:free",
-    premiumModel: "google/gemini-3.6-flash",
+    premiumModel: "google/gemini-3.7-flash",
     evaluatorThreshold: 45,
     simulatedStats: {
       totalRouted: 24,
@@ -364,7 +364,7 @@ export default function SystemHealthTab({ logs, onClearLogs }: SystemHealthTabPr
                   onChange={(e) => updateRouterSettings({ premiumModel: e.target.value })}
                   className="w-full bg-[#070b13] border border-[#1e293b] rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-teal-400 outline-none transition-colors font-mono"
                 >
-                  <option value="google/gemini-3.6-flash">google/gemini-3.6-flash (Active Fast)</option>
+                  <option value="google/gemini-3.7-flash">google/gemini-3.7-flash (Active Fast)</option>
                   <option value="google/gemini-3.1-pro-preview">google/gemini-3.1-pro-preview (Flagship - Deep Thinking)</option>
                 </select>
                 <div className="flex items-center gap-1.5 pt-1">
@@ -447,8 +447,8 @@ export default function SystemHealthTab({ logs, onClearLogs }: SystemHealthTabPr
             {/* Quick Templates */}
             <div className="flex flex-wrap gap-2">
               {[
-                { label: 'Custody Schedule', text: 'Administrative scheduled calendar intake review: ask Eleanor Vance for separation dates and custody timelines.' },
-                { label: 'Bankruptcy Assets Ledger', text: 'Chapter 7 assets audit ledger: cross audit Samuel Miller liabilities lists for any joint duress limits.' },
+                { label: 'Custody Schedule', text: 'Administrative scheduled calendar intake review: ask Jane Doe for separation dates and custody timelines.' },
+                { label: 'Bankruptcy Assets Ledger', text: 'Chapter 7 assets audit ledger: cross audit John Doe liabilities lists for any joint duress limits.' },
                 { label: 'Asylum Briefing (Complex)', text: 'Draft asylum brief under CPC Title 8 CP. Include formal supporting narrative declaration of persecution and duress.' }
               ].map((tpl, i) => (
                 <button

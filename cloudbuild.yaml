@@ -1,0 +1,57 @@
+# Google Cloud Build Pipeline for LEVEL 23 Legal AI Suite
+# Builds Docker container and deploys directly to Google Cloud Run with zero downtime
+
+steps:
+  # 1. Build the multi-stage Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/level23-legal:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/level23-legal:latest'
+      - '.'
+
+  # 2. Push image to Google Artifact / Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/level23-legal:$COMMIT_SHA'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/level23-legal:latest'
+
+  # 3. Deploy container image directly to Google Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'level23-legal'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/level23-legal:$COMMIT_SHA'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--port'
+      - '8080'
+      - '--cpu'
+      - '2'
+      - '--memory'
+      - '2Gi'
+      - '--min-instances'
+      - '0'
+      - '--max-instances'
+      - '10'
+
+images:
+  - 'gcr.io/$PROJECT_ID/level23-legal:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/level23-legal:latest'
+
+timeout: '900s'
+options:
+  logging: CLOUD_LOGGING_ONLY

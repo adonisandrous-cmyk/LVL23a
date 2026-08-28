@@ -131,9 +131,9 @@ export default function LegalFormsTemplateManager({
     fields.forEach(f => {
       const lowerF = f.toLowerCase();
       if (lowerF.includes('client name') || lowerF.includes('petitioner') || lowerF.includes('applicant') || lowerF.includes('plaintiff')) {
-        extracted[f] = client?.name || 'Eleanor Vance';
+        extracted[f] = client?.name || 'Jane Doe';
       } else if (lowerF.includes('spouse') || lowerF.includes('respondent') || lowerF.includes('defendant') || lowerF.includes('opposing')) {
-        extracted[f] = clientAny?.spouseName || clientAny?.opposingParty || 'Bradley Jenkins';
+        extracted[f] = clientAny?.spouseName || clientAny?.opposingParty || 'John Doe';
       } else if (lowerF.includes('county')) {
         extracted[f] = clientAny?.county || 'Orange County';
       } else if (lowerF.includes('case no') || lowerF.includes('docket') || lowerF.includes('matter') || lowerF.includes('case number')) {

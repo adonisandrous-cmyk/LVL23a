@@ -49,6 +49,13 @@ export interface DocumentTemplate {
   isCustom?: boolean;    // Custom created by attorney flag
 }
 
+export interface DocumentVersion {
+  versionNumber: number;
+  content: string;
+  timestamp: string;
+  notes?: string;
+}
+
 export interface GeneratedDocument {
   id: string;
   title: string;
@@ -57,6 +64,8 @@ export interface GeneratedDocument {
   templateId: string;
   content: string;
   generatedAt: string;
+  version?: number;
+  versions?: DocumentVersion[];
 }
 
 export interface LegalMessage {

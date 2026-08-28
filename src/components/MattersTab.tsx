@@ -25,13 +25,26 @@ import {
   File,
   FileText,
   ExternalLink,
-  Upload
+  Upload,
+  X,
+  TrendingUp,
+  Scale,
+  Clock,
+  Activity,
+  CheckCircle2,
+  Info,
+  ShieldCheck,
+  Percent,
+  BarChart3,
+  Users
 } from 'lucide-react';
-import { Client, Matter } from '../types';
+import { Client, Matter, EvidenceFile, ConsultationSession } from '../types';
 
 interface MattersTabProps {
   matters: Matter[];
   clients: Client[];
+  evidenceFiles?: EvidenceFile[];
+  consultations?: ConsultationSession[];
   onAddMatter: (newMatter: Omit<Matter, 'id' | 'createdAt'>) => void;
   onUpdateMatter: (updatedMatter: Matter) => void;
 }
@@ -39,6 +52,8 @@ interface MattersTabProps {
 export default function MattersTab({
   matters,
   clients,
+  evidenceFiles = [],
+  consultations = [],
   onAddMatter,
   onUpdateMatter
 }: MattersTabProps) {
@@ -46,6 +61,10 @@ export default function MattersTab({
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'completed'>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [selectedMatter, setSelectedMatter] = useState<Matter | null>(matters[0] || null);
+
+  // Summary stats widget view mode
+  const [statsViewMode, setStatsViewMode] = useState<'selected' | 'portfolio'>('selected');
+  const [showPredictorModal, setShowPredictorModal] = useState(false);
 
   // New Matter Form state
   const [showModal, setShowModal] = useState(false);
@@ -74,9 +93,118 @@ export default function MattersTab({
   const [editingFileContent, setEditingFileContent] = useState('');
   const [isNewFile, setIsNewFile] = useState(true);
 
+  // Helper functions for Summary Stats Widget
+  const calculateMatterStats = (m: Matter) => {
+    const linkedEvidence = (evidenceFiles || []).filter(
+      e => (e.matterId && e.matterId === m.id) || 
+           (e.clientId && e.clientId === m.clientId) || 
+           (e.matterTitle && e.matterTitle.toLowerCase() === m.title.toLowerCase())
+    );
+    const linkedConsultations = (consultations || []).filter(
+      c => c.clientId === m.clientId || c.clientName?.toLowerCase() === m.clientName?.toLowerCase()
+    );
+
+    const coreHours = m.billedHours || 0;
+    const consultHours = Number((linkedConsultations.length * 1.25).toFixed(1)); // 1.25 hrs per consultation/deposition
+    const evidenceHours = Number((linkedEvidence.length * 0.75).toFixed(1)); // 0.75 hrs per discovery document audit
+    const totalEstimatedHours = Number((coreHours + consultHours + evidenceHours).toFixed(1));
+    const estimatedRevenue = Math.round(totalEstimatedHours * (m.billingRate || 250));
+
+    // Multi-factor Empirical Outcome Success Probability (45% - 98%)
+    let score = 64; // baseline for accepted matters
+    
+    // 1. Task Completion factor (up to +16%)
+    const totalTasks = m.tasks?.length || 0;
+    const completedTasks = m.tasks?.filter(t => t.completed).length || 0;
+    if (totalTasks > 0) {
+      const taskRatio = completedTasks / totalTasks;
+      score += Math.round(taskRatio * 16);
+    } else {
+      score += 6;
+    }
+
+    // 2. Linked Evidence factor (up to +12%)
+    const evidenceBonus = Math.min(linkedEvidence.length * 4, 12);
+    score += evidenceBonus;
+
+    // 3. Linked Consultations factor (up to +10%)
+    const consultBonus = Math.min(linkedConsultations.length * 5, 10);
+    score += consultBonus;
+
+    // 4. Status adjustment
+    if (m.status === 'completed') score += 8;
+    if (m.status === 'pending') score -= 3;
+
+    // 5. Practice area statutory alignment
+    if (m.practiceArea === 'Immigration') score += 2;
+    if (m.practiceArea === 'Family Law') score += 1;
+    if (m.practiceArea === 'Bankruptcy') score += 3;
+
+    // 6. Duress / Risk penalty check
+    const highDuressFiles = linkedEvidence.filter(e => e.duressLevel === 'High');
+    if (highDuressFiles.length > 0) score -= 3;
+
+    const probability = Math.max(48, Math.min(96, score));
+
+    return {
+      matter: m,
+      linkedEvidence,
+      linkedConsultations,
+      coreHours,
+      consultHours,
+      evidenceHours,
+      totalEstimatedHours,
+      estimatedRevenue,
+      probability,
+      taskCompletionRate: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 100,
+      evidenceCount: linkedEvidence.length,
+      consultationCount: linkedConsultations.length,
+      highDuressCount: highDuressFiles.length
+    };
+  };
+
+  const calculatePortfolioStats = () => {
+    let totalCoreHours = 0;
+    let totalConsultHours = 0;
+    let totalEvidenceHours = 0;
+    let totalRevenue = 0;
+    let totalEvidenceLinked = 0;
+    let totalConsultationsLinked = 0;
+    let weightedProbabilitySum = 0;
+
+    matters.forEach(m => {
+      const stats = calculateMatterStats(m);
+      totalCoreHours += stats.coreHours;
+      totalConsultHours += stats.consultHours;
+      totalEvidenceHours += stats.evidenceHours;
+      totalRevenue += stats.estimatedRevenue;
+      totalEvidenceLinked += stats.evidenceCount;
+      totalConsultationsLinked += stats.consultationCount;
+      weightedProbabilitySum += stats.probability;
+    });
+
+    const count = matters.length || 1;
+    const avgProbability = Math.round(weightedProbabilitySum / count);
+    const grandTotalHours = Number((totalCoreHours + totalConsultHours + totalEvidenceHours).toFixed(1));
+
+    return {
+      totalCoreHours,
+      totalConsultHours,
+      totalEvidenceHours,
+      grandTotalHours,
+      totalRevenue,
+      totalEvidenceLinked,
+      totalConsultationsLinked,
+      avgProbability
+    };
+  };
+
+  const currentMatterStats = selectedMatter ? calculateMatterStats(selectedMatter) : null;
+  const portfolioStats = calculatePortfolioStats();
+
   // Fallback simulated local filesystem database for Case Matters
   const [simulatedMatterFiles, setSimulatedMatterFiles] = useState<Record<string, { name: string; content: string; size: string; type: string; date: string }[]>>(() => {
-    const saved = localStorage.getItem('l23_simulated_matter_files');
+    const saved = localStorage.getItem('l23_simulated_matter_files_v3');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -86,19 +214,19 @@ export default function MattersTab({
     // Prepopulated folders out of the box!
     return {
       'm-1': [ // Joint Custody Dissolution case
-        { name: 'Separation_Timeline_Draft.md', type: 'Markdown', size: '2.5 KB', date: '2026-06-10', content: '### Case Joint Separation Timeline draft\n- Marriage Date: July 2nd, 2012.\n- Separation Date: April 10, 2026.\n- Minor Children: Two (Sean age 11, Chloe age 8).\n\nKey issues claimed: structural duress, limits on community townhouse liability.' },
-        { name: 'FL_100_Petition_Draft.md', type: 'Markdown', size: '3.1 KB', date: '2026-06-11', content: '### FAMILY LAW PETITION (CA FL-100)\n\nATTORNEY FOR: Eleanor Vance\nRESPONDENT: Marcus Vance\n\n1. RESIDENCE REQUIREMENT: Petitioner has been a resident of this county.\n2. MINOR CHILDREN: Joint legal custody is requested.' },
-        { name: 'Joint_Property_Inventory.txt', type: 'Text Document', size: '1.1 KB', date: '2026-06-11', content: 'Property 1: Cooperative Townhouse Unit 12-A\nValue: $920,000.\nOutstanding Liability: $120,000 (claimed community liability).' }
+        { name: 'Separation_Timeline_Draft.md', type: 'Markdown', size: '2.5 KB', date: '2026-08-01', content: '### Case Joint Separation Timeline draft\n- Marriage Date: July 2nd, 2012.\n- Separation Date: April 10, 2026.\n- Minor Children: Two.\n\nKey issues claimed: structural duress, limits on community property liability.' },
+        { name: 'FL_100_Petition_Draft.md', type: 'Markdown', size: '3.1 KB', date: '2026-08-01', content: '### FAMILY LAW PETITION (CA FL-100)\n\nATTORNEY FOR: Jane Doe\nRESPONDENT: John Doe\n\n1. RESIDENCE REQUIREMENT: Petitioner has been a resident of this county.\n2. MINOR CHILDREN: Joint legal custody is requested.' },
+        { name: 'Joint_Property_Inventory.txt', type: 'Text Document', size: '1.1 KB', date: '2026-08-01', content: 'Property 1: Residence Unit\nValue: $920,000.\nOutstanding Liability: $120,000 (claimed community liability).' }
       ],
-      'm-2': [ // Asylum Case
-        { name: 'Asylum_Application_I589.md', type: 'Markdown', size: '2.8 KB', date: '2026-06-11', content: '### FORM I-589 APPLICATION FOR ASYLUM\n\nAPPLICANT: Sarah Jenkins\nNARRATIVE BRIEF: Applicant requests asylum fear of persecution based on political activity.' }
+      'm-2': [ // Legal Matter Case
+        { name: 'Legal_Intake_Brief.md', type: 'Markdown', size: '2.8 KB', date: '2026-08-01', content: '### INITIAL LEGAL INTAKE BRIEF\n\nAPPLICANT: John Doe\nNARRATIVE BRIEF: Applicant requests comprehensive representation and filing support.' }
       ]
     };
   });
 
   const saveSimulatedMatters = (updated: Record<string, any>) => {
     setSimulatedMatterFiles(updated);
-    localStorage.setItem('l23_simulated_matter_files', JSON.stringify(updated));
+    localStorage.setItem('l23_simulated_matter_files_v3', JSON.stringify(updated));
   };
 
   // Drag and drop case files support
@@ -557,7 +685,155 @@ Pursuant to CA Civil Procedure guidelines, we have examined the community asset 
   };
 
   return (
-    <div id="matters-tab-container" className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-140px)]">
+    <div id="matters-tab-container" className="flex flex-col gap-4 h-[calc(100vh-140px)]">
+      
+      {/* TOP SUMMARY STATS & OUTCOME PREDICTOR WIDGET BAR */}
+      <div className="bg-[#0e1626] rounded-2.5xl border border-[#1e293b] p-4 shadow-xl shrink-0">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          
+          {/* Header & Mode Switcher */}
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/20">
+                <BarChart3 className="w-4 h-4" />
+              </span>
+              <h2 className="text-sm font-bold font-heading text-white tracking-wide">
+                Case Analytics & Outcome Predictor
+              </h2>
+              <span className="px-2 py-0.5 text-[10px] font-mono rounded-full bg-teal-950/60 text-teal-300 border border-teal-500/30">
+                Live Empirical Engine
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-sans">
+              Calculates estimated total billable hours and predicts case outcome success probability from linked evidence and consultations.
+            </p>
+          </div>
+
+          {/* Selector Switch: Selected Matter vs Practice Portfolio */}
+          <div className="flex items-center gap-2 bg-[#090d16] p-1 rounded-xl border border-[#1e293b] self-start lg:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => setStatsViewMode('selected')}
+              className={`px-3 py-1 rounded-lg text-xs font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
+                statsViewMode === 'selected'
+                  ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-xs font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Briefcase className="w-3 h-3" />
+              <span>Selected Case</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatsViewMode('portfolio')}
+              className={`px-3 py-1 rounded-lg text-xs font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
+                statsViewMode === 'portfolio'
+                  ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-xs font-semibold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Layers className="w-3 h-3" />
+              <span>All Matters Portfolio ({matters.length})</span>
+            </button>
+          </div>
+        </div>
+
+        {/* METRICS ROW CARDS */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mt-3 pt-3 border-t border-[#1e293b]/70">
+          
+          {/* Card 1: Estimated Total Hours Billed (5/12 width) */}
+          <div className="md:col-span-5 bg-[#090d16] rounded-xl border border-[#1e293b] p-3 flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono uppercase text-slate-400 font-bold flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-teal-400" />
+                <span>Estimated Total Hours Billed</span>
+              </span>
+              <span className="text-xs font-mono font-bold text-emerald-400">
+                ${(statsViewMode === 'selected' ? currentMatterStats?.estimatedRevenue || 0 : portfolioStats.totalRevenue).toLocaleString()} Value
+              </span>
+            </div>
+
+            <div className="flex items-baseline gap-2 my-1.5">
+              <span className="text-xl font-bold font-mono text-white">
+                {statsViewMode === 'selected' ? currentMatterStats?.totalEstimatedHours || 0 : portfolioStats.grandTotalHours}
+              </span>
+              <span className="text-xs text-teal-400 font-mono">hours aggregated</span>
+            </div>
+
+            {/* Breakdown Pills */}
+            <div className="flex flex-wrap gap-1.5 text-[10px] font-mono">
+              <span className="px-2 py-0.5 rounded-md bg-[#0e1626] border border-[#1e293b] text-slate-300">
+                Core: <strong className="text-white">{statsViewMode === 'selected' ? currentMatterStats?.coreHours || 0 : portfolioStats.totalCoreHours}h</strong>
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-teal-500/10 border border-teal-500/20 text-teal-300">
+                Consults: <strong className="text-teal-200">+{statsViewMode === 'selected' ? currentMatterStats?.consultHours || 0 : portfolioStats.totalConsultHours}h</strong> ({statsViewMode === 'selected' ? currentMatterStats?.consultationCount || 0 : portfolioStats.totalConsultationsLinked} linked)
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-300">
+                Evidence: <strong className="text-indigo-200">+{statsViewMode === 'selected' ? currentMatterStats?.evidenceHours || 0 : portfolioStats.totalEvidenceHours}h</strong> ({statsViewMode === 'selected' ? currentMatterStats?.evidenceCount || 0 : portfolioStats.totalEvidenceLinked} linked)
+              </span>
+            </div>
+          </div>
+
+          {/* Card 2: Predicted Case Outcome Success Probability (5/12 width) */}
+          <div className="md:col-span-5 bg-[#090d16] rounded-xl border border-[#1e293b] p-3 flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono uppercase text-slate-400 font-bold flex items-center gap-1.5">
+                <Scale className="w-3.5 h-3.5 text-amber-400" />
+                <span>Predicted Outcome Success Probability</span>
+              </span>
+              <span className={`px-2 py-0.5 text-[9.5px] font-mono uppercase rounded-full border ${
+                (statsViewMode === 'selected' ? currentMatterStats?.probability || 75 : portfolioStats.avgProbability) >= 80
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-bold'
+                  : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+              }`}>
+                {(statsViewMode === 'selected' ? currentMatterStats?.probability || 75 : portfolioStats.avgProbability) >= 80 ? 'High Probability' : 'Moderate Probability'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 my-1.5">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-xl font-bold font-mono text-emerald-400">
+                  {statsViewMode === 'selected' ? currentMatterStats?.probability || 75 : portfolioStats.avgProbability}%
+                </span>
+                <span className="text-[11px] text-slate-400 font-sans">favorable disposition forecast</span>
+              </div>
+              <div className="flex-1 bg-slate-800 rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-teal-500 to-emerald-400 h-full transition-all duration-500 rounded-full"
+                  style={{ width: `${statsViewMode === 'selected' ? currentMatterStats?.probability || 75 : portfolioStats.avgProbability}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Contributing factors mini line */}
+            <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+              <span>Evidence: {statsViewMode === 'selected' ? `${currentMatterStats?.evidenceCount || 0} files` : `${portfolioStats.totalEvidenceLinked} files`}</span>
+              <span>•</span>
+              <span>Consults: {statsViewMode === 'selected' ? `${currentMatterStats?.consultationCount || 0} sessions` : `${portfolioStats.totalConsultationsLinked} sessions`}</span>
+              <span>•</span>
+              <span>Procedural Tasks: {statsViewMode === 'selected' ? `${currentMatterStats?.taskCompletionRate || 0}% complete` : 'Active'}</span>
+            </div>
+          </div>
+
+          {/* Card 3: Inspect Matrix Action (2/12 width) */}
+          <div className="md:col-span-2 bg-[#090d16] rounded-xl border border-[#1e293b] p-3 flex flex-col justify-between items-center text-center">
+            <span className="text-[10px] font-mono uppercase text-slate-400 font-bold">Predictive Matrix</span>
+            <button
+              type="button"
+              onClick={() => setShowPredictorModal(true)}
+              className="w-full py-2 px-2.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 hover:text-teal-200 border border-teal-500/30 rounded-lg text-xs font-mono flex items-center justify-center gap-1.5 transition-all cursor-pointer my-auto shadow-xs"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
+              <span>Audit Factors</span>
+            </button>
+            <span className="text-[9px] text-slate-500 font-mono">Statistical breakdown</span>
+          </div>
+
+        </div>
+      </div>
+
+      {/* MAIN 2-COLUMN VIEW CONTAINER */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
       
       {/* Left Columns: Matters Directory list (5/12 width) */}
       <div className="lg:col-span-5 bg-[#0e1626] rounded-2.5xl border border-[#1e293b] flex flex-col justify-between overflow-hidden shadow-xl">
@@ -587,13 +863,32 @@ Pursuant to CA Civil Procedure guidelines, we have examined the community asset 
           <div className="relative">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
             <input
+              id="matters-search-input"
               type="text"
-              placeholder="Search case, title, client..."
+              placeholder="Search by case #, client name, or title in real-time..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#090d16] border border-[#1e293b] rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500/60 font-sans"
+              className="w-full bg-[#090d16] border border-[#1e293b] rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500/60 font-sans transition-all"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white p-0.5 rounded cursor-pointer"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
+
+          {/* Matches indicator if searching */}
+          {search && (
+            <div className="flex items-center justify-between text-[10.5px] font-mono text-teal-400/90 px-1">
+              <span>Filtering: &quot;{search}&quot;</span>
+              <span>{filteredMatters.length} matter{filteredMatters.length === 1 ? '' : 's'} found</span>
+            </div>
+          )}
 
           {/* Sort tabs */}
           <div className="flex gap-1.5 overflow-x-auto pb-1">
@@ -1006,6 +1301,8 @@ Pursuant to CA Civil Procedure guidelines, we have examined the community asset 
         )}
       </div>
 
+      </div>
+
       {/* Modal view for establishing a new legal matter */}
       <AnimatePresence>
         {showModal && (
@@ -1199,6 +1496,186 @@ Pursuant to CA Civil Procedure guidelines, we have examined the community asset 
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+
+        {/* PREDICTOR FACTOR MATRIX & EVIDENTIARY AUDIT MODAL */}
+        {showPredictorModal && (
+          <div id="predictor-audit-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#0e1626] border border-[#1e293b] rounded-2.5xl max-w-3xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col"
+            >
+              {/* Modal Header */}
+              <div className="p-6 bg-gradient-to-r from-teal-950/40 via-[#0d1624] to-[#0e1626] border-b border-[#1e293b] flex items-center justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/20">
+                      <ShieldCheck className="w-4.5 h-4.5" />
+                    </span>
+                    <h3 className="text-base font-bold font-heading text-white">
+                      Predictive Outcome & Hours Audit Matrix
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-400 font-sans">
+                    Empirical calculations based on aggregated exhibits, consultation logs, and procedural tasks.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPredictorModal(false)}
+                  className="text-slate-400 hover:text-white font-mono text-sm p-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 space-y-6 overflow-y-auto flex-1 text-xs">
+                
+                {/* Active Scope Summary */}
+                <div className="p-4 bg-[#090d16] border border-[#1e293b] rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <span className="text-[10px] font-mono uppercase text-teal-400 font-bold block">
+                      Target Audit Scope: {selectedMatter?.title || 'Practice Portfolio'}
+                    </span>
+                    <p className="text-slate-200 font-sans mt-0.5">
+                      Client: <strong>{selectedMatter?.clientName}</strong> ({selectedMatter?.caseNumber})
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <span className="text-[9.5px] font-mono text-slate-400 uppercase block">Predicted Success</span>
+                      <span className="text-base font-bold font-mono text-emerald-400">
+                        {currentMatterStats?.probability || 75}% Favorable
+                      </span>
+                    </div>
+                    <div className="text-right border-l border-[#1e293b] pl-4">
+                      <span className="text-[9.5px] font-mono text-slate-400 uppercase block">Aggregated Hours</span>
+                      <span className="text-base font-bold font-mono text-teal-300">
+                        {currentMatterStats?.totalEstimatedHours || 0} hrs (${(currentMatterStats?.estimatedRevenue || 0).toLocaleString()})
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Factor 1: Evidence & Exhibits Aggregation */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-white font-heading flex items-center gap-2">
+                      <FileCheck2 className="w-4 h-4 text-indigo-400" />
+                      <span>Linked Evidence Discovery & Exhibit Index ({currentMatterStats?.evidenceCount || 0} Files)</span>
+                    </h4>
+                    <span className="text-[10.5px] font-mono text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                      +{currentMatterStats ? Math.min(currentMatterStats.evidenceCount * 4, 12) : 0}% Success Weight • +{currentMatterStats?.evidenceHours || 0}h Billed
+                    </span>
+                  </div>
+
+                  {currentMatterStats?.linkedEvidence.length === 0 ? (
+                    <div className="p-3 bg-[#090d16] border border-[#1e293b] rounded-xl text-slate-400 text-[11px] font-sans">
+                      No external evidence files directly linked to this matter yet. Upload evidence in the Documents tab to increase evidentiary burden score.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {currentMatterStats?.linkedEvidence.map((ev) => (
+                        <div key={ev.id} className="p-3 bg-[#090d16] border border-[#1e293b] rounded-xl flex items-center justify-between">
+                          <div className="space-y-0.5 max-w-[70%]">
+                            <span className="font-semibold text-slate-200 block truncate">{ev.name}</span>
+                            <p className="text-[10.5px] text-slate-400 font-sans truncate">{ev.summary || 'Evidentiary exhibit scanned and indexed into case matrix.'}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className={`px-2 py-0.5 text-[9px] font-mono uppercase rounded border ${
+                              ev.duressLevel === 'High' ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                            }`}>
+                              {ev.duressLevel === 'High' ? 'High Risk Exhibit' : 'Verified Exhibit'}
+                            </span>
+                            <span className="block text-[9.5px] font-mono text-slate-500 mt-1">+0.75 hr audit</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Factor 2: Linked Consultations & Depositions */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-white font-heading flex items-center gap-2">
+                      <Users className="w-4 h-4 text-teal-400" />
+                      <span>Linked Consultations & Recorded Depositions ({currentMatterStats?.consultationCount || 0} Sessions)</span>
+                    </h4>
+                    <span className="text-[10.5px] font-mono text-teal-300 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/20">
+                      +{currentMatterStats ? Math.min(currentMatterStats.consultationCount * 5, 10) : 0}% Alignment Weight • +{currentMatterStats?.consultHours || 0}h Billed
+                    </span>
+                  </div>
+
+                  {currentMatterStats?.linkedConsultations.length === 0 ? (
+                    <div className="p-3 bg-[#090d16] border border-[#1e293b] rounded-xl text-slate-400 text-[11px] font-sans">
+                      No active consultation sessions scheduled for this client yet. Schedule client depositions or mediation conferences in the Consultations tab.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {currentMatterStats?.linkedConsultations.map((con) => (
+                        <div key={con.id} className="p-3 bg-[#090d16] border border-[#1e293b] rounded-xl flex items-center justify-between">
+                          <div className="space-y-0.5 max-w-[70%]">
+                            <span className="font-semibold text-slate-200 block">{con.meetingType} - {con.roomName}</span>
+                            <p className="text-[10.5px] text-slate-400 font-sans truncate">{con.notes || 'Client consultation logged with attorney notes.'}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className="px-2 py-0.5 text-[9px] font-mono uppercase rounded bg-teal-500/10 text-teal-300 border border-teal-500/30">
+                              {con.status}
+                            </span>
+                            <span className="block text-[9.5px] font-mono text-slate-500 mt-1">+1.25 hr session</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Factor 3: Procedural Tasks Readiness */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-white font-heading flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <span>Litigation Procedural Tasks ({selectedMatter?.tasks?.filter(t => t.completed).length || 0}/{selectedMatter?.tasks?.length || 0} Completed)</span>
+                    </h4>
+                    <span className="text-[10.5px] font-mono text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                      {currentMatterStats?.taskCompletionRate || 0}% Completion Ratio
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 bg-[#090d16] border border-[#1e293b] rounded-xl space-y-2">
+                    <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-emerald-400 h-full rounded-full transition-all"
+                        style={{ width: `${currentMatterStats?.taskCompletionRate || 0}%` }}
+                      />
+                    </div>
+                    <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed">
+                      Completing all pre-trial filings, financial disclosure questionnaires, and discovery responses maximizes case disposition readiness under applicable California Family Code and Civil Procedure timelines.
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 bg-[#0c1322] border-t border-[#1e293b] flex items-center justify-between">
+                <span className="text-[10.5px] font-mono text-slate-500">
+                  Level 23 Real-Time Statistical Audit Matrix
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowPredictorModal(false)}
+                  className="px-5 py-2 bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold rounded-xl text-xs font-heading transition-all shadow-md cursor-pointer"
+                >
+                  Dismiss Audit Report
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

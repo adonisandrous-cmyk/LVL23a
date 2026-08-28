@@ -159,21 +159,21 @@ export default function ResearchPortalDrawer({
       };
 
       if (form.code === 'FL-100') {
-        if (client.name.includes('Watson') || client.name.includes('Don')) {
-          data.petitionerName = "Don Watson (Petitioner)";
-          data.petitionerDOB = "November 14, 1982";
-          data.petitionerAddress = "1420 Newport Center Dr, Suite 500, Newport Beach, CA 92660";
-          data.petitionerContact = "don.watson@watsontech.com | +1 (949) 555-0198";
-          data.respondentName = "Clara Watson (Respondent)";
-          data.respondentDOB = "April 22, 1985";
-          data.respondentAddress = "780 Coast Hwy, Laguna Beach, CA 92651";
-          data.respondentContact = "clara.watson@gmail.com | +1 (949) 555-0812";
+        if (client.name.includes('Jane') || client.name.includes('Doe')) {
+          data.petitionerName = `${client.name} (Petitioner)`;
+          data.petitionerDOB = "November 14, 1985";
+          data.petitionerAddress = "100 Main Street, Suite 200, Santa Ana, CA 92701";
+          data.petitionerContact = `${client.email || 'jane.doe@example.com'} | ${client.phone || '+1 (555) 019-2831'}`;
+          data.respondentName = "John Doe (Respondent)";
+          data.respondentDOB = "April 22, 1983";
+          data.respondentAddress = "200 Coastal Way, Newport Beach, CA 92660";
+          data.respondentContact = "john.doe@example.com | +1 (555) 019-2832";
           data.jurisdictionalBasis = "California Family Code Section 300 (6 Months CA / 3 Months Orange County verified)";
           data.countyFiling = "Superior Court of California, County of Orange (341 The City Drive South, Orange, CA 92868)";
           data.actionNature = "Dissolution of Marriage (Marriage Date: June 15, 2012; Separation Date: April 10, 2026)";
           data.marriageDetails = "Marriage Date: June 15, 2012 in Newport Beach, CA. Separation Date: April 10, 2026.";
-          data.children = "Ethan Watson (DOB: 08/10/2016), Chloe Watson (DOB: 12/05/2019). Joint Legal & Primary Physical Custody to Petitioner.";
-          data.communalAssets = "Newport Beach residential real estate ($1.4M valuation) & WatsonTech equity. Separate pre-marital tech patents confirmed.";
+          data.children = "Minor Children declared. Joint Legal & Primary Physical Custody to Petitioner.";
+          data.communalAssets = "Orange County residential real estate ($1.4M valuation). Separate pre-marital assets confirmed.";
           data.coverSheetDeclaration = "Declaration & Cover Sheet filed referencing Dissolution of Marriage, Orange County filing, under CA Fam Code § 300.";
         } else {
           data.marriageDetails = "Estimated marriage date: July 2, 2012. Separation Date: April 10th.";

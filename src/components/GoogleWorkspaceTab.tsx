@@ -212,9 +212,9 @@ export default function GoogleWorkspaceTab({ onNotify, defaultSubTab = 'gmail' }
           {
             id: 'gm-2',
             threadId: 'th-2',
-            snippet: 'Don Watson returned the executed FL-110 summons acknowledgment and preliminary disclosure documents.',
-            subject: 'Watson v. Watson - Executed FL-110 & Property Disclosure',
-            from: 'Don Watson <don.watson@watsontech.com>',
+            snippet: 'Jane Doe returned the executed FL-110 summons acknowledgment and preliminary disclosure documents.',
+            subject: 'Doe v. Doe - Executed FL-110 & Property Disclosure',
+            from: 'Jane Doe <jane.doe@example.com>',
             to: 'counsel@level23legal.com',
             date: 'Yesterday, 4:45 PM',
             labelIds: ['INBOX']

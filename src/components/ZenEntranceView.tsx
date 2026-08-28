@@ -55,6 +55,7 @@ export default function ZenEntranceView({
   const [localClock, setLocalClock] = useState<string>('');
   const [mediaPermissionsGranted, setMediaPermissionsGranted] = useState<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
 
   const requestMediaPermissions = async () => {
     try {
@@ -106,13 +107,23 @@ export default function ZenEntranceView({
   // Web Speech API dictation
   const toggleSpeechRecognition = () => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert('Speech recognition is not supported in this browser.');
+      alert('Speech recognition is not supported in this browser. Please use Chrome or Edge.');
       return;
     }
 
     if (isListening) {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch {}
+        try { recognitionRef.current.abort(); } catch {}
+      }
       setIsListening(false);
       return;
+    }
+
+    // Clean up previous instance if still hanging around
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch {}
+      try { recognitionRef.current.abort(); } catch {}
     }
 
     try {
@@ -127,12 +138,17 @@ export default function ZenEntranceView({
       };
 
       recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        setInputPrompt(prev => prev ? `${prev} ${transcript}` : transcript);
+        if (event.results && event.results[0] && event.results[0][0]) {
+          const transcript = event.results[0][0].transcript;
+          setInputPrompt(prev => prev ? `${prev} ${transcript}` : transcript);
+        }
         setIsListening(false);
       };
 
-      recognition.onerror = () => {
+      recognition.onerror = (err: any) => {
+        if (err.error !== 'no-speech' && err.error !== 'aborted') {
+          console.warn("Speech recognition notice:", err.error || err);
+        }
         setIsListening(false);
       };
 
@@ -140,9 +156,19 @@ export default function ZenEntranceView({
         setIsListening(false);
       };
 
-      recognition.start();
+      recognitionRef.current = recognition;
+      try {
+        recognition.start();
+      } catch (err: any) {
+        if (err.name === 'InvalidStateError' || (err.message && err.message.includes('already started'))) {
+          setIsListening(true);
+        } else {
+          console.warn("Dictation start note:", err);
+          setIsListening(false);
+        }
+      }
     } catch (e) {
-      console.error(e);
+      console.warn("Dictation initialization error:", e);
       setIsListening(false);
     }
   };
@@ -375,9 +401,9 @@ export default function ZenEntranceView({
           )}
 
           {isSubmitting && (
-            <div className="flex items-center gap-2 p-3 bg-slate-900/80 border border-slate-800 text-amber-400 text-xs rounded-xl font-mono">
-              <Sparkles className="w-4 h-4 animate-spin text-amber-400" />
-              <span>{selectedAgent} is analyzing case files and formulating guidance...</span>
+            <div className="flex items-center gap-2 p-2.5 bg-slate-900/90 border border-amber-500/40 text-amber-300 text-xs rounded-xl font-mono animate-pulse">
+              <Sparkles className="w-3.5 h-3.5 animate-spin text-amber-400" />
+              <span>{selectedAgent} responding...</span>
             </div>
           )}
 
@@ -397,7 +423,7 @@ export default function ZenEntranceView({
               type="text"
               value={inputPrompt}
               onChange={(e) => setInputPrompt(e.target.value)}
-              placeholder={`Ask ${selectedAgent} anything (e.g. "Draft FL-100 petition for Don Watson", "Show client list")...`}
+              placeholder={`Ask ${selectedAgent} anything (e.g. "Draft FL-100 petition for Jane Doe", "Show client list")...`}
               className="w-full bg-transparent px-3 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none font-sans"
             />
 
@@ -434,7 +460,7 @@ export default function ZenEntranceView({
             
             <button
               type="button"
-              onClick={() => handleSend("Draft FL-100 Marriage Dissolution Petition for Don Watson.")}
+              onClick={() => handleSend("Draft FL-100 Marriage Dissolution Petition for Jane Doe.")}
               className="px-2.5 py-1 bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/50 text-slate-300 rounded-lg shrink-0 cursor-pointer transition-colors flex items-center gap-1"
             >
               <FileText className="w-3 h-3 text-amber-400" />

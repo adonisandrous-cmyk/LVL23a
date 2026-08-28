@@ -244,7 +244,7 @@ export default function AIStaffTab({
 
   const [eveMemoTopic, setEveMemoTopic] = useState('Intake Detail Summary');
   const [eveReminderContent, setEveReminderContent] = useState('');
-  const [eveEmailName, setEveEmailName] = useState('Sarah Jenkins');
+  const [eveEmailName, setEveEmailName] = useState('Jane Doe');
   const [eveEmailScenario, setEveEmailScenario] = useState('disclosures'); // 'disclosures' | 'co-counsel' | 'hearing'
 
   // EVE Evidence Specialist Suite States
@@ -262,9 +262,9 @@ export default function AIStaffTab({
   const [inconsistencyReport, setInconsistencyReport] = useState<string | null>(null);
   const [isInconsistencyAuditing, setIsInconsistencyAuditing] = useState(false);
 
-  // Speech Recognition & TTS States (Active by Default)
-  const [isListening, setIsListening] = useState(true);
-  const [voiceStatus, setVoiceStatus] = useState<'SLEEPING' | 'LISTENING' | 'WAKING' | 'SPEAKING' | 'ERROR'>('LISTENING');
+  // Speech Recognition & TTS States (Disabled by default until user clicks to allow gesture)
+  const [isListening, setIsListening] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState<'SLEEPING' | 'LISTENING' | 'WAKING' | 'SPEAKING' | 'ERROR'>('SLEEPING');
   const [recognition, setRecognition] = useState<any>(null);
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [isSpeakingAudio, setIsSpeakingAudio] = useState(false);
@@ -279,6 +279,8 @@ export default function AIStaffTab({
   const micStreamRef = useRef<MediaStream | null>(null);
   const micAnalyserRef = useRef<AnalyserNode | null>(null);
   const micAnimFrameRef = useRef<number | null>(null);
+  const isDictatingRef = useRef<boolean>(false);
+  const isRecognitionRunningRef = useRef<boolean>(false);
 
   // Integrated Document Upload and Parsing State Panel
   const [uploadedFile, setUploadedFile] = useState<{
@@ -337,6 +339,10 @@ export default function AIStaffTab({
   }, [isListening]);
 
   useEffect(() => {
+    isDictatingRef.current = isDictating;
+  }, [isDictating]);
+
+  useEffect(() => {
     isSpeakingAudioRef.current = isSpeakingAudio;
   }, [isSpeakingAudio]);
 
@@ -352,22 +358,43 @@ export default function AIStaffTab({
     continuousConversationRef.current = continuousConversation;
   }, [continuousConversation]);
 
-  // Safe restart helper to prevent InvalidStateError and maintain continuous hot mic
+  // Safe start and stop helpers to prevent InvalidStateError
+  const startRecognitionSafely = () => {
+    if (isRecognitionRunningRef.current) return;
+    const rec = recognitionRef.current;
+    if (!rec) return;
+    try {
+      rec.start();
+      isRecognitionRunningRef.current = true;
+      setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
+      setSpeechError(null);
+    } catch (err: any) {
+      if (err.name === 'InvalidStateError' || (err.message && err.message.includes('already started'))) {
+        isRecognitionRunningRef.current = true;
+      } else {
+        console.warn("Speech recognition start notice:", err);
+      }
+    }
+  };
+
+  const stopRecognitionSafely = () => {
+    const rec = recognitionRef.current;
+    if (!rec) return;
+    try {
+      rec.stop();
+    } catch {}
+    isRecognitionRunningRef.current = false;
+  };
+
+  // Safe restart helper to maintain continuous hot mic / dictation without throwing already-started errors
   const safeRestartRecognition = (delay = 120) => {
     if (restartTimeoutRef.current) {
       clearTimeout(restartTimeoutRef.current);
     }
     restartTimeoutRef.current = setTimeout(() => {
-      if (!isListeningRef.current) return;
-      const rec = recognitionRef.current;
-      if (!rec) return;
-      try {
-        rec.start();
-        setVoiceStatus('LISTENING');
-        setSpeechError(null);
-      } catch (err: any) {
-        // If already started or transitioning, ignore safely
-      }
+      if (!isListeningRef.current && !isDictatingRef.current) return;
+      if (isSpeakingAudioRef.current) return;
+      startRecognitionSafely();
     }, delay);
   };
 
@@ -395,7 +422,7 @@ export default function AIStaffTab({
   ];
 
   // ----------------------------------------------------------------------
-  // SPEECH RECOGNITION (WAKE WORD & COMMAND LISTENER)
+  // SPEECH RECOGNITION (WAKE WORD & COMMAND LISTENER & DICTATION)
   // ----------------------------------------------------------------------
   useEffect(() => {
     const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -406,80 +433,103 @@ export default function AIStaffTab({
       rec.lang = 'en-US';
 
       rec.onstart = () => {
-        setVoiceStatus('LISTENING');
+        isRecognitionRunningRef.current = true;
+        setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
         setSpeechError(null);
       };
 
       rec.onerror = (event: any) => {
         if (event.error === 'no-speech') {
-          console.info("🎙️ Speech Recognition: Silent interval.");
+          // Normal silent interval
           return;
         }
         if (event.error === 'aborted') {
-          console.info("🎙️ Speech Recognition aborted event. Re-arming listener...");
-          if (isListeningRef.current) {
-            safeRestartRecognition(150);
+          isRecognitionRunningRef.current = false;
+          if (isListeningRef.current || isDictatingRef.current) {
+            safeRestartRecognition(200);
           }
           return;
         }
         if (event.error === 'network') {
-          console.info("🎙️ Speech Recognition network notice:", event.error);
-          if (isListeningRef.current) {
+          isRecognitionRunningRef.current = false;
+          if (isListeningRef.current || isDictatingRef.current) {
             safeRestartRecognition(600);
           }
           return;
         }
         if (event.error === 'not-allowed') {
-          console.warn("🎙️ Speech Recognition permission not allowed.");
+          console.warn("🎙️ Speech Recognition permission not allowed by browser.");
+          isRecognitionRunningRef.current = false;
           isListeningRef.current = false;
+          isDictatingRef.current = false;
           setIsListening(false);
+          setIsDictating(false);
           setVoiceStatus('SLEEPING');
-          setSpeechError("Microphone access denied. Please enable microphone permissions in your browser to converse.");
+          setMicPermissionGranted(false);
+          setSpeechError("Microphone access denied. Please click Allow in your browser address bar to use Voice features.");
           return;
         }
-        console.error("Speech Recognition error:", event.error);
-        if (isListeningRef.current) {
+        console.warn("Speech Recognition notice:", event.error);
+        isRecognitionRunningRef.current = false;
+        if (isListeningRef.current || isDictatingRef.current) {
           safeRestartRecognition(400);
         }
       };
 
       rec.onend = () => {
-        if (isListeningRef.current) {
-          // Keep hot mic alive for continuous conversational turn-taking
-          safeRestartRecognition(100);
+        isRecognitionRunningRef.current = false;
+        if (isListeningRef.current || isDictatingRef.current) {
+          // Keep active listener alive
+          safeRestartRecognition(150);
         } else {
           setVoiceStatus('SLEEPING');
         }
       };
 
       rec.onresult = (event: any) => {
-        // Prevent feedback looping when active speech synthesis is running or finished very recently (microphone echo delay)
+        // Prevent feedback looping when active speech synthesis is running or finished very recently
         const timeSinceLastSpoke = Date.now() - lastSpokeTimeRef.current;
         if (isSpeakingAudioRef.current || (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) || timeSinceLastSpoke < 350) {
-          console.info("🤫 Muted speaker feedback while assistant is outputting audio.");
           return;
         }
         const lastResultIndex = event.resultIndex;
         const transcript = event.results[lastResultIndex][0].transcript.trim();
-        console.log("🎙️ Legal Wake Listener parsed speech:", transcript);
+        if (!transcript) return;
+
         setLastHeardSpeech(transcript);
-        if (event.results[lastResultIndex].isFinal || transcript.length > 2) {
-          handleHeardSpeechPhrase(transcript);
+
+        // ROUTE 1: DICTATION MODE (Types directly into the message text box)
+        if (isDictatingRef.current) {
+          if (event.results[lastResultIndex].isFinal) {
+            setUserInput(prev => {
+              const clean = prev.trim();
+              return clean ? `${clean} ${transcript}` : transcript;
+            });
+          }
+          return;
+        }
+
+        // ROUTE 2: HOT MIC / WAKE WORD / NATURAL CONVERSATION MODE
+        if (isListeningRef.current) {
+          if (event.results[lastResultIndex].isFinal || transcript.length > 2) {
+            handleHeardSpeechPhrase(transcript);
+          }
         }
       };
 
       recognitionRef.current = rec;
       setRecognition(rec);
-
-      // Auto-start continuous wake word listening on mount
-      try {
-        rec.start();
-        setIsListening(true);
-        setVoiceStatus('LISTENING');
-      } catch (err) {
-        console.info("Voice wake auto-start notice:", err);
-      }
     }
+
+    return () => {
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+      }
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch {}
+      }
+      isRecognitionRunningRef.current = false;
+    };
   }, []);
 
   // Pre-load and warm up browser speech synthesis voices to prevent empty voices list
@@ -947,52 +997,50 @@ export default function AIStaffTab({
   };
 
   const toggleVoiceListener = async () => {
-    const rec = recognitionRef.current || recognition;
-    
     if (isListening) {
       setIsListening(false);
-      stopMicAudioAnalyzer();
-      if (rec) {
-        try { rec.stop(); } catch {}
+      isListeningRef.current = false;
+      if (!isDictatingRef.current) {
+        stopMicAudioAnalyzer();
+        stopRecognitionSafely();
       }
       setVoiceStatus('SLEEPING');
     } else {
       setIsListening(true);
+      isListeningRef.current = true;
       setShowHandsFreeDeck(true);
-      resumeAudioContextIfSuspended();
+      await resumeAudioContextIfSuspended();
 
       const micActive = await startMicAudioAnalyzer();
-
-      if (rec && micActive) {
-        try {
-          rec.start();
-        } catch (err) {
-          console.error("Mic start error:", err);
-        }
-      } else if (!rec) {
-        console.warn("Speech recognition object not available natively in this frame context.");
+      if (micActive) {
+        startRecognitionSafely();
+        setVoiceStatus('LISTENING');
+      } else {
+        setIsListening(false);
+        isListeningRef.current = false;
+        setVoiceStatus('ERROR');
       }
     }
   };
 
   const toggleDictation = async () => {
-    const rec = recognitionRef.current || recognition;
     if (isDictating) {
       setIsDictating(false);
-      stopMicAudioAnalyzer();
-      if (rec) {
-        try { rec.stop(); } catch {}
+      isDictatingRef.current = false;
+      if (!isListeningRef.current) {
+        stopMicAudioAnalyzer();
+        stopRecognitionSafely();
       }
     } else {
       setIsDictating(true);
-      resumeAudioContextIfSuspended();
+      isDictatingRef.current = true;
+      await resumeAudioContextIfSuspended();
       const micActive = await startMicAudioAnalyzer();
-      if (rec && micActive) {
-        try {
-          rec.start();
-        } catch (err) {
-          console.error("Dictation start error:", err);
-        }
+      if (micActive) {
+        startRecognitionSafely();
+      } else {
+        setIsDictating(false);
+        isDictatingRef.current = false;
       }
     }
   };
@@ -1325,7 +1373,7 @@ export default function AIStaffTab({
 - **Evidentiary Weight**: Strong supporting documentation. High relevance for temporary support motions index.`;
 
           const genericVerification = `### 🛠️ FORM VERIFICATION & VERACITY METRICS
-- **Metadata Alignment**: Matches Sarah Jenkins legal files directory structure.
+- **Metadata Alignment**: Matches active client legal files directory structure.
 - **Signature Audit**: **WARNING**: Unsigned sections identified on signature pages.
 - **Compliance Status**: 84% compliant with CA Civil Procedure § 425.10. Missing form appendix.`;
 
@@ -2913,10 +2961,10 @@ EVE has completed document synchronization audit:
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-2 py-1 bg-[#050912] hover:bg-emerald-950/50 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-emerald-300 rounded flex items-center gap-1 shrink-0 transition"
-                title="Don Watson Client File Folder in Google Drive"
+                title="Client File Folder in Google Drive"
               >
                 <FileText className="w-3 h-3 text-amber-400" />
-                <span>📁 Don Watson Client Folder</span>
+                <span>📁 Client Files Repository</span>
               </a>
 
               <a
@@ -2924,10 +2972,10 @@ EVE has completed document synchronization audit:
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-2 py-1 bg-[#050912] hover:bg-emerald-950/50 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-emerald-300 rounded flex items-center gap-1 shrink-0 transition"
-                title="CA FL-100 Petition for Dissolution (Don Watson)"
+                title="CA FL-100 Petition for Dissolution Template"
               >
                 <FileText className="w-3 h-3 text-teal-400" />
-                <span>CA_FL-100_Petition_Dissolution_Don_Watson.docx</span>
+                <span>CA_FL-100_Petition_Dissolution_Template.docx</span>
               </a>
 
               <a
@@ -2935,10 +2983,10 @@ EVE has completed document synchronization audit:
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-2 py-1 bg-[#050912] hover:bg-emerald-950/50 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-emerald-300 rounded flex items-center gap-1 shrink-0 transition"
-                title="Intake Memorandum & Declaration (Don Watson)"
+                title="Client Intake Memorandum & Declaration Template"
               >
                 <FileText className="w-3 h-3 text-indigo-400" />
-                <span>Intake_Memorandum_Declaration_Don_Watson.pdf</span>
+                <span>Intake_Memorandum_Declaration_Template.pdf</span>
               </a>
 
               <button

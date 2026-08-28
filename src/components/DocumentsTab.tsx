@@ -41,12 +41,16 @@ import {
   ZoomIn,
   ZoomOut,
   X,
-  Languages
+  Languages,
+  History,
+  Edit3,
+  Save
 } from 'lucide-react';
 import { Client, DocumentTemplate, GeneratedDocument, Matter, EvidenceFile } from '../types';
 import { ALL_DOCUMENT_TEMPLATES, ALL_COURT_FORM_SCHEMAS, CourtFormSchema } from '../data/legalFormsCatalog';
 import LegalFormsTemplateManager from './LegalFormsTemplateManager';
 import OmniUploadModal from './OmniUploadModal';
+import DocumentSplitPreview from './DocumentSplitPreview';
 import { initAuth, googleSignIn, logout, getAccessToken } from '../lib/driveAuth';
 
 interface DocumentsTabProps {
@@ -167,55 +171,55 @@ export default function DocumentsTab({
   const ocrPresets: OCRPreset[] = [
     {
       id: 'p-1',
-      name: 'Sarah Jenkins Handwritten Legal Form-21',
+      name: 'Jane Doe Handwritten Legal Form-21',
       templateId: 'temp-1',
-      sender: 'Sarah Jenkins',
+      sender: 'Jane Doe',
       previewSummary: 'Spouse Intake Form. Highlights separation date 2025-05-15, married 2015-06-18.',
       rawTextSim: `INTAKE CLIENT INQUIRY FORM
-Spouse Plaintiff: Sarah Jenkins
-Spouse Defendant: Bradley Jenkins
+Spouse Plaintiff: Jane Doe
+Spouse Defendant: John Doe
 Date of Marriage: June 18, 2015.
 Separation date is May 15, 2025.
-Alimony Request: Sarah Jenkins desires temporary spousal support of $1,250 every month.
-Children: Two minor children. Physical care of Sarah. Joint legal decision-making.
+Alimony Request: Jane Doe desires temporary spousal support of $1,250 every month.
+Children: Two minor children. Physical care of Jane. Joint legal decision-making.
 Property claims: Orange County marital home purchased with joint bank account in 2018 (Community). Separate property: Inherited savings portfolio.`,
       extracted: {
         'Date of Marriage': 'June 18, 2015',
         'Separation Date': 'May 15, 2025',
-        'Spousal Support goals': 'Temporary spousal support of $1,250/month requested by Sarah',
-        'Child Custody details': 'Joint legal custody, Sarah Jenkins to remain primary caretakers',
+        'Spousal Support goals': 'Temporary spousal support of $1,250/month requested by Jane',
+        'Child Custody details': 'Joint legal custody, Jane Doe to remain primary caretakers',
         'Separate vs Community Property description': 'Marital home in Orange County is Community; Inherited personal savings portfolio claimed as Separate'
       }
     },
     {
       id: 'p-2',
-      name: 'Mateo Asylum Declaration Draft',
+      name: 'Client Asylum Declaration Draft',
       templateId: 'temp-2',
-      sender: 'Mateo Alvarez',
-      previewSummary: 'Immigration intake sheet. Notes political baker affiliation and cartel threat.',
+      sender: 'Jane Doe',
+      previewSummary: 'Immigration intake sheet. Notes political affiliation and threat.',
       rawTextSim: `USCIS STATEMENT OF BACKGROUND
-Declarant: Mateo Alvarez
+Declarant: Jane Doe
 Country: El Salvador
-Event list: On April 4, 2024, received primary written threat from local extortion crew demanding bakery payout.
-Affiliation: Active Organizer of National baker unions community federation.
+Event list: On April 4, 2024, received primary written threat from local extortion crew demanding business payout.
+Affiliation: Active Organizer of National community federation.
 Fear outline: Retribution, forced closure, and personal harm if sent back.
 Police reaction: Dispatched local station statement, no police bodyguard or patrols were provided.`,
       extracted: {
         'Country of Origin': 'El Salvador',
-        'Specific threat occurrences': 'Written warning from cartel on April 4, 2024 at his bakery shop',
-        'Political/Social group affiliation': 'Active Organizer inside National baker unions community',
+        'Specific threat occurrences': 'Written warning from local gang on April 4, 2024 at business shop',
+        'Political/Social group affiliation': 'Active Organizer inside community federation',
         'Fear of future persecution description': 'Personal recapture and severe retaliatory violence if deported',
         'Previous local police response details': 'Case registered but police stated lack of security patrols available'
       }
     },
     {
       id: 'p-3',
-      name: 'Miller Debts Schedule & Assets Invoice Scan',
+      name: 'John Doe Debts Schedule & Assets Invoice Scan',
       templateId: 'temp-3',
-      sender: 'Samuel Miller',
+      sender: 'John Doe',
       previewSummary: 'Chapter 7 schedule sheet detailing medical debts and automobile liens.',
       rawTextSim: `CHAPTER 7 DISCLOSURE SHEET
-Petitioner: Samuel Miller
+Petitioner: John Doe
 Unsecured Liabilities: Credit cards, store cards, and hospital invoices totaling $85,320.
 Household assets: One primary truck valued around $8,200. Family savings of $1,500.
 Income: Clerk job of $3,140 a month.
@@ -630,6 +634,10 @@ Law governance: Governed by the rules of California state, County of San Francis
   };
 
   const [viewingDoc, setViewingDoc] = useState<GeneratedDocument | null>(null);
+  const [isEditingDoc, setIsEditingDoc] = useState(false);
+  const [editDocContent, setEditDocContent] = useState('');
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [selectedHistoricalVersion, setSelectedHistoricalVersion] = useState<number | null>(null);
 
   const [isOcrProcessing, setIsOcrProcessing] = useState(false);
   const [ocrCompletedPreset, setOcrCompletedPreset] = useState<string | null>(null);
@@ -666,7 +674,7 @@ Law governance: Governed by the rules of California state, County of San Francis
   
   // Standard raw client response email narrative (fully editable by user)
   const [clientNarrativeMail, setClientNarrativeMail] = useState<string>(
-    `Dear Alex,\n\nHere are the dissolution details for our case petition.\nMy spouse is Bradley Jenkins. We were married on June 18, 2015, and our separation date was May 15, 2025. I am requesting $1,250 a month for spousal support because I look after the two kids. I should keep physical custody with Bradley having joint legal custody. As for our community property assets, the marital house in Orange County was bought together in 2018 with community funds, but the inheritance savings account is mine alone (separate property).\n\nLet me know if there are other parameters needed for the California FL-100 court forms.\n\nWarm regards,\nSarah Jenkins`
+    `Dear Alex,\n\nHere are the dissolution details for our case petition.\nMy spouse is John Doe. We were married on June 18, 2015, and our separation date was May 15, 2025. I am requesting $1,250 a month for spousal support because I look after the two kids. I should keep physical custody with John having joint legal custody. As for our community property assets, the marital house in Orange County was bought together in 2018 with community funds, but the inheritance savings account is mine alone (separate property).\n\nLet me know if there are other parameters needed for the California FL-100 court forms.\n\nWarm regards,\nJane Doe`
   );
 
   // Default Judicial Court Form Schemas with Coordinate/Token field maps
@@ -810,7 +818,7 @@ Law governance: Governed by the rules of California state, County of San Francis
             extracted[q] = 'Temporary spousal support of $1,250 every month requested by client';
             sources[q] = { sourceName: 'Verbal Client Notes', factSnippet: 'Disclosed in initial interview notes schedule' };
           } else if (q === 'Child Custody details') {
-            extracted[q] = 'Joint legal custody. Physical care of children to Sarah Jenkins.';
+            extracted[q] = 'Joint legal custody. Physical care of children to Jane Doe.';
             sources[q] = { sourceName: 'Verbal Client Notes', factSnippet: 'Joint legal requests filed by counselor' };
           } else if (q === 'Separate vs Community Property description') {
             extracted[q] = 'Marital home in Orange County is community property; Inheritance personal account is separate property.';
@@ -858,7 +866,7 @@ Law governance: Governed by the rules of California state, County of San Francis
         sources['Client Name'] = { sourceName: 'System Directory Link', factSnippet: `Linked to active client name` };
       }
       if (!extracted['Spouse Defendant Name']) {
-        extracted['Spouse Defendant Name'] = alignSelectedClient.name === 'Sarah Jenkins' ? 'Bradley Jenkins' : 'Respondent';
+        extracted['Spouse Defendant Name'] = alignSelectedClient.name === 'Jane Doe' ? 'John Doe' : 'Respondent';
         sources['Spouse Defendant Name'] = { sourceName: 'Intake Dossier', factSnippet: 'Determined based on family case records' };
       }
       if (!extracted['Filing County']) {
@@ -889,7 +897,7 @@ Law governance: Governed by the rules of California state, County of San Francis
 
     // Replace system default tags
     rendered = rendered.replace(/\{\{\s*Client Name\s*\}\}/gi, alignSelectedClient?.name || 'Client Name');
-    rendered = rendered.replace(/\{\{\s*Spouse Defendant Name\s*\}\}/gi, alignSelectedClient?.name === 'Sarah Jenkins' ? 'Bradley Jenkins' : 'Respondent');
+    rendered = rendered.replace(/\{\{\s*Spouse Defendant Name\s*\}\}/gi, alignSelectedClient?.name === 'Jane Doe' ? 'John Doe' : 'Respondent');
     rendered = rendered.replace(/\{\{\s*Filing County\s*\}\}/gi, alignedValues['Filing County'] || 'ORANGE COUNTY');
 
     // Render numbered california pleading margin
@@ -1370,11 +1378,11 @@ Respectfully submitted,
           mappedData = {
             'ATTORNEY_OR_PARTY_WITHOUT_ATTORNEY': 'Alex, Esq. (State Bar 232323)',
             'SUPERIOR_COURT_OF_CALIFORNIA_COUNTY': 'Superior Court of California, County of Orange',
-            'PETITIONER_NAME': selectedCourtClient?.name || 'Sarah Jenkins',
-            'RESPONDENT_NAME': 'Bradley Jenkins',
+            'PETITIONER_NAME': selectedCourtClient?.name || 'Jane Doe',
+            'RESPONDENT_NAME': 'John Doe',
             'DATE_OF_MARRIAGE': 'June 18, 2015',
             'DATE_OF_SEPARATION': 'May 15, 2025',
-            'MINOR_CHILDREN_CUSTODY_PRAYER': 'Joint Legal Custody, primary physical to Petitioner Sarah Jenkins',
+            'MINOR_CHILDREN_CUSTODY_PRAYER': 'Joint Legal Custody, primary physical to Petitioner Jane Doe',
             'SPOUSAL_SUPPORT_PRAYER': 'Requested temporary spousal support of $1,250 per month',
             'COMMUNITY_PROPERTY_ASSET_DECLARATION': 'Citrus Ave Residence community home. Inherited accounts are claims separate.'
           };
@@ -1957,12 +1965,22 @@ Respectfully submitted,
                           type="button"
                           onClick={() => {
                             setViewingDoc(doc);
+                            setIsEditingDoc(false);
+                            setEditDocContent(doc.content);
+                            setShowVersionHistory(false);
                             setCompiledText(null);
                           }}
                           className="max-w-[65%] text-left cursor-pointer"
                         >
-                          <span className="text-xs font-semibold text-slate-300 group-hover:text-teal-400 transition-colors block truncate">{doc.title}</span>
-                          <span className="text-[9px] font-mono text-slate-500 block truncate mt-0.5">Client: {doc.clientName}</span>
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="text-xs font-semibold text-slate-300 group-hover:text-teal-400 transition-colors truncate">{doc.title}</span>
+                            <span className="px-1.5 py-0.2 text-[9px] font-mono bg-teal-950/80 text-teal-400 border border-teal-500/30 rounded shrink-0">
+                              v{doc.version || 1}
+                            </span>
+                          </div>
+                          <span className="text-[9px] font-mono text-slate-500 block truncate mt-0.5">
+                            Client: {doc.clientName} {doc.versions && doc.versions.length > 1 ? `(${doc.versions.length} revisions)` : ''}
+                          </span>
                         </button>
                         
                         <div className="flex items-center gap-2 shrink-0">
@@ -2002,75 +2020,36 @@ Respectfully submitted,
                     exit={{ opacity: 0 }}
                     className="flex-1 flex flex-col h-full"
                   >
-                    <div className="p-6 bg-[#0d1624] border-b border-[#1e293b] flex items-center justify-between mr-1 flex-wrap gap-2">
-                      <div>
-                        <h3 className="text-sm font-extrabold text-white uppercase tracking-wider">{viewingDoc.title}</h3>
-                        <p className="text-xs text-slate-400 font-mono">Prepared for Client: {viewingDoc.clientName}</p>
-                      </div>
-                      <div className="flex gap-2 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={() => setPdfPreviewDoc({
-                            title: viewingDoc.title,
-                            clientName: viewingDoc.clientName,
-                            content: viewingDoc.content,
-                            generatedAt: new Date(viewingDoc.generatedAt).toLocaleDateString()
-                          })}
-                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400 rounded-none cursor-pointer flex items-center gap-1.5 text-xs font-mono font-bold uppercase shadow-md"
-                          title="Open Printable Read-Only PDF Preview Modal"
-                        >
-                          <Printer className="w-4 h-4 text-white" />
-                          <span>PDF Preview</span>
-                        </button>
-                        <button
-                          onClick={() => exportDocToDesktopBridge(viewingDoc.title, viewingDoc.content)}
-                          disabled={isExportingToBridge}
-                          className="p-2 bg-sky-950/80 border border-sky-500/30 hover:border-sky-400 text-sky-400 rounded-none cursor-pointer flex items-center justify-center gap-1.5 text-xs font-mono disabled:opacity-40"
-                          title="Save directly to Windows C:\Users\Administrator\iiiamadex folder"
-                        >
-                          <HardDrive className="w-4 h-4 text-sky-405" />
-                          <span className="hidden sm:inline">Export to PC Folder</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(viewingDoc.content);
-                            alert('Document content copied.');
-                          }}
-                          className="p-2 bg-slate-900 border border-[#1e293b] hover:border-teal-400 text-slate-300 rounded-none cursor-pointer"
-                        >
-                          <Copy className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            const blob = new Blob([viewingDoc.content], { type: 'text/markdown' });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `${viewingDoc.title.toLowerCase().replace(/\s+/g, '-')}.md`;
-                            a.click();
-                          }}
-                          className="p-2 bg-teal-500 text-[#090d16] hover:bg-teal-600 rounded-none cursor-pointer"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setViewingDoc(null)}
-                          className={smallSharp3D}
-                        >
-                          Close File
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="p-6 flex-1 overflow-y-auto bg-[#090d16]/30">
-                      <pre className="whitespace-pre-wrap font-sans text-xs text-slate-300 leading-relaxed italic border border-[#1e293b] p-5 rounded-none bg-[#080d16]">
-                        {viewingDoc.content}
-                      </pre>
-                    </div>
+                    <DocumentSplitPreview
+                      title={viewingDoc.title}
+                      clientName={viewingDoc.clientName}
+                      content={viewingDoc.content}
+                      generatedAt={new Date(viewingDoc.generatedAt).toLocaleDateString()}
+                      version={viewingDoc.version || 1}
+                      category="Certified Pleading"
+                      onClose={() => {
+                        setViewingDoc(null);
+                        setIsEditingDoc(false);
+                        setShowVersionHistory(false);
+                      }}
+                      onSave={(updatedContent) => {
+                        const updatedDoc: GeneratedDocument = {
+                          ...viewingDoc,
+                          content: updatedContent,
+                          generatedAt: new Date().toISOString()
+                        };
+                        onAddGeneratedDoc(updatedDoc);
+                        setViewingDoc({
+                          ...updatedDoc,
+                          version: (viewingDoc.version || 1) + 1
+                        });
+                      }}
+                      isEditable={true}
+                    />
                   </motion.div>
                 ) : compiledText ? (
                   
-                  // NEW LY SYNTHESIZED OUTPUT
+                  // NEWLY SYNTHESIZED OUTPUT WITH SPLIT-PANE PREVIEW
                   <motion.div
                     key="compiling-output"
                     initial={{ opacity: 0 }}
@@ -2078,61 +2057,19 @@ Respectfully submitted,
                     exit={{ opacity: 0 }}
                     className="flex-1 flex flex-col h-full"
                   >
-                    <div className="p-6 bg-[#0d1624] border-b border-[#1e293b] flex items-center justify-between flex-wrap gap-2">
-                      <div>
-                        <h3 className="text-sm font-extrabold text-teal-400 uppercase tracking-widest flex items-center gap-2">
-                          <Sparkles className="w-4.5 h-4.5 animate-pulse" />
-                          Document Brief Draft Filled
-                        </h3>
-                        <p className="text-xs text-slate-400 font-mono">Template: {selectedTemplate.name}</p>
-                      </div>
-                      <div className="flex gap-2 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={() => setPdfPreviewDoc({
-                            title: selectedTemplate.name,
-                            clientName: selectedClient?.name,
-                            content: compiledText,
-                            generatedAt: new Date().toLocaleDateString(),
-                            category: selectedTemplate.category
-                          })}
-                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[11px] font-bold uppercase rounded-none cursor-pointer flex items-center gap-1.5 shadow-md border border-emerald-400"
-                          title="Open Read-Only Printable PDF Preview Modal"
-                        >
-                          <Printer className="w-3.5 h-3.5 text-white" />
-                          <span>PDF Preview</span>
-                        </button>
-                        <button
-                          onClick={() => exportDocToDesktopBridge(selectedTemplate.name, compiledText)}
-                          disabled={isExportingToBridge}
-                          className="px-3 py-1 bg-sky-950/80 border border-sky-500/30 hover:border-sky-400 text-sky-400 font-mono text-[11px] font-bold uppercase rounded-none cursor-pointer flex items-center gap-1.5 disabled:opacity-40"
-                        >
-                          <HardDrive className="w-3.5 h-3.5" />
-                          <span>Export to PC Folder</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(compiledText);
-                            alert('Draft copied to clipboard.');
-                          }}
-                          className={`${smallSharp3D} flex items-center gap-1`}
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copy</span>
-                        </button>
-                        <button
-                          onClick={() => setCompiledText(null)}
-                          className={sharp3DButton}
-                        >
-                          Back
-                        </button>
-                      </div>
-                    </div>
-                    <div className="p-6 flex-1 overflow-y-auto bg-[#080d16]/20">
-                      <pre className="whitespace-pre-wrap font-mono text-xs text-slate-300 bg-[#090d16] p-5 rounded-none border border-[#1e293b] leading-relaxed">
-                        {compiledText}
-                      </pre>
-                    </div>
+                    <DocumentSplitPreview
+                      title={selectedTemplate.name}
+                      clientName={selectedClient?.name}
+                      content={compiledText}
+                      generatedAt={new Date().toLocaleDateString()}
+                      version={1}
+                      category={selectedTemplate.category}
+                      onClose={() => setCompiledText(null)}
+                      onSave={(updatedContent) => {
+                        setCompiledText(updatedContent);
+                      }}
+                      isEditable={true}
+                    />
                   </motion.div>
                 ) : (
                   
