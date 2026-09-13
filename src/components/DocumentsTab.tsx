@@ -284,7 +284,7 @@ Law governance: Governed by the rules of California state, County of San Francis
         const data = await res.json();
         if (data && data.success) {
           setLocalFiles(data.files || []);
-          setLocalFolder(data.folder || 'C:\\Users\\Administrator\\iiiamadex');
+          setLocalFolder(data.folder || 'C:\\Users\\Administrator\\illamadex');
           setLocalStatus('connected');
           if (data.syncStatus && data.syncStatus.synced) {
             setDriveSyncMsg(`Drive synced: ${data.syncStatus.filesSyncedCount || 0} active files mirrored`);
@@ -622,7 +622,7 @@ Law governance: Governed by the rules of California state, County of San Francis
       });
       if (response.ok) {
         const data = await response.json();
-        alert(`🎉 Direct Desktop sync successful!\n📍 File saved to your computer:\n${data.filePath || 'C:\\Users\\Administrator\\iiiamadex\\' + sanitizedName}`);
+        alert(`🎉 Direct Desktop sync successful!\n📍 File saved to your computer:\n${data.filePath || 'C:\\Users\\Administrator\\illamadex\\' + sanitizedName}`);
       } else {
         alert("Desktop Sync Status: Local bridge offline on port 4321.\nPlease copy the Node bridge script and run it in your computer's terminal (under 'Desktop & Sync' -> 'Copy Desktop Bridge JS script').");
       }
@@ -1729,7 +1729,7 @@ Respectfully submitted,
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-mono font-black uppercase tracking-wider text-white">iiiamadex On-Premises Connector</span>
+              <span className="text-xs font-mono font-black uppercase tracking-wider text-white">illamadex On-Premises Connector</span>
               <span className={`text-[9px] font-mono font-extrabold px-2 py-0.5 rounded-none border ${
                 localStatus === 'connected' 
                   ? 'bg-emerald-505/10 text-emerald-400 border-emerald-550/30' 
@@ -1739,7 +1739,7 @@ Respectfully submitted,
               </span>
             </div>
             <p className="text-[10.5px] text-slate-400 font-mono mt-0.5">
-              Target Folder: <span className="text-sky-400 font-bold">C:\Users\Administrator\iiiamadex</span> {localStatus === 'connected' ? `(${localFiles.length} client files monitored)` : '(Open Desktop tab to copy bridge proxy script)'}
+              Target Folder: <span className="text-sky-400 font-bold">C:\Users\Administrator\illamadex</span> {localStatus === 'connected' ? `(${localFiles.length} client files monitored)` : '(Open Desktop tab to copy bridge proxy script)'}
             </p>
           </div>
         </div>
@@ -1783,7 +1783,7 @@ Respectfully submitted,
             type="button"
             onClick={async () => {
               await loadLocalFiles();
-              alert("Bidirectional synchronize cycle triggered between PC G:\\My Drive\\iiiamadex and C:\\Users\\Administrator\\iiiamadex!");
+              alert("Bidirectional synchronize cycle triggered between PC G:\\My Drive\\illamadex and C:\\Users\\Administrator\\illamadex!");
             }}
             className="p-2 bg-[#090d16] border-2 border-[#1e293b] hover:border-teal-500 text-slate-400 hover:text-teal-400 transition-colors cursor-pointer flex items-center justify-center"
             title="Refresh active file lists & mirror to cloud Google drive"
@@ -1805,14 +1805,14 @@ Respectfully submitted,
             <div className="flex items-center justify-between pb-3 border-b border-slate-900 mb-4">
               <span className="text-[11px] uppercase font-mono font-black text-sky-400 flex items-center gap-2">
                 <FolderOpen className="w-4 h-4 text-sky-400" />
-                On-Premises Directory: C:\Users\Administrator\iiiamadex
+                On-Premises Directory: C:\Users\Administrator\illamadex
               </span>
               <span className="text-[10px] text-teal-400 font-mono tracking-wide">{driveSyncMsg}</span>
             </div>
 
             {localFiles.length === 0 ? (
               <div className="py-8 text-center text-xs text-slate-500 font-mono italic">
-                Folder is empty! Save pleadings using templates to automatically write active files to your C:\Users\Administrator\iiiamadex folder.
+                Folder is empty! Save pleadings using templates to automatically write active files to your C:\Users\Administrator\illamadex folder.
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

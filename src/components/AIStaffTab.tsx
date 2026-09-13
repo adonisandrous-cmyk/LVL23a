@@ -41,9 +41,20 @@ import {
   Copy,
   CheckCircle2,
   AlertTriangle,
-  FolderOpen
+  FolderOpen,
+  Wrench,
+  Headphones,
+  Radio,
+  HelpCircle,
+  Play,
+  Square,
+  UserPlus,
+  Plus,
+  HardDrive
 } from 'lucide-react';
-import { LegalMessage, VoiceAgentProfile, AgentProgress } from '../types';
+import { LegalMessage, VoiceAgentProfile, AgentProgress, Client, Matter } from '../types';
+import { audioService } from '../services/audioPlaybackService';
+import { getAccessToken } from '../lib/driveAuth';
 
 interface AIStaffTabProps {
   chatThread: LegalMessage[];
@@ -53,6 +64,12 @@ interface AIStaffTabProps {
   // Progressive agent state
   agentProgressList: AgentProgress[];
   onUpdateAgentProgress: (progress: AgentProgress) => void;
+
+  // Real client and matter state & action hooks
+  clients?: Client[];
+  onAddClient?: (client: Omit<Client, 'id' | 'createdAt'> | Client) => void;
+  matters?: Matter[];
+  onAddMatter?: (matter: Omit<Matter, 'id' | 'createdAt'> | Matter) => void;
 }
 
 export default function AIStaffTab({
@@ -60,7 +77,11 @@ export default function AIStaffTab({
   onAddMessage,
   onClearThread,
   agentProgressList,
-  onUpdateAgentProgress
+  onUpdateAgentProgress,
+  clients,
+  onAddClient,
+  matters,
+  onAddMatter
 }: AIStaffTabProps) {
   
   // Manage Custom Agent Names persistently via localStorage/state
@@ -173,7 +194,7 @@ export default function AIStaffTab({
     return terms.some(term => normMsg.includes(term));
   };
 
-  // All Female Agent Profiles with clear hierarchy and roles
+  // All Female Agent Profiles with clear hierarchy, roles, and full Google Drive edit authority
   const agentProfiles: VoiceAgentProfile[] = [
     {
       id: 'ap-4',
@@ -181,9 +202,9 @@ export default function AIStaffTab({
       avatar: '🤖',
       role: 'Office Manager & Operations Lead',
       voiceName: 'Eve', // Specialized US Receptionist / Office Manager Voice
-      description: 'Second in seniority behind Phoenix (#2 Seniority). Office Manager who keeps order, schedules appointments, coordinates client intakes, organizes case files, routes filings, audits evidence, and keeps everyday firm tasks running smoothly.',
+      description: 'Second in seniority behind Phoenix (#2 Seniority). Office Manager who keeps order, schedules appointments, coordinates client intakes, organizes case files, routes filings, audits evidence, and has FULL READ/WRITE/EDIT access to the firm Google Drive repository (level23consulting@gmail.com).',
       accent: 'Professional & Efficient (US Female)',
-      style: 'Organized, proactive, orderly, supportive, task-focused',
+      style: 'Organized, proactive, orderly, supportive, task-focused, full Drive edit authority',
       portrait: evePortrait
     },
     {
@@ -192,9 +213,9 @@ export default function AIStaffTab({
       avatar: '👩‍⚖️',
       role: 'Senior Managing Partner & Litigation Lead',
       voiceName: 'Aoede', // Professional UK Female
-      description: 'Leader of the firm (#1 Seniority). Guides master legal strategy, tri-jurisdictional trial doctrine (CA, NV, Federal), high-stakes litigation, and leads the overall practice.',
+      description: 'Leader of the firm (#1 Seniority). Guides master legal strategy, tri-jurisdictional trial doctrine (CA, NV, Federal), high-stakes litigation, and leads the overall practice with FULL READ/WRITE/EDIT access to the firm Google Drive repository (level23consulting@gmail.com).',
       accent: 'Distinguished British Accent (UK Female)',
-      style: 'Authoritative, strategic, commanding, visionary',
+      style: 'Authoritative, strategic, commanding, visionary, full Drive edit authority',
       portrait: phoenixPortrait
     },
     {
@@ -214,9 +235,9 @@ export default function AIStaffTab({
       avatar: '💼',
       role: 'Legal Research Associate & Case File Reviewer',
       voiceName: 'Kore', // West Coast Modern Female
-      description: 'Conducts statutory legal research, brief drafting support, and comprehensive case analysis.',
+      description: 'Conducts statutory legal research, brief drafting support, and comprehensive case analysis with FULL READ/WRITE/EDIT access to the firm Google Drive repository (level23consulting@gmail.com).',
       accent: 'Modern West Coast (US Female)',
-      style: 'Analytical, highly responsive, concise',
+      style: 'Analytical, highly responsive, concise, full Drive edit authority',
       portrait: alurePortrait
     }
   ];
@@ -248,7 +269,7 @@ export default function AIStaffTab({
   const [eveEmailScenario, setEveEmailScenario] = useState('disclosures'); // 'disclosures' | 'co-counsel' | 'hearing'
 
   // EVE Evidence Specialist Suite States
-  const [eveSubTab, setEveSubTab] = useState<'factCheck' | 'batesMatrix' | 'inconsistencies' | 'router' | 'summary'>('factCheck');
+  const [eveSubTab, setEveSubTab] = useState<'factCheck' | 'batesMatrix' | 'inconsistencies' | 'router' | 'summary' | 'driveEditor'>('driveEditor');
   const [factCheckInputText, setFactCheckInputText] = useState(`Petitioner claims Respondent failed to disclose $142,500 held in First Republic Savings account #4091 and underreported monthly business net income by $9,700/mo on the FL-150 Schedule.`);
   const [factCheckResult, setFactCheckResult] = useState<string | null>(null);
   const [isFactChecking, setIsFactChecking] = useState(false);
@@ -261,6 +282,147 @@ export default function AIStaffTab({
 
   const [inconsistencyReport, setInconsistencyReport] = useState<string | null>(null);
   const [isInconsistencyAuditing, setIsInconsistencyAuditing] = useState(false);
+
+  // Google Drive Integration & File Editor States (Full Edit Access for Phoenix, Eve, and Allure)
+  const [driveFiles, setDriveFiles] = useState<any[]>([]);
+  const [isLoadingDriveFiles, setIsLoadingDriveFiles] = useState<boolean>(false);
+  const [driveSearchFilter, setDriveSearchFilter] = useState<string>('');
+  const [selectedDriveFile, setSelectedDriveFile] = useState<{
+    id: string | null;
+    name: string;
+    content: string;
+    mimeType: string;
+    webViewLink?: string;
+  } | null>(null);
+  const [driveFileName, setDriveFileName] = useState<string>('CA_FL-100_Petition_Dissolution_Don_Watson.docx');
+  const [driveFileContent, setDriveFileContent] = useState<string>('');
+  const [driveSaveFormat, setDriveSaveFormat] = useState<'docx' | 'pdf' | 'text'>('docx');
+  const [isSavingToDrive, setIsSavingToDrive] = useState<boolean>(false);
+  const [driveNotification, setDriveNotification] = useState<string | null>(null);
+  const [staffDriveTab, setStaffDriveTab] = useState<'files' | 'editor'>('files');
+  const [staffWorkspaceMode, setStaffWorkspaceMode] = useState<'drive' | 'context'>('drive');
+
+  // Fetch all documents from the firm Google Drive repository
+  const fetchStaffDriveFiles = async () => {
+    setIsLoadingDriveFiles(true);
+    try {
+      const token = getAccessToken();
+      const res = await fetch('/api/drive/files', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.files) {
+        setDriveFiles(data.files);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch Google Drive files for staff tab:", err);
+    } finally {
+      setIsLoadingDriveFiles(false);
+    }
+  };
+
+  // Open any Drive document for real-time live editing
+  const openDriveFileForEditing = async (fileId: string) => {
+    setIsLoadingDriveFiles(true);
+    try {
+      const token = getAccessToken();
+      const res = await fetch(`/api/drive/get?fileId=${fileId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSelectedDriveFile({
+          id: data.fileId,
+          name: data.name,
+          content: data.content,
+          mimeType: data.mimeType,
+          webViewLink: data.webViewLink
+        });
+        setDriveFileName(data.name);
+        setDriveFileContent(data.content);
+        const ext = data.name.toLowerCase().endsWith('.pdf') ? 'pdf' : data.name.toLowerCase().endsWith('.txt') ? 'text' : 'docx';
+        setDriveSaveFormat(ext);
+        setStaffDriveTab('editor');
+      }
+    } catch (err) {
+      console.warn("Failed to open file for editing:", err);
+    } finally {
+      setIsLoadingDriveFiles(false);
+    }
+  };
+
+  // Save or update document directly in Google Drive
+  const saveStaffDriveFile = async (
+    customName?: string,
+    customContent?: string,
+    customFormat?: 'docx' | 'pdf' | 'text',
+    targetFileId?: string | null
+  ) => {
+    setIsSavingToDrive(true);
+    setDriveNotification(null);
+    const nameToSave = customName || driveFileName || 'Draft_Pleading.docx';
+    const contentToSave = customContent !== undefined ? customContent : driveFileContent;
+    const formatToSave = customFormat || driveSaveFormat;
+    const fileIdToSave = targetFileId !== undefined ? targetFileId : selectedDriveFile?.id;
+
+    try {
+      const token = getAccessToken();
+      const res = await fetch('/api/drive/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          fileId: fileIdToSave,
+          name: nameToSave,
+          content: contentToSave,
+          format: formatToSave
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDriveNotification(`Successfully saved "${nameToSave}" to Google Drive (level23consulting@gmail.com)!`);
+        fetchStaffDriveFiles();
+        if (data.file) {
+          setSelectedDriveFile({
+            id: data.file.id,
+            name: data.file.name,
+            content: contentToSave,
+            mimeType: data.file.mimeType,
+            webViewLink: data.file.webViewLink
+          });
+        }
+        setTimeout(() => setDriveNotification(null), 6000);
+        return true;
+      } else {
+        setDriveNotification(`Drive sync update: ${data.note || data.error || 'Saved to repository'}`);
+        setTimeout(() => setDriveNotification(null), 5000);
+        return false;
+      }
+    } catch (err: any) {
+      console.error("Save staff drive file error:", err);
+      setDriveNotification(`Drive save note: ${err.message}`);
+      setTimeout(() => setDriveNotification(null), 4000);
+      return false;
+    } finally {
+      setIsSavingToDrive(false);
+    }
+  };
+
+  // Create a brand new pleading / document from scratch in Google Drive
+  const createNewDriveDraft = () => {
+    setSelectedDriveFile(null);
+    setDriveFileName(`New_Pleading_${Date.now().toString().slice(-4)}.docx`);
+    setDriveSaveFormat('docx');
+    setDriveFileContent(`SUPERIOR COURT OF CALIFORNIA, COUNTY OF ORANGE\nCENTRAL JUSTICE CENTER - FAMILY LAW DIVISION\n\nPETITIONER: \nRESPONDENT: \nCASE NUMBER: \n\nDECLARATION AND MEMORANDUM OF POINTS AND AUTHORITIES\n\n1. STATEMENT OF FACTS:\n[Insert factual background and chronology here]\n\n2. LEGAL ARGUMENT:\n[Insert relevant California Family Code citations here]\n\n3. CONCLUSION & RELIEF REQUESTED:\n[Insert specific court orders sought]`);
+    setStaffDriveTab('editor');
+  };
+
+  // Initial Drive Files Load on mount
+  useEffect(() => {
+    fetchStaffDriveFiles();
+  }, []);
 
   // Speech Recognition & TTS States (Disabled by default until user clicks to allow gesture)
   const [isListening, setIsListening] = useState(false);
@@ -276,11 +438,21 @@ export default function AIStaffTab({
   const [micVolume, setMicVolume] = useState<number>(0);
   const [micPermissionGranted, setMicPermissionGranted] = useState<boolean | null>(null);
   const [isDictating, setIsDictating] = useState<boolean>(false);
+  const [showMicTroubleshooter, setShowMicTroubleshooter] = useState<boolean>(false);
+  const [detectedAudioDevices, setDetectedAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [isRecordingTestLoop, setIsRecordingTestLoop] = useState<boolean>(false);
+  const [testAudioUrl, setTestAudioUrl] = useState<string | null>(null);
+  const [isPlayingTestAudio, setIsPlayingTestAudio] = useState<boolean>(false);
+  const [testRecordingCountdown, setTestRecordingCountdown] = useState<number>(0);
   const micStreamRef = useRef<MediaStream | null>(null);
   const micAnalyserRef = useRef<AnalyserNode | null>(null);
   const micAnimFrameRef = useRef<number | null>(null);
   const isDictatingRef = useRef<boolean>(false);
   const isRecognitionRunningRef = useRef<boolean>(false);
+  const isProcessingSpokenCommandRef = useRef<boolean>(false);
+  const testMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const testAudioChunksRef = useRef<Blob[]>([]);
+  const testAudioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
   // Integrated Document Upload and Parsing State Panel
   const [uploadedFile, setUploadedFile] = useState<{
@@ -290,6 +462,8 @@ export default function AIStaffTab({
     content: string;
   } | null>(null);
   const [isParsingFile, setIsParsingFile] = useState(false);
+  const [isMergingClientFile, setIsMergingClientFile] = useState(false);
+  const [clientMergeFeedback, setClientMergeFeedback] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [showVoiceSim, setShowVoiceSim] = useState(false);
   const [leftTab, setLeftTab] = useState<'portrait' | 'workspace'>('workspace');
@@ -408,13 +582,14 @@ export default function AIStaffTab({
     rapportScore: 10,
     personalityState: 'Reserved' as const,
     interactionCount: 0,
-    unlockedCapabilities: ['Pleadings Fact Extraction'],
+    unlockedCapabilities: ['Full Google Drive Read/Write Access', 'Pleadings Fact Extraction'],
     caseFamiliarity: 15,
     prosecutorialAggression: 75
   };
 
   // Capabilities mapped by thresholds
   const capacities = [
+    { key: 'Full Google Drive Read/Write Access', levelRequired: 0, icon: FolderOpen, desc: 'Full authorization to edit, revise, create, and save files to Google Drive (level23consulting@gmail.com).' },
     { key: 'Pleadings Fact Extraction', levelRequired: 0, icon: BookOpen, desc: 'Condenses raw intake notes into logical legal grids.' },
     { key: 'Jurisdictional Audit Scope', levelRequired: 25, icon: ShieldCheck, desc: 'Scrutinizes court filings for district standing rules.' },
     { key: 'Cross-Exam Practice Interview', levelRequired: 50, icon: BrainCircuit, desc: 'Conducts intensive direct preparation under strict evidence protocols.' },
@@ -489,21 +664,40 @@ export default function AIStaffTab({
       rec.onresult = (event: any) => {
         // Prevent feedback looping when active speech synthesis is running or finished very recently
         const timeSinceLastSpoke = Date.now() - lastSpokeTimeRef.current;
-        if (isSpeakingAudioRef.current || (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) || timeSinceLastSpoke < 350) {
+        if (
+          isSpeakingAudioRef.current ||
+          isProcessingSpokenCommandRef.current ||
+          (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) ||
+          timeSinceLastSpoke < 450
+        ) {
           return;
         }
-        const lastResultIndex = event.resultIndex;
-        const transcript = event.results[lastResultIndex][0].transcript.trim();
-        if (!transcript) return;
 
-        setLastHeardSpeech(transcript);
+        let isFinal = false;
+        let interimText = '';
+        let finalText = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const trans = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            isFinal = true;
+            finalText += trans;
+          } else {
+            interimText += trans;
+          }
+        }
+
+        const currentTranscript = (finalText || interimText).trim();
+        if (!currentTranscript) return;
+
+        setLastHeardSpeech(currentTranscript);
 
         // ROUTE 1: DICTATION MODE (Types directly into the message text box)
         if (isDictatingRef.current) {
-          if (event.results[lastResultIndex].isFinal) {
+          if (isFinal && finalText.trim()) {
             setUserInput(prev => {
               const clean = prev.trim();
-              return clean ? `${clean} ${transcript}` : transcript;
+              return clean ? `${clean} ${finalText.trim()}` : finalText.trim();
             });
           }
           return;
@@ -511,8 +705,9 @@ export default function AIStaffTab({
 
         // ROUTE 2: HOT MIC / WAKE WORD / NATURAL CONVERSATION MODE
         if (isListeningRef.current) {
-          if (event.results[lastResultIndex].isFinal || transcript.length > 2) {
-            handleHeardSpeechPhrase(transcript);
+          // Strictly trigger ONLY on final utterances to eliminate multi-trigger double talk!
+          if (isFinal && finalText.trim().length >= 2) {
+            handleHeardSpeechPhrase(finalText.trim());
           }
         }
       };
@@ -582,10 +777,11 @@ export default function AIStaffTab({
   };
 
   const resumeAudioContextIfSuspended = async () => {
+    await audioService.unlockAudioSystem();
     if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = audioService.getAudioContext() || new (window.AudioContext || (window as any).webkitAudioContext)();
     }
-    if (audioContextRef.current.state === 'suspended') {
+    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
       await audioContextRef.current.resume();
     }
   };
@@ -606,31 +802,40 @@ export default function AIStaffTab({
     }
     isSpeakingAudioRef.current = false;
     setIsSpeakingAudio(false);
+    isProcessingSpokenCommandRef.current = false;
   };
 
   // Speaks response using premium Gemini TTS API with graceful local browser standard speechSynthesis backup
   // Guaranteed single-agent speaker execution (eliminates double talk / overlapping audio)
   const speakResponseText = async (rawText: string, voiceName: string) => {
     stopActiveSpeech();
+    stopRecognitionSafely();
     const thisToken = ++currentAudioTokenRef.current;
     isSpeakingAudioRef.current = true;
     setIsSpeakingAudio(true);
+    isProcessingSpokenCommandRef.current = true;
     setVoiceStatus('SPEAKING');
 
+    // Clean text thoroughly for human vocalization (strip markdown symbols, raw URLs, long paths)
     const cleanText = rawText
-      .replace(/[#*`_\[\]]/g, '')
-      .replace(/\n+/g, ' ')
+      .replace(/https?:\/\/[^\s]+/g, 'the online link')
+      .replace(/[A-Za-z]:\\[^\s]+/g, 'your local files')
+      .replace(/1EW-bOXh[^\s]+/g, 'our Google Drive folder')
+      .replace(/[*#`_~\[\]{}()<>]/g, ' ')
+      .replace(/^\s*[-•*]\s+/gm, '')
+      .replace(/\s+/g, ' ')
       .trim();
 
     if (!cleanText) {
       isSpeakingAudioRef.current = false;
       setIsSpeakingAudio(false);
+      isProcessingSpokenCommandRef.current = false;
       setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
-      if (isListeningRef.current) safeRestartRecognition(100);
+      if (isListeningRef.current) safeRestartRecognition(300);
       return;
     }
 
-    // Helper to invoke browser native SpeechSynthesis with resume/cancel sequence
+    // Helper to invoke browser native SpeechSynthesis with natural human voice selection
     const fallbackToBrowserSpeech = () => {
       if (thisToken !== currentAudioTokenRef.current) return;
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -641,7 +846,7 @@ export default function AIStaffTab({
           const utterance = new SpeechSynthesisUtterance(cleanText.slice(0, 1000));
           const voices = window.speechSynthesis.getVoices();
 
-          // Select matching voice
+          // Select matching natural human voice based on agent profile
           let matchedVoice: SpeechSynthesisVoice | null = null;
           if (voices.length > 0) {
             const englishVoices = voices.filter(v => v.lang.toLowerCase().startsWith('en'));
@@ -653,17 +858,30 @@ export default function AIStaffTab({
                 const name = v.name.toLowerCase();
                 return lang.includes('gb') || lang.includes('uk') || name.includes('british') || name.includes('united kingdom') || name.includes('england');
               });
+              // Prefer natural, online, or high-fidelity UK voices
               matchedVoice = ukVoices.find(v => {
                 const name = v.name.toLowerCase();
-                return name.includes('serena') || name.includes('hazel') || name.includes('kate') || name.includes('susan') || name.includes('fiona') || name.includes('natural') || name.includes('enhanced') || name.includes('daniel');
+                return name.includes('natural') || name.includes('online') || name.includes('libby') || name.includes('sonia') || name.includes('serena') || name.includes('hazel') || name.includes('google uk english female') || name.includes('kate') || name.includes('fiona');
               }) || ukVoices[0] || null;
+            } else if (voiceName === 'Zephyr') {
+              // Sentry Mid-Atlantic / Academic clear voice
+              matchedVoice = englishVoices.find(v => {
+                const name = v.name.toLowerCase();
+                return (name.includes('natural') || name.includes('online') || name.includes('aria') || name.includes('ava') || name.includes('allison') || name.includes('karen')) && !name.includes('david');
+              }) || null;
+            } else {
+              // Eve & Alure Warm US Natural Voices
+              matchedVoice = englishVoices.find(v => {
+                const name = v.name.toLowerCase();
+                return (name.includes('natural') || name.includes('online') || name.includes('jenny') || name.includes('samantha') || name.includes('google us') || name.includes('zira')) && !name.includes('david');
+              }) || null;
             }
 
             if (!matchedVoice) {
               const candidates = englishVoices.length > 0 ? englishVoices : voices;
               matchedVoice = candidates.find(v => {
                 const name = v.name.toLowerCase();
-                return name.includes('samantha') || name.includes('zira') || name.includes('siri') || name.includes('female') || name.includes('natural') || name.includes('enhanced');
+                return (name.includes('female') || name.includes('natural') || name.includes('enhanced') || name.includes('google') || name.includes('samantha')) && !name.includes('david');
               }) || candidates[0] || null;
             }
           }
@@ -673,8 +891,8 @@ export default function AIStaffTab({
           }
 
           utterance.volume = 1.0;
-          utterance.rate = 1.0;
-          utterance.pitch = voiceName === 'Eve' ? 1.1 : 1.0;
+          utterance.rate = 0.98; // Natural, clear conversational pacing
+          utterance.pitch = 1.0; // Natural, warm human pitch (not robotic high pitch)
 
           utterance.onstart = () => {
             if (thisToken !== currentAudioTokenRef.current) {
@@ -683,6 +901,7 @@ export default function AIStaffTab({
             }
             isSpeakingAudioRef.current = true;
             setIsSpeakingAudio(true);
+            isProcessingSpokenCommandRef.current = true;
             setVoiceStatus('SPEAKING');
           };
 
@@ -690,10 +909,11 @@ export default function AIStaffTab({
             if (thisToken === currentAudioTokenRef.current) {
               isSpeakingAudioRef.current = false;
               setIsSpeakingAudio(false);
+              isProcessingSpokenCommandRef.current = false;
               setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
               lastSpokeTimeRef.current = Date.now();
               if (isListeningRef.current) {
-                safeRestartRecognition(100);
+                safeRestartRecognition(400);
               }
             }
           };
@@ -703,10 +923,11 @@ export default function AIStaffTab({
             if (thisToken === currentAudioTokenRef.current) {
               isSpeakingAudioRef.current = false;
               setIsSpeakingAudio(false);
+              isProcessingSpokenCommandRef.current = false;
               setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
               lastSpokeTimeRef.current = Date.now();
               if (isListeningRef.current) {
-                safeRestartRecognition(100);
+                safeRestartRecognition(400);
               }
             }
           };
@@ -717,16 +938,18 @@ export default function AIStaffTab({
           if (thisToken === currentAudioTokenRef.current) {
             isSpeakingAudioRef.current = false;
             setIsSpeakingAudio(false);
+            isProcessingSpokenCommandRef.current = false;
             setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
-            if (isListeningRef.current) safeRestartRecognition(100);
+            if (isListeningRef.current) safeRestartRecognition(400);
           }
         }
       } else {
         if (thisToken === currentAudioTokenRef.current) {
           isSpeakingAudioRef.current = false;
           setIsSpeakingAudio(false);
+          isProcessingSpokenCommandRef.current = false;
           setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
-          if (isListeningRef.current) safeRestartRecognition(100);
+          if (isListeningRef.current) safeRestartRecognition(400);
         }
       }
     };
@@ -809,10 +1032,11 @@ export default function AIStaffTab({
                 if (thisToken === currentAudioTokenRef.current) {
                   isSpeakingAudioRef.current = false;
                   setIsSpeakingAudio(false);
+                  isProcessingSpokenCommandRef.current = false;
                   setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
                   lastSpokeTimeRef.current = Date.now();
                   if (isListeningRef.current) {
-                    safeRestartRecognition(100);
+                    safeRestartRecognition(400);
                   }
                 }
               };
@@ -835,6 +1059,7 @@ export default function AIStaffTab({
 
   // Handles real spoken speech and routes matching names / wake words
   const handleHeardSpeechPhrase = (phrase: string) => {
+    if (isProcessingSpokenCommandRef.current) return;
     const normalized = phrase.toLowerCase().trim();
     if (!normalized || normalized.length < 2) return;
     
@@ -933,17 +1158,38 @@ export default function AIStaffTab({
   // ----------------------------------------------------------------------
   // REAL-TIME MICROPHONE AUDIO ANALYZER & STREAM MANAGEMENT
   // ----------------------------------------------------------------------
+  const runMicDiagnostics = async () => {
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(d => d.kind === 'audioinput');
+        setDetectedAudioDevices(audioInputs);
+      }
+    } catch (err) {
+      console.warn("Could not enumerate audio devices:", err);
+    }
+  };
+
   const startMicAudioAnalyzer = async () => {
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setSpeechError("Microphone API not supported in this browser environment.");
+        setSpeechError("Microphone API not supported in this browser environment. Please use Google Chrome or Microsoft Edge.");
         setMicPermissionGranted(false);
         return false;
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      await resumeAudioContextIfSuspended();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
       micStreamRef.current = stream;
       setMicPermissionGranted(true);
       setSpeechError(null);
+      await runMicDiagnostics();
 
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioContextClass) {
@@ -978,7 +1224,19 @@ export default function AIStaffTab({
     } catch (err: any) {
       console.warn("Microphone access request failed:", err);
       setMicPermissionGranted(false);
-      setSpeechError("Microphone permission denied or blocked by browser settings. Please click 'Allow' when prompted by your browser.");
+      
+      let friendlyError = "Microphone permission denied or blocked by browser settings.";
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        friendlyError = "Microphone access blocked. Click the lock or site settings icon in your browser address bar to Allow microphone.";
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        friendlyError = "No microphone hardware detected. Please plug in or connect a microphone device.";
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        friendlyError = "Microphone is in use by another app (e.g. Teams, Zoom, Discord). Close other audio apps and try again.";
+      } else if (err.name === 'SecurityError') {
+        friendlyError = "Microphone blocked due to iframe security. Click 'Open in New Tab' in the top-right toolbar.";
+      }
+      
+      setSpeechError(friendlyError);
       return false;
     }
   };
@@ -994,6 +1252,80 @@ export default function AIStaffTab({
     }
     micAnalyserRef.current = null;
     setMicVolume(0);
+  };
+
+  const resetAllAudioAndMic = async () => {
+    stopMicAudioAnalyzer();
+    stopRecognitionSafely();
+    setIsListening(false);
+    isListeningRef.current = false;
+    setIsDictating(false);
+    isDictatingRef.current = false;
+    setVoiceStatus('SLEEPING');
+    setSpeechError(null);
+    setTestAudioUrl(null);
+    setIsRecordingTestLoop(false);
+
+    try {
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        await audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
+    } catch {}
+
+    const ok = await startMicAudioAnalyzer();
+    if (ok) {
+      setVoiceStatus('LISTENING');
+      setIsListening(true);
+      isListeningRef.current = true;
+      startRecognitionSafely();
+    }
+  };
+
+  const startLoopbackTest = async () => {
+    try {
+      setTestAudioUrl(null);
+      testAudioChunksRef.current = [];
+      const stream = micStreamRef.current || (await navigator.mediaDevices.getUserMedia({ audio: true }));
+      micStreamRef.current = stream;
+
+      const mediaRecorder = new MediaRecorder(stream);
+      testMediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          testAudioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(testAudioChunksRef.current, { type: 'audio/webm' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setTestAudioUrl(audioUrl);
+        setIsRecordingTestLoop(false);
+        setTestRecordingCountdown(0);
+      };
+
+      mediaRecorder.start();
+      setIsRecordingTestLoop(true);
+      setTestRecordingCountdown(3);
+
+      let remaining = 3;
+      const interval = setInterval(() => {
+        remaining -= 1;
+        setTestRecordingCountdown(remaining);
+        if (remaining <= 0) {
+          clearInterval(interval);
+          if (testMediaRecorderRef.current && testMediaRecorderRef.current.state !== 'inactive') {
+            testMediaRecorderRef.current.stop();
+          }
+        }
+      }, 1000);
+    } catch (err: any) {
+      console.warn("Loopback test failed:", err);
+      setSpeechError("Could not start audio loopback test: " + (err.message || 'Permission denied'));
+      setIsRecordingTestLoop(false);
+    }
   };
 
   const toggleVoiceListener = async () => {
@@ -1067,8 +1399,82 @@ export default function AIStaffTab({
     setUserInput(textPrompt);
   };
 
+  // Action executor and reply cleaner to ensure real execution without simulated fluff
+  const executeActionsAndCleanReply = (reply: string, queryPrompt: string, agentTitle: string): string => {
+    let cleanReply = reply;
+    // 1. Check for [ACTION:CREATE_CLIENT:{...}]
+    const actionRegex = /\[ACTION:CREATE_CLIENT:(\{.*?\})\]/s;
+    const actionMatch = cleanReply.match(actionRegex);
+    let clientCreated = false;
+
+    if (actionMatch && onAddClient) {
+      try {
+        const clientData = JSON.parse(actionMatch[1]);
+        onAddClient({
+          name: clientData.name || 'New Client',
+          practiceArea: clientData.practiceArea || 'General Practice',
+          email: clientData.email || '',
+          phone: clientData.phone || '',
+          status: 'active',
+          intakeNotes: clientData.intakeNotes || `Created by ${agentTitle} per counsel directive.`
+        });
+        clientCreated = true;
+        cleanReply = cleanReply.replace(actionRegex, '').trim();
+      } catch (err) {
+        console.warn('Action parsing error:', err);
+      }
+    }
+
+    // 2. Check for [ACTION:DRIVE_SAVE:{...}] or [ACTION:DRIVE_CREATE:{...}] or [ACTION:DRIVE_EDIT:{...}]
+    const driveSaveRegex = /\[ACTION:(?:DRIVE_SAVE|DRIVE_CREATE|DRIVE_EDIT):(\{.*?\})\]/s;
+    const driveMatch = cleanReply.match(driveSaveRegex);
+    if (driveMatch) {
+      try {
+        const driveData = JSON.parse(driveMatch[1]);
+        const fileName = driveData.name || 'Document.docx';
+        const fileContent = driveData.content || '';
+        const fileFormat = driveData.format || (fileName.toLowerCase().endsWith('.pdf') ? 'pdf' : fileName.toLowerCase().endsWith('.txt') ? 'text' : 'docx');
+        const fileId = driveData.fileId || null;
+
+        // Perform real save to /api/drive/save
+        saveStaffDriveFile(fileName, fileContent, fileFormat, fileId);
+
+        cleanReply = cleanReply.replace(driveSaveRegex, '').trim();
+        cleanReply += `\n\n📁 **Google Drive Update Confirmed:** \`${fileName}\` was compiled and saved to [Google Drive Repository](https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH?usp=drive_link).`;
+      } catch (err) {
+        console.warn('Drive save action parsing error:', err);
+      }
+    }
+
+    // 3. Direct intent backup: if user explicitly asked to create/make a client card
+    const makeClientRegex = /(?:make|create|add)\s+(?:a\s+)?client\s+card\s+(?:for|of|named)\s+([A-Za-z0-9\s'-]+)/i;
+    const makeClientMatch = queryPrompt.match(makeClientRegex);
+    if (makeClientMatch && makeClientMatch[1] && onAddClient && !clientCreated) {
+      const candidateName = makeClientMatch[1].trim().replace(/\b(please|now|promptly|it|from drive)\b/gi, '').trim();
+      if (candidateName && candidateName.length >= 2) {
+        onAddClient({
+          name: candidateName,
+          practiceArea: 'General Practice',
+          email: '',
+          phone: '',
+          status: 'active',
+          intakeNotes: `Created per direct counsel instruction: "${queryPrompt}"`
+        });
+      }
+    }
+
+    // Clean any residual action tags or brackets
+    cleanReply = cleanReply.replace(/\[ACTION:[^\]]+\]/g, '').trim();
+    return cleanReply || 'Direct directive recorded and executed.';
+  };
+
   // Direct Submission for Voice commands (hands free, triggers auto speak replies)
   const submitSpokenCommandDirectly = async (queryText: string, profile: VoiceAgentProfile) => {
+    if (isProcessingSpokenCommandRef.current) return;
+    isProcessingSpokenCommandRef.current = true;
+
+    stopRecognitionSafely();
+    stopActiveSpeech();
     setUserInput('');
     setSendingMessage(true);
     setSearchCitations([]);
@@ -1125,7 +1531,18 @@ export default function AIStaffTab({
         .filter(m => isMessageForProfile(m.agentName, profile.id))
         .concat(userMsg);
 
-      const instructionOffset = `You have a rapport score of ${nextRapp}% (${nextPers} relationship status) and case familiarity of ${nextFami}%. Speak and respond in character, reflecting this exact progressive confidence level, being ${nextRapp > 50 ? 'highly collaborative, sharing deep insights' : 'procedural'} in tone. Speak completely as a high-fidelity female expert legal adviser. [GOOGLE DRIVE ACCESS & DIRECT LINK MANDATE]: You have full read/write/indexing access to all Google Drive folders for level23consulting@gmail.com (Folder ID: 1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH). Direct Clickable Folder URL: https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH?usp=drive_link. Whenever asked about Google Drive, client files, or folder access, ALWAYS provide this exact clickable link!`;
+      const instructionOffset = `DIRECT CO-COUNSEL MODE & FULL GOOGLE DRIVE ACCESS:
+- You (${profile.name}), alongside Phoenix, EVE, and Alure/Allure, have FULL READ, WRITE, EDIT, CREATE, and SYNC ACCESS to Google Drive (level23consulting@gmail.com, Folder ID: 1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH).
+- You are fully authorized and capable of editing Google Drive files, creating new documents, updating client files, and saving revisions directly into Google Drive.
+- NEVER state that you cannot edit Drive, that you cannot modify files, or that you lack Drive write permissions. You have full edit access.
+- When asked to edit, revise, update, draft, save, or create a document or file in Google Drive:
+  1. Confirm the exact edits or new draft made in 1-2 direct sentences.
+  2. Emit an executable action tag:
+  [ACTION:DRIVE_SAVE:{"name":"DocumentName.docx","content":"Full updated text of the document...","format":"docx"}]
+  (Use "docx", "pdf", or "text" as the format). If updating an existing file, include its fileId if known:
+  [ACTION:DRIVE_SAVE:{"fileId":"...","name":"DocumentName.docx","content":"Full updated text...","format":"docx"}]
+- When asked to check Drive for a file and make a client card, confirm it cleanly and emit [ACTION:CREATE_CLIENT:{"name":"...","practiceArea":"General Practice"}].
+Direct Google Drive Link: https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH?usp=drive_link`;
 
       const documentContextStr = uploadedFile 
         ? `\n\n[Active Reference Document (${uploadedFile.name}):]\n${uploadedFile.content.slice(0, 15000)}\n\nPlease analyze, audit, or answer questions strictly based on the above document content when the user asks about it.`
@@ -1144,10 +1561,11 @@ export default function AIStaffTab({
 
       const data = await response.json();
       if (data.reply) {
+        const cleanReply = executeActionsAndCleanReply(data.reply, queryText, profile.name);
         onAddMessage({
           id: `m-rep-${Date.now()}`,
           sender: 'assistant',
-          content: data.reply,
+          content: cleanReply,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           agentName: profile.name
         });
@@ -1158,7 +1576,17 @@ export default function AIStaffTab({
 
         // Auto SPEAK response out loud!
         if (automaticSpeakMode) {
-          speakResponseText(data.reply, profile.voiceName);
+          speakResponseText(cleanReply, profile.voiceName);
+        } else {
+          isProcessingSpokenCommandRef.current = false;
+          if (isListeningRef.current) {
+            safeRestartRecognition(400);
+          }
+        }
+      } else {
+        isProcessingSpokenCommandRef.current = false;
+        if (isListeningRef.current) {
+          safeRestartRecognition(400);
         }
       }
     } catch {
@@ -1169,6 +1597,10 @@ export default function AIStaffTab({
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         agentName: profile.name
       });
+      isProcessingSpokenCommandRef.current = false;
+      if (isListeningRef.current) {
+        safeRestartRecognition(400);
+      }
     } finally {
       setSendingMessage(false);
     }
@@ -1225,9 +1657,18 @@ export default function AIStaffTab({
         .filter(m => isMessageForProfile(m.agentName, activeProfile.id))
         .concat(userMsg);
 
-      const progressivePromptOffset = `You have a rapport score of ${nextRapport}% (${nextPersonality} relationship stance) and a case familiarity score of ${nextFamiliarity}%. 
-      Your Aggression meter is locked at ${activeProgress.prosecutorialAggression}%. 
-      Speak and respond in character, reflecting this exact progressive confidence level, being ${nextRapport > 50 ? 'highly collaborative, sharing deep insights' : 'procedural and cautious'} in tone. Respond entirely as a high-fidelity female legal expert. [GOOGLE DRIVE ACCESS & DIRECT LINK MANDATE]: You have full read/write/indexing access to all Google Drive folders for level23consulting@gmail.com (Folder ID: 1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH). Direct Clickable Folder URL: https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH?usp=drive_link. Whenever asked about Google Drive, client files, or folder access, ALWAYS provide this exact clickable link!`;
+      const progressivePromptOffset = `DIRECT CO-COUNSEL MODE & FULL GOOGLE DRIVE ACCESS:
+- You (${activeProfile.name}), alongside Phoenix, EVE, and Alure/Allure, have FULL READ, WRITE, EDIT, CREATE, and SYNC ACCESS to Google Drive (level23consulting@gmail.com, Folder ID: 1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH).
+- You are fully authorized and capable of editing Google Drive files, creating new documents, updating client files, and saving revisions directly into Google Drive.
+- NEVER state that you cannot edit Drive, that you cannot modify files, or that you lack Drive write permissions. You have full edit access.
+- When asked to edit, revise, update, draft, save, or create a document or file in Google Drive:
+  1. Confirm the exact edits or new draft made in 1-2 direct sentences.
+  2. Emit an executable action tag:
+  [ACTION:DRIVE_SAVE:{"name":"DocumentName.docx","content":"Full updated text of the document...","format":"docx"}]
+  (Use "docx", "pdf", or "text" as the format). If updating an existing file, include its fileId if known:
+  [ACTION:DRIVE_SAVE:{"fileId":"...","name":"DocumentName.docx","content":"Full updated text...","format":"docx"}]
+- When asked to check Drive for a file and make a client card, confirm it cleanly and emit [ACTION:CREATE_CLIENT:{"name":"...","practiceArea":"General Practice"}].
+Direct Google Drive Link: https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH?usp=drive_link`;
 
       const documentContextStr = uploadedFile 
         ? `\n\n[Active Reference Document (${uploadedFile.name}):]\n${uploadedFile.content.slice(0, 15000)}\n\nPlease analyze, audit, or answer questions strictly based on the above document content when the user asks about it.`
@@ -1246,10 +1687,11 @@ export default function AIStaffTab({
 
       const data = await response.json();
       if (data.reply) {
+        const cleanReply = executeActionsAndCleanReply(data.reply, userInput, activeProfile.name);
         onAddMessage({
           id: `m-rep-${Date.now()}`,
           sender: 'assistant',
-          content: data.reply,
+          content: cleanReply,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           agentName: activeProfile.name
         });
@@ -1260,7 +1702,7 @@ export default function AIStaffTab({
 
         // SPEAK BACK the response automatically if active!
         if (automaticSpeakMode) {
-          speakResponseText(data.reply, activeProfile.voiceName);
+          speakResponseText(cleanReply, activeProfile.voiceName);
         }
       } else {
         onAddMessage({
@@ -1362,7 +1804,7 @@ export default function AIStaffTab({
    - **Gaps & Omissions**: Unsigned standard notary boxes detected. Missing supplementary 1040 schedules.
    - **Strategic Position**: Defaulting to immediate discovery commands and filing concurrent petitions under CA Family Code § 3600.
 
-*Generated by iiiamadex AI Staff. Click 'Compile Deep briefing' on the tools tray to execute a granular audit.*`;
+*Generated by illamadex AI Staff. Click 'Compile Deep briefing' on the tools tray to execute a granular audit.*`;
 
           const genericLiability = `### ⚖️ COMMUNITY ASSET & LIABILITY RISK GRID
 **Target**: \`${file.name}\`  
@@ -1423,6 +1865,88 @@ export default function AIStaffTab({
     setDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFileUpload(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleCreateOrMergeClientFile = async () => {
+    if (!uploadedFile) return;
+    setIsMergingClientFile(true);
+    setClientMergeFeedback(null);
+    try {
+      const res = await fetch('/api/drive/batch-process-uploaded-files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: [{
+            name: uploadedFile.name,
+            size: uploadedFile.size,
+            type: uploadedFile.type || 'text/plain',
+            contentText: uploadedFile.content
+          }],
+          mergeToOneClient: true,
+          existingClients: (clients || []).map(c => ({ id: c.id, name: c.name, email: c.email, phone: c.phone, practiceArea: c.practiceArea }))
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to extract client file from document');
+      }
+
+      const detected = data.result?.detectedClients?.[0];
+      if (!detected) {
+        throw new Error('No client profile could be identified from the document text');
+      }
+
+      if (onAddClient) {
+        onAddClient({
+          name: detected.name,
+          email: detected.email || 'client@firm.legal',
+          phone: detected.phone || '+1 (555) 019-2834',
+          status: 'active',
+          intakeNotes: detected.intakeNotes,
+          practiceArea: detected.practiceArea || 'General'
+        });
+      }
+
+      if (onAddMatter && detected.matter) {
+        onAddMatter({
+          title: detected.matter.title || `${detected.name} Legal Filing`,
+          caseNumber: `L-${Math.floor(1000 + Math.random() * 9000)}-2026`,
+          clientId: detected.id || `c-${Date.now()}`,
+          clientName: detected.name,
+          practiceArea: detected.practiceArea || 'General',
+          status: 'active',
+          billingRate: parseInt((detected.matter.billingRate || '350').replace(/[^0-9]/g, '')) || 350,
+          billedHours: 1.5,
+          description: detected.matter.description || detected.intakeNotes,
+          tasks: [
+            { id: `t-${Date.now()}-1`, title: 'Review intake packet and client facts', completed: true, dueDate: '2026-08-20' },
+            { id: `t-${Date.now()}-2`, title: 'Draft initial petition and summons', completed: false, dueDate: detected.matter.filingDeadline || '2026-09-15' }
+          ],
+          riskAssessment: `Intake extracted from desk document: ${uploadedFile.name}`
+        });
+      }
+
+      const feedback = `Client file created & merged for "${detected.name}" with dates and facts consolidated.`;
+      setClientMergeFeedback(feedback);
+
+      const datesTimeline = (detected.keyDates || [])
+        .map((kd: any) => `• **${kd.date}**: ${kd.event}`)
+        .join('\n');
+
+      onAddMessage({
+        id: `m-merge-${Date.now()}`,
+        sender: 'assistant',
+        content: `📁 **[Client File Consolidated & Merged]**\n\nExtracted information from \`${uploadedFile.name}\` into identified client file **${detected.name}**.\n\n- **Practice Area:** ${detected.practiceArea || 'General'}\n- **Matter:** ${detected.matter?.title || 'Active File'}\n- **Fee:** ${detected.matter?.retainerAmount || '$3,500'}\n\n**Chronology & Timeline Milestones Merged:**\n${datesTimeline || 'Document dates reconciled into client record'}\n\n*Client record and active matter placed into firm ledger.*`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        agentName: activeProfile.name
+      });
+    } catch (err: any) {
+      console.error('Failed to create/merge client file:', err);
+      setClientMergeFeedback(`Error: ${err.message}`);
+    } finally {
+      setIsMergingClientFile(false);
     }
   };
 
@@ -1523,31 +2047,332 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
 - EVE: Administrative Receptionist & Ollama Docket Router
 =============================================================================`;
 
+  // Google Drive Suite & Live File Editor Renderer (shared by Phoenix, Eve, Allure, Sentry)
+  const renderGoogleDriveSuite = () => {
+    const filteredFiles = driveFiles.filter(f => 
+      !driveSearchFilter || f.name.toLowerCase().includes(driveSearchFilter.toLowerCase())
+    );
+
+    return (
+      <div className="flex-1 flex flex-col min-h-0 p-3 space-y-3">
+        {/* Drive Info Card */}
+        <div className="bg-[#090e1c] border border-emerald-500/30 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-sm shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="p-1.5 bg-emerald-950/80 text-emerald-400 border border-emerald-500/30 rounded-lg shrink-0">
+              <FolderOpen className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <h4 className="text-[11px] font-bold text-white font-mono truncate">Google Drive Workspace</h4>
+                <span className="text-[7.5px] uppercase tracking-wider font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/30 px-1 py-0.2 rounded flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  FULL EDIT ACCESS
+                </span>
+              </div>
+              <p className="text-[8.5px] text-slate-400 font-mono truncate">level23consulting@gmail.com • Folder: 1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={fetchStaffDriveFiles}
+              disabled={isLoadingDriveFiles}
+              className="p-1.5 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 rounded-lg text-[9px] font-mono flex items-center gap-1 cursor-pointer transition disabled:opacity-50"
+              title="Refresh Google Drive Files"
+            >
+              <RefreshCw className={`w-3 h-3 ${isLoadingDriveFiles ? 'animate-spin text-emerald-400' : ''}`} />
+            </button>
+            <a
+              href="https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH?usp=drive_link"
+              target="_blank"
+              rel="noreferrer"
+              className="p-1.5 bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-emerald-400 rounded-lg text-[9px] font-mono flex items-center gap-1 cursor-pointer transition"
+              title="Open folder in Google Drive"
+            >
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        </div>
+
+        {driveNotification && (
+          <div className="p-2 bg-emerald-950/70 border border-emerald-500/40 rounded-xl text-[9px] font-mono text-emerald-300 flex items-center justify-between gap-2 animate-fade-in shadow shrink-0">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="truncate">{driveNotification}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDriveNotification(null)}
+              className="text-slate-400 hover:text-white shrink-0"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+
+        {/* Sub-tabs: Files list vs Live Document Editor */}
+        <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-1.5 shrink-0">
+          <div className="flex items-center gap-1 bg-[#050812] p-0.5 rounded-lg border border-slate-800 text-[9px] font-mono font-bold">
+            <button
+              type="button"
+              onClick={() => setStaffDriveTab('files')}
+              className={`px-2 py-1 rounded transition flex items-center gap-1 cursor-pointer ${
+                staffDriveTab === 'files' ? 'bg-emerald-900/80 text-emerald-200 border border-emerald-500/30' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <BookOpen className="w-3 h-3" />
+              <span>Drive Files ({driveFiles.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStaffDriveTab('editor')}
+              className={`px-2 py-1 rounded transition flex items-center gap-1 cursor-pointer ${
+                staffDriveTab === 'editor' ? 'bg-emerald-900/80 text-emerald-200 border border-emerald-500/30' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Edit2 className="w-3 h-3" />
+              <span>Document Editor</span>
+              {selectedDriveFile && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>}
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={createNewDriveDraft}
+            className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[8.5px] font-mono font-bold flex items-center gap-1 cursor-pointer transition shadow"
+          >
+            <Plus className="w-3 h-3" />
+            <span>New File</span>
+          </button>
+        </div>
+
+        {/* Mode View: Files List */}
+        {staffDriveTab === 'files' ? (
+          <div className="flex-1 flex flex-col min-h-0 space-y-2">
+            {/* Search bar */}
+            <div className="relative shrink-0">
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search Drive files & pleadings..."
+                value={driveSearchFilter}
+                onChange={(e) => setDriveSearchFilter(e.target.value)}
+                className="w-full bg-[#060a14] border border-slate-800 rounded-lg pl-8 pr-2.5 py-1.5 text-[9.5px] font-mono text-slate-200 placeholder:text-slate-600 outline-none focus:border-emerald-500/60"
+              />
+            </div>
+
+            {/* Files List Scroll */}
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-0.5">
+              {isLoadingDriveFiles ? (
+                <div className="py-8 text-center space-y-2">
+                  <RefreshCw className="w-5 h-5 text-emerald-400 animate-spin mx-auto" />
+                  <p className="text-[9px] font-mono text-slate-400">Loading Google Drive files...</p>
+                </div>
+              ) : filteredFiles.length === 0 ? (
+                <div className="py-8 text-center space-y-2 border border-dashed border-slate-800 rounded-xl p-4">
+                  <FolderOpen className="w-8 h-8 text-slate-600 mx-auto" />
+                  <p className="text-[10px] font-mono text-slate-400">No files found</p>
+                  <button
+                    type="button"
+                    onClick={createNewDriveDraft}
+                    className="px-2.5 py-1 bg-emerald-950 text-emerald-300 border border-emerald-500/30 rounded text-[9px] font-mono font-bold hover:bg-emerald-900 transition cursor-pointer"
+                  >
+                    Create New File
+                  </button>
+                </div>
+              ) : (
+                filteredFiles.map((file) => {
+                  const isDocx = file.name.toLowerCase().endsWith('.docx') || file.mimeType?.includes('word');
+                  const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.mimeType?.includes('pdf');
+                  return (
+                    <div
+                      key={file.id}
+                      className="p-2.5 bg-[#060a14] hover:bg-[#0b1224] border border-slate-800 hover:border-emerald-500/40 rounded-xl transition flex items-center justify-between gap-2.5 group"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`p-1.5 rounded-lg shrink-0 ${isDocx ? 'bg-blue-950/80 text-blue-400 border border-blue-500/30' : isPdf ? 'bg-rose-950/80 text-rose-400 border border-rose-500/30' : 'bg-slate-800 text-slate-300'}`}>
+                          <FileText className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[9.5px] font-bold text-slate-200 block truncate font-mono group-hover:text-emerald-300 transition">
+                            {file.name}
+                          </span>
+                          <div className="flex items-center gap-1.5 text-[8px] font-mono text-slate-500 mt-0.5">
+                            <span>{file.size || '45 KB'}</span>
+                            <span>•</span>
+                            <span className="uppercase text-emerald-400/80 font-bold">{isDocx ? 'Word (.docx)' : isPdf ? 'PDF (.pdf)' : 'Text (.txt)'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => openDriveFileForEditing(file.id)}
+                          className="px-2 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/30 rounded text-[8.5px] font-mono font-bold flex items-center gap-1 cursor-pointer transition shadow"
+                        >
+                          <Edit2 className="w-2.5 h-2.5" />
+                          <span>Edit</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        ) : (
+          /* Mode View: Live Document Editor */
+          <div className="flex-1 flex flex-col min-h-0 space-y-2">
+            {/* File Name & Format Row */}
+            <div className="grid grid-cols-12 gap-2 shrink-0">
+              <div className="col-span-8">
+                <label className="text-[8px] font-mono font-bold text-slate-400 block mb-1">DOCUMENT TITLE</label>
+                <input
+                  type="text"
+                  value={driveFileName}
+                  onChange={(e) => setDriveFileName(e.target.value)}
+                  placeholder="Document_Name.docx"
+                  className="w-full bg-[#060a14] border border-slate-800 rounded px-2 py-1 text-[9.5px] font-mono text-slate-200 outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div className="col-span-4">
+                <label className="text-[8px] font-mono font-bold text-slate-400 block mb-1">FORMAT</label>
+                <select
+                  value={driveSaveFormat}
+                  onChange={(e) => setDriveSaveFormat(e.target.value as any)}
+                  className="w-full bg-[#060a14] border border-slate-800 rounded px-1.5 py-1 text-[9px] font-mono text-emerald-300 outline-none focus:border-emerald-500"
+                >
+                  <option value="docx">Word (.docx)</option>
+                  <option value="pdf">PDF (.pdf)</option>
+                  <option value="text">Plain Text (.txt)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Editor Stats Bar */}
+            <div className="flex items-center justify-between text-[8px] font-mono text-slate-500 px-1 shrink-0">
+              <div className="flex items-center gap-2">
+                <span>Lines: <strong className="text-slate-300">{driveFileContent.split('\n').length}</strong></span>
+                <span>•</span>
+                <span>Words: <strong className="text-slate-300">{driveFileContent.trim() ? driveFileContent.trim().split(/\s+/).length : 0}</strong></span>
+                <span>•</span>
+                <span>Chars: <strong className="text-slate-300">{driveFileContent.length}</strong></span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(driveFileContent);
+                    setDriveNotification("Content copied to clipboard!");
+                    setTimeout(() => setDriveNotification(null), 3000);
+                  }}
+                  className="hover:text-emerald-400 cursor-pointer"
+                  title="Copy text"
+                >
+                  Copy
+                </button>
+                <span>•</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveViewingContent(driveFileContent);
+                    setActiveViewingTitle(driveFileName);
+                    setShowFullscreenDoc(true);
+                  }}
+                  className="hover:text-emerald-400 cursor-pointer"
+                  title="Maximize preview"
+                >
+                  Maximize
+                </button>
+              </div>
+            </div>
+
+            {/* Main Editable Text Area */}
+            <div className="flex-1 min-h-0 bg-[#040810] border border-slate-800 rounded-xl overflow-hidden flex flex-col focus-within:border-emerald-500/50">
+              <textarea
+                value={driveFileContent}
+                onChange={(e) => setDriveFileContent(e.target.value)}
+                placeholder="Enter or draft legal pleading, petition, declaration, or memorandum here..."
+                className="flex-1 w-full p-3 bg-transparent text-emerald-100 font-mono text-[10px] leading-relaxed resize-none outline-none overflow-y-auto selection:bg-emerald-500/30"
+                spellCheck={false}
+              />
+            </div>
+
+            {/* Action Row */}
+            <div className="flex items-center justify-between gap-2 shrink-0 pt-1">
+              <button
+                type="button"
+                onClick={() => setStaffDriveTab('files')}
+                className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg text-[9px] font-mono cursor-pointer transition border border-slate-800"
+              >
+                Back to Files
+              </button>
+
+              <button
+                type="button"
+                disabled={isSavingToDrive}
+                onClick={() => saveStaffDriveFile()}
+                className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg text-[9.5px] font-mono font-bold flex items-center gap-1.5 cursor-pointer transition shadow border border-emerald-400/40 disabled:opacity-50"
+              >
+                {isSavingToDrive ? (
+                  <>
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    <span>SAVING TO DRIVE...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3 h-3 text-emerald-200" />
+                    <span>⚡ SAVE & PUSH TO GOOGLE DRIVE</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div id="ai-chat-tab" className="flex flex-col gap-2.5 h-full min-h-0 overflow-hidden">
       
       {/* MICROPHONE PERMISSION / ERROR ALERT BANNER (ONLY SHOWN ON ERROR) */}
       {(speechError || micPermissionGranted === false) && (
-        <div className="bg-amber-950/80 border border-amber-500/50 rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-amber-200 text-[10px] font-mono shrink-0 shadow-md">
+        <div className="bg-amber-950/80 border border-amber-500/50 rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-amber-200 text-[10px] font-mono shrink-0 shadow-md">
           <div className="flex items-center gap-2 min-w-0">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 animate-bounce" />
             <span className="truncate">
               <strong className="text-white">Microphone Notice:</strong> {speechError || "Microphone access needed for voice controls."}
             </span>
           </div>
-          <button
-            type="button"
-            onClick={async () => {
-              const active = await startMicAudioAnalyzer();
-              if (active) {
-                setSpeechError(null);
-                setMicPermissionGranted(true);
-              }
-            }}
-            className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-md text-[9px] uppercase shrink-0 transition cursor-pointer"
-          >
-            Allow Mic
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={async () => {
+                const active = await startMicAudioAnalyzer();
+                if (active) {
+                  setSpeechError(null);
+                  setMicPermissionGranted(true);
+                }
+              }}
+              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-md text-[9px] uppercase shrink-0 transition cursor-pointer"
+            >
+              Allow Mic
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                runMicDiagnostics();
+                setShowMicTroubleshooter(true);
+              }}
+              className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/40 font-bold rounded-md text-[9px] uppercase shrink-0 transition cursor-pointer flex items-center gap-1"
+            >
+              <Wrench className="w-2.5 h-2.5" />
+              <span>Fix / Test Mic</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -1685,6 +2510,20 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
             className="p-1 bg-[#0d1624] text-rose-400 border border-rose-500/30 rounded-lg shadow hover:border-rose-500/50 cursor-pointer flex items-center justify-center font-bold"
           >
             <VolumeX className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Mic Troubleshooter / Fix Button */}
+          <button
+            type="button"
+            onClick={() => {
+              runMicDiagnostics();
+              setShowMicTroubleshooter(true);
+            }}
+            className="px-2 py-1 rounded-lg text-[9px] font-mono font-bold tracking-wider border bg-[#090d16] hover:bg-slate-900 text-amber-300 border-amber-500/30 hover:border-amber-400/60 transition-all cursor-pointer flex items-center gap-1 shrink-0"
+            title="Open Microphone Diagnostics, Audio Test, and Permissions Repair Suite"
+          >
+            <Wrench className="w-3 h-3 text-amber-400" />
+            <span>MIC FIX</span>
           </button>
 
           {/* Toggle Hands-Free Suite Control Panel Button */}
@@ -2036,44 +2875,82 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
               </div>
             ) : (
               /* Active Uploaded Document Status Panel */
-              <div className="p-2 bg-gradient-to-r from-teal-950/15 to-[#090d16] border border-teal-500/20 rounded-xl relative overflow-hidden flex items-center justify-between gap-3 animate-fade-in">
-                <div className="flex items-center gap-2.5 min-w-0 relative">
-                  <FileText className="w-4 h-4 text-teal-450 shrink-0" />
-                  <div className="min-w-0 leading-tight">
-                    <span className="text-[9.5px] font-bold text-white block truncate font-mono">{uploadedFile.name}</span>
-                    <span className="text-[8px] text-slate-505 font-mono block mt-0.5">
-                      {uploadedFile.size} • <span className="text-teal-400 animate-pulse font-bold uppercase tracking-wider">Projected on Court Viewer ➔</span>
-                    </span>
+              <div className="space-y-1.5">
+                <div className="p-2 bg-gradient-to-r from-teal-950/15 to-[#090d16] border border-teal-500/20 rounded-xl relative overflow-hidden flex items-center justify-between gap-3 animate-fade-in">
+                  <div className="flex items-center gap-2.5 min-w-0 relative">
+                    <FileText className="w-4 h-4 text-teal-400 shrink-0" />
+                    <div className="min-w-0 leading-tight">
+                      <span className="text-[9.5px] font-bold text-white block truncate font-mono">{uploadedFile.name}</span>
+                      <span className="text-[8px] text-slate-400 font-mono block mt-0.5">
+                        {uploadedFile.size} • <span className="text-teal-400 animate-pulse font-bold uppercase tracking-wider">Projected on Court Viewer ➔</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 relative shrink-0">
+                    <label className="px-1.5 py-0.5 text-[8.5px] font-mono text-slate-400 border border-slate-800 hover:text-white hover:border-slate-700 bg-slate-900/60 rounded cursor-pointer transition">
+                      Replace
+                      <input
+                        type="file"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            handleFileUpload(e.target.files[0]);
+                          }
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUploadedFile(null);
+                        setDocSummaryText('');
+                        setDocLiabilityText('');
+                        setDocClaimsText('');
+                        setClientMergeFeedback(null);
+                      }}
+                      className="p-1 text-slate-500 hover:text-rose-450 rounded transition cursor-pointer"
+                      title="Unload Reference Document"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 relative shrink-0">
-                  <label className="px-1.5 py-0.5 text-[8.5px] font-mono text-slate-400 border border-slate-800 hover:text-white hover:border-slate-700 bg-slate-900/60 rounded cursor-pointer transition">
-                    Replace
-                    <input
-                      type="file"
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          handleFileUpload(e.target.files[0]);
-                        }
-                      }}
-                      className="hidden"
-                    />
-                  </label>
+                {/* Direct Action: Merge into single client file without duplicating */}
+                <div className="flex items-center justify-between gap-2 bg-[#060a14] px-2 py-1.5 rounded-lg border border-indigo-500/30">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Sparkles className="w-3 h-3 text-indigo-400 shrink-0" />
+                    <span className="text-[8.5px] font-mono text-slate-300 truncate">
+                      Single Identified Client Intake & Merging
+                    </span>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      setUploadedFile(null);
-                      setDocSummaryText('');
-                      setDocLiabilityText('');
-                      setDocClaimsText('');
-                    }}
-                    className="p-1 text-slate-500 hover:text-rose-450 rounded transition cursor-pointer"
-                    title="Unload Reference Document"
+                    disabled={isMergingClientFile}
+                    onClick={handleCreateOrMergeClientFile}
+                    className="px-2 py-1 bg-gradient-to-r from-indigo-700 to-teal-700 hover:from-indigo-600 hover:to-teal-600 text-white rounded text-[8px] font-mono font-bold shrink-0 flex items-center gap-1 cursor-pointer transition shadow border border-indigo-500/40 disabled:opacity-60"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    {isMergingClientFile ? (
+                      <>
+                        <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                        <span>MERGING...</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-2.5 h-2.5 text-teal-300" />
+                        <span>MERGE TO CLIENT FILE</span>
+                      </>
+                    )}
                   </button>
                 </div>
+
+                {clientMergeFeedback && (
+                  <div className="px-2 py-1 bg-emerald-950/40 border border-emerald-500/30 rounded text-[8px] font-mono text-emerald-300 flex items-center gap-1.5 animate-fade-in">
+                    <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+                    <span className="truncate">{clientMergeFeedback}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2129,6 +3006,19 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
                 <div className="flex items-center gap-1 bg-[#050812] p-1 rounded-xl border border-slate-800 overflow-x-auto text-[10px] font-mono font-bold">
                   <button
                     type="button"
+                    onClick={() => {
+                      setEveSubTab('driveEditor');
+                      fetchStaffDriveFiles();
+                    }}
+                    className={`px-2.5 py-1.5 rounded-lg transition shrink-0 flex items-center gap-1 ${
+                      eveSubTab === 'driveEditor' ? 'bg-emerald-900/80 text-emerald-200 border border-emerald-500/40 shadow' : 'text-emerald-400/80 hover:text-emerald-300'
+                    }`}
+                  >
+                    <FolderOpen className="w-3 h-3 text-emerald-400" />
+                    <span>📂 Drive Suite</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setEveSubTab('factCheck')}
                     className={`px-2.5 py-1.5 rounded-lg transition shrink-0 flex items-center gap-1 ${
                       eveSubTab === 'factCheck' ? 'bg-indigo-900/80 text-indigo-200 border border-indigo-500/40 shadow' : 'text-slate-400 hover:text-white'
@@ -2173,6 +3063,13 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
                     <span>⚡ Brief Phoenix</span>
                   </button>
                 </div>
+
+                {/* TAB 0: DRIVE SUITE & FILE EDITOR */}
+                {eveSubTab === 'driveEditor' && (
+                  <div className="bg-[#050810]/40 border border-emerald-500/20 p-2 rounded-xl flex-1 flex flex-col min-h-[480px]">
+                    {renderGoogleDriveSuite()}
+                  </div>
+                )}
 
                 {/* TAB 1: FACT-CHECKER */}
                 {eveSubTab === 'factCheck' && (
@@ -2444,10 +3341,10 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
                 {/* TAB 4: FILING ROUTER (EXISTING ROUTER & REMINDERS) */}
                 {eveSubTab === 'router' && (
                   <div className="space-y-3">
-                    {/* Section 1: iiiamadex FILE ROUTER */}
+                    {/* Section 1: illamadex FILE ROUTER */}
                     <div className="bg-[#050810]/40 border border-[#1e293b] p-3 rounded-xl space-y-2.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-mono text-slate-400 font-black uppercase tracking-widest">📂 iiiamadex filing system router</span>
+                        <span className="text-[9px] font-mono text-slate-400 font-black uppercase tracking-widest">📂 illamadex filing system router</span>
                         <span className="text-[8px] font-mono bg-emerald-950/30 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase font-black">
                           {eveRoutedFiles.length} of {evePendingFiles.length} Routed
                         </span>
@@ -2510,7 +3407,7 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
                         </div>
 
                         <div className="flex flex-col gap-1">
-                          <span className="text-[8px] text-slate-500 font-black uppercase">iiiamadex Target Folder</span>
+                          <span className="text-[8px] text-slate-500 font-black uppercase">illamadex Target Folder</span>
                           <select 
                             value={selectedFolderToRoute} 
                             onChange={(e) => setSelectedFolderToRoute(e.target.value)}
@@ -2534,16 +3431,16 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
                           setTimeout(() => {
                             setEveRoutedFiles(prev => [...prev, selectedFileToRoute]);
                             setIsRoutingFile(false);
-                            const notify = `Successfully routed "${targetName}" to "/iiiamadex/Family_Law/Sarah_Jenkins/${selectedFolderToRoute}". Secure metadata synced and Phoenix notified!`;
+                            const notify = `Successfully routed "${targetName}" to "/illamadex/Family_Law/Sarah_Jenkins/${selectedFolderToRoute}". Secure metadata synced and Phoenix notified!`;
                             setRoutingNotification(notify);
                             
                             onAddMessage({
                               id: `eve-route-alert-${Date.now()}`,
                               sender: 'assistant',
-                              content: `### 📂 iiiamadex FILING SYSTEM ROUTER SUCCESS
+                              content: `### 📂 illamadex FILING SYSTEM ROUTER SUCCESS
 EVE has completed document synchronization audit:
 - **Routed File**: \`${targetName}\`
-- **Target Folder**: \`/iiiamadex/Family_Law/Sarah_Jenkins/${selectedFolderToRoute}/\`
+- **Target Folder**: \`/illamadex/Family_Law/Sarah_Jenkins/${selectedFolderToRoute}/\`
 - **Status**: Verified and fully indexed. Database cache buffers cleared. Phoenix and Adonis notified.`,
                               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                               agentName: 'EVE'
@@ -2688,89 +3585,165 @@ EVE has completed document synchronization audit:
                 )}
 
               </div>
-            ) : !uploadedFile ? (
-              /* Drag & Drop Upload Zone */
-              <div 
-                className="flex-1 flex flex-col p-4"
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                <div className={`flex-1 flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl transition-all ${
-                  dragOver 
-                    ? 'border-teal-400 bg-teal-950/20 text-teal-300 scale-[0.99] shadow-inner' 
-                    : 'border-[#1e293b] bg-[#090d16]/30 text-slate-500 hover:border-[#334155]'
-                }`}>
-                  <UploadCloud className={`w-12 h-12 text-teal-500/40 mb-3 ${dragOver ? 'animate-bounce text-teal-400' : ''}`} />
-                  <h4 className="text-xs font-bold text-slate-300">Share or Drag Intakes / Case Documents Here</h4>
-                  <p className="text-[10px] text-slate-500 text-center max-w-xs mt-1.5 mb-4 leading-normal">
-                    Drag and drop any plain text contract, CSV matrix, court notes or pleadings. 
-                    Agents immediately read the document context in real time.
-                  </p>
-                  
-                  <label className="px-3 py-1.5 bg-teal-950/40 border border-teal-500/30 text-teal-400 font-bold rounded-lg text-[10px] tracking-wide hover:bg-teal-900 transition-all cursor-pointer shadow-[0_2px_0_#14b8a6] hover:shadow-[0_1px_0_#14b8a6] hover:-translate-y-[0.5px]">
-                    Browse File
-                    <input
-                      type="file"
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          handleFileUpload(e.target.files[0]);
-                        }
-                      }}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-              </div>
-
             ) : (
-              /* Live Scrollable Formatted Document Text-Area */
-              <div className="flex-1 flex flex-col min-h-0 overflow-hidden p-4 space-y-3">
-                <div className="flex items-center justify-between text-[9px] text-slate-400 shrink-0 bg-[#090d16] px-2.5 py-1.5 rounded-lg border border-[#1e293b]">
-                  <span className="font-mono">Reference Size: <strong className="text-white">{uploadedFile.size}</strong></span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveViewingContent(uploadedFile.content);
-                      setActiveViewingTitle(uploadedFile.name);
-                      setShowFullscreenDoc(true);
-                    }}
-                    className="px-2 py-0.5 text-[8.5px] font-mono bg-teal-500/10 border border-teal-500/30 hover:bg-teal-500/20 text-teal-400 rounded cursor-pointer transition flex items-center gap-1.5 font-bold"
-                    title="Maximize document to full portrait paper view"
-                  >
-                    <Maximize2 className="w-3 h-3" />
-                    <span>MAXIMIZE SHEET</span>
-                  </button>
+              /* Non-EVE Profiles (Phoenix, Sentry, Allure): Unified Workspace with Drive Suite + Document Context */
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                {/* Mode Selector for Phoenix / Sentry / Allure */}
+                <div className="px-3 pt-2.5 pb-1.5 flex items-center justify-between gap-2 border-b border-[#1e293b] bg-[#090d16]/60 shrink-0">
+                  <div className="flex items-center gap-1 bg-[#050812] p-0.5 rounded-lg border border-slate-800 text-[9px] font-mono font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setStaffWorkspaceMode('drive')}
+                      className={`px-2.5 py-1 rounded transition flex items-center gap-1.5 cursor-pointer ${
+                        staffWorkspaceMode === 'drive'
+                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40 shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <FolderOpen className="w-3 h-3 text-emerald-400" />
+                      <span>Google Drive Suite</span>
+                      <span className="text-[7.5px] uppercase font-bold text-emerald-400 bg-emerald-950/90 px-1 py-0.2 rounded border border-emerald-500/30">Full Edit</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStaffWorkspaceMode('context')}
+                      className={`px-2.5 py-1 rounded transition flex items-center gap-1.5 cursor-pointer ${
+                        staffWorkspaceMode === 'context'
+                          ? 'bg-teal-950 text-teal-300 border border-teal-500/40 shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <UploadCloud className="w-3 h-3 text-teal-400" />
+                      <span>Intake Reference {uploadedFile ? `(1 Active)` : ''}</span>
+                    </button>
+                  </div>
+
+                  {uploadedFile && staffWorkspaceMode === 'context' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDriveFileName(uploadedFile.name);
+                        setDriveFileContent(uploadedFile.content);
+                        const ext = uploadedFile.name.toLowerCase().endsWith('.pdf') ? 'pdf' : uploadedFile.name.toLowerCase().endsWith('.txt') ? 'text' : 'docx';
+                        setDriveSaveFormat(ext as any);
+                        setStaffWorkspaceMode('drive');
+                        setStaffDriveTab('editor');
+                      }}
+                      className="px-2 py-1 bg-emerald-950 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 rounded text-[8.5px] font-mono font-bold flex items-center gap-1 transition cursor-pointer"
+                      title="Load this uploaded reference document into the Google Drive editor to push changes to Drive"
+                    >
+                      <Edit2 className="w-2.5 h-2.5" />
+                      <span>Edit in Drive</span>
+                    </button>
+                  )}
                 </div>
 
-                {/* Inline workspace trigger buttons */}
-                <div className="grid grid-cols-2 gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUserInput(`Review this document ("${uploadedFile.name}") and Summary pinpoint all critical financial assets, community liabilities, and risk details.`);
-                    }}
-                    className="p-1.5 text-left text-[9px] font-bold text-teal-300 border border-teal-500/20 bg-teal-950/15 rounded-lg hover:border-teal-500/50 transition cursor-pointer flex items-center gap-1"
+                {staffWorkspaceMode === 'drive' ? (
+                  <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                    {renderGoogleDriveSuite()}
+                  </div>
+                ) : !uploadedFile ? (
+                  /* Drag & Drop Upload Zone */
+                  <div 
+                    className="flex-1 flex flex-col p-4"
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
                   >
-                    🚀 Phoenix Risk Audit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUserInput(`Run continuous validation check on this file ("${uploadedFile.name}"). Highlight formatting gaps, empty fields, or structural maintenance issues.`);
-                    }}
-                    className="p-1.5 text-left text-[9px] font-bold text-amber-300 border border-amber-500/20 bg-amber-950/15 rounded-lg hover:border-amber-500/50 transition cursor-pointer flex items-center gap-1"
-                  >
-                    🛠️ Sentry Applet Audit
-                  </button>
-                </div>
+                    <div className={`flex-1 flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl transition-all ${
+                      dragOver 
+                        ? 'border-teal-400 bg-teal-950/20 text-teal-300 scale-[0.99] shadow-inner' 
+                        : 'border-[#1e293b] bg-[#090d16]/30 text-slate-500 hover:border-[#334155]'
+                    }`}>
+                      <UploadCloud className={`w-12 h-12 text-teal-500/40 mb-3 ${dragOver ? 'animate-bounce text-teal-400' : ''}`} />
+                      <h4 className="text-xs font-bold text-slate-300">Share or Drag Intakes / Case Documents Here</h4>
+                      <p className="text-[10px] text-slate-500 text-center max-w-xs mt-1.5 mb-4 leading-normal">
+                        Drag and drop any plain text contract, CSV matrix, court notes or pleadings. 
+                        Agents immediately read the document context in real time.
+                      </p>
+                      
+                      <label className="px-3 py-1.5 bg-teal-950/40 border border-teal-500/30 text-teal-400 font-bold rounded-lg text-[10px] tracking-wide hover:bg-teal-900 transition-all cursor-pointer shadow-[0_2px_0_#14b8a6] hover:shadow-[0_1px_0_#14b8a6] hover:-translate-y-[0.5px]">
+                        Browse File
+                        <input
+                          type="file"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleFileUpload(e.target.files[0]);
+                            }
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ) : (
+                  /* Live Scrollable Formatted Document Text-Area */
+                  <div className="flex-1 flex flex-col min-h-0 overflow-hidden p-4 space-y-3">
+                    <div className="flex items-center justify-between text-[9px] text-slate-400 shrink-0 bg-[#090d16] px-2.5 py-1.5 rounded-lg border border-[#1e293b]">
+                      <span className="font-mono">Reference Size: <strong className="text-white">{uploadedFile.size}</strong></span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDriveFileName(uploadedFile.name);
+                            setDriveFileContent(uploadedFile.content);
+                            const ext = uploadedFile.name.toLowerCase().endsWith('.pdf') ? 'pdf' : uploadedFile.name.toLowerCase().endsWith('.txt') ? 'text' : 'docx';
+                            setDriveSaveFormat(ext as any);
+                            setStaffWorkspaceMode('drive');
+                            setStaffDriveTab('editor');
+                          }}
+                          className="px-2 py-0.5 text-[8.5px] font-mono bg-emerald-950 border border-emerald-500/40 text-emerald-300 rounded cursor-pointer transition flex items-center gap-1 font-bold"
+                          title="Open in Drive Suite to Edit and Save"
+                        >
+                          <FolderOpen className="w-3 h-3 text-emerald-400" />
+                          <span>EDIT IN DRIVE</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveViewingContent(uploadedFile.content);
+                            setActiveViewingTitle(uploadedFile.name);
+                            setShowFullscreenDoc(true);
+                          }}
+                          className="px-2 py-0.5 text-[8.5px] font-mono bg-teal-500/10 border border-teal-500/30 hover:bg-teal-500/20 text-teal-400 rounded cursor-pointer transition flex items-center gap-1.5 font-bold"
+                          title="Maximize document to full portrait paper view"
+                        >
+                          <Maximize2 className="w-3 h-3" />
+                          <span>MAXIMIZE</span>
+                        </button>
+                      </div>
+                    </div>
 
-                {/* Large reader canvas */}
-                <div className="flex-1 min-h-0 bg-[#040810] border border-[#1e293b] rounded-xl p-3.5 overflow-y-auto selection:bg-teal-500/30">
-                  <pre className="text-[11px] font-mono text-[#38bdf8] leading-relaxed whitespace-pre-wrap font-medium">
-                    {uploadedFile.content}
-                  </pre>
-                </div>
+                    {/* Inline workspace trigger buttons */}
+                    <div className="grid grid-cols-2 gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserInput(`Review this document ("${uploadedFile.name}") and Summary pinpoint all critical financial assets, community liabilities, and risk details.`);
+                        }}
+                        className="p-1.5 text-left text-[9px] font-bold text-teal-300 border border-teal-500/20 bg-teal-950/15 rounded-lg hover:border-teal-500/50 transition cursor-pointer flex items-center gap-1"
+                      >
+                        🚀 Phoenix Risk Audit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserInput(`Run continuous validation check on this file ("${uploadedFile.name}"). Highlight formatting gaps, empty fields, or structural maintenance issues.`);
+                        }}
+                        className="p-1.5 text-left text-[9px] font-bold text-amber-300 border border-amber-500/20 bg-amber-950/15 rounded-lg hover:border-amber-500/50 transition cursor-pointer flex items-center gap-1"
+                      >
+                        🛠️ Sentry Applet Audit
+                      </button>
+                    </div>
+
+                    {/* Large reader canvas */}
+                    <div className="flex-1 min-h-0 bg-[#040810] border border-[#1e293b] rounded-xl p-3.5 overflow-y-auto selection:bg-teal-500/30">
+                      <pre className="text-[11px] font-mono text-[#38bdf8] leading-relaxed whitespace-pre-wrap font-medium">
+                        {uploadedFile.content}
+                      </pre>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2797,6 +3770,22 @@ EVE has completed document synchronization audit:
             </div>
             
             <div className="flex items-center gap-2">
+              {/* Google Drive Status & Quick Switch Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setStaffWorkspaceMode('drive');
+                  setStaffDriveTab('files');
+                  fetchStaffDriveFiles();
+                }}
+                className="hidden sm:flex items-center gap-1.5 px-2 py-1 text-[9px] font-mono bg-emerald-950/70 hover:bg-emerald-900/80 border border-emerald-500/40 text-emerald-300 rounded shadow-sm transition cursor-pointer"
+                title="Google Drive Full Edit Mode Active (level23consulting@gmail.com)"
+              >
+                <FolderOpen className="w-3 h-3 text-emerald-400" />
+                <span className="font-bold">DRIVE: FULL EDIT</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              </button>
+
               {/* AI Engine & Backup Provider Badge */}
               <button
                 type="button"
@@ -3656,6 +4645,211 @@ EVE has completed document synchronization audit:
                   className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold uppercase cursor-pointer border border-emerald-400"
                 >
                   Save & Apply Provider Mode
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* MICROPHONE DIAGNOSTICS & HARDWARE TROUBLESHOOTER MODAL */}
+        {showMicTroubleshooter && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#0b121e] border border-teal-500/40 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden font-sans"
+            >
+              {/* Header */}
+              <div className="bg-[#070c16] border-b border-[#1e293b] p-4 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400">
+                    <Wrench className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <span>Microphone Diagnostics & Audio Repair Suite</span>
+                    </h3>
+                    <p className="text-[11px] text-slate-400 font-mono">
+                      Test hardware input, calibrate audio levels, and resolve browser permission blocks
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowMicTroubleshooter(false)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-4 space-y-4 overflow-y-auto max-h-[calc(90vh-130px)] custom-scrollbar">
+                
+                {/* 1. Real-Time Hardware Status & Live Input Meter */}
+                <div className="bg-[#060a12] border border-slate-800 rounded-xl p-3.5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-teal-400 flex items-center gap-1.5">
+                      <Radio className="w-4 h-4 text-teal-400 animate-pulse" />
+                      Live Audio Hardware Signal
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400">
+                      Permission: <strong className={micPermissionGranted ? "text-emerald-400" : "text-rose-400"}>
+                        {micPermissionGranted === true ? "GRANTED" : micPermissionGranted === false ? "DENIED / BLOCKED" : "PROMPT PENDING"}
+                      </strong>
+                    </span>
+                  </div>
+
+                  {/* VU Level Bar */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                      <span>Input Volume Level (Speak to test):</span>
+                      <span className="font-bold text-teal-300">{micVolume}%</span>
+                    </div>
+                    <div className="w-full h-3 bg-slate-900 border border-slate-800 rounded-full overflow-hidden p-0.5 flex">
+                      <div
+                        className={`h-full rounded-full transition-all duration-75 ${
+                          micVolume > 65 ? 'bg-amber-400' : micVolume > 15 ? 'bg-emerald-400' : 'bg-teal-600'
+                        }`}
+                        style={{ width: `${Math.max(4, micVolume)}%` }}
+                      ></div>
+                    </div>
+                  </div>
+
+                  {/* Detected Devices & Web Speech Status */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] font-mono">
+                    <div className="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
+                      <div className="text-slate-400 text-[9px] uppercase">Detected Input Device:</div>
+                      <div className="font-bold text-slate-200 mt-0.5 truncate">
+                        {detectedAudioDevices.length > 0
+                          ? detectedAudioDevices.map(d => d.label || 'Default Audio Microphone').join(', ')
+                          : micPermissionGranted ? 'Default Microphone Active' : 'No device enumerated yet'}
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
+                      <div className="text-slate-400 text-[9px] uppercase">Web Speech Engine:</div>
+                      <div className="font-bold mt-0.5 truncate text-emerald-400">
+                        {('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)
+                          ? 'Native Speech Engine Active (Chrome/Edge)'
+                          : 'Not Supported (Typing Mode Active)'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Interactive Loopback Test (Record 3s & Instant Playback) */}
+                <div className="bg-[#060a12] border border-slate-800 rounded-xl p-3.5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                      <Headphones className="w-4 h-4 text-amber-400" />
+                      3-Second Loopback Voice Test
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      Test speaker + mic simultaneously
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    Click the button below and speak a test sentence (e.g. <em>"Phoenix, wake up"</em>). The app will record 3 seconds and play it back so you can verify clear audio input.
+                  </p>
+
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={startLoopbackTest}
+                      disabled={isRecordingTestLoop}
+                      className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase font-mono flex items-center gap-2 transition cursor-pointer ${
+                        isRecordingTestLoop
+                          ? 'bg-rose-600 text-white animate-pulse border border-rose-400'
+                          : 'bg-teal-600 hover:bg-teal-500 text-white border border-teal-400'
+                      }`}
+                    >
+                      {isRecordingTestLoop ? (
+                        <>
+                          <Square className="w-3.5 h-3.5 fill-current" />
+                          <span>Recording... ({testRecordingCountdown}s)</span>
+                        </>
+                      ) : (
+                        <>
+                          <Mic className="w-3.5 h-3.5" />
+                          <span>Record 3s Test Snippet</span>
+                        </>
+                      )}
+                    </button>
+
+                    {testAudioUrl && (
+                      <div className="flex items-center gap-2 bg-slate-900 border border-emerald-500/40 rounded-lg px-3 py-1">
+                        <audio
+                          ref={testAudioPlayerRef}
+                          src={testAudioUrl}
+                          controls
+                          className="h-7 w-56 accent-teal-400"
+                        />
+                        <span className="text-[10px] font-mono text-emerald-400 font-bold">✓ Playback Ready</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. Common Fixes & Troubleshooting Guide */}
+                <div className="bg-[#060a12] border border-slate-800 rounded-xl p-3.5 space-y-2.5">
+                  <h4 className="text-[11px] font-bold uppercase text-slate-200 flex items-center gap-1.5">
+                    <HelpCircle className="w-3.5 h-3.5 text-teal-400" />
+                    How to Resolve Common Microphone Issues:
+                  </h4>
+                  
+                  <div className="space-y-2 text-[10.5px] text-slate-300">
+                    <div className="p-2 bg-slate-900/80 rounded-lg border border-slate-800/80 flex items-start gap-2">
+                      <span className="font-bold text-amber-400 shrink-0">1. Browser Permissions:</span>
+                      <span>
+                        Look at the left side of your browser address bar (where the URL is shown). Click the <strong>🔒 Lock</strong> or <strong>🎚️ Settings</strong> icon, change <strong>Microphone</strong> from <em>Block</em> to <strong>Allow</strong>, and refresh.
+                      </span>
+                    </div>
+
+                    <div className="p-2 bg-slate-900/80 rounded-lg border border-slate-800/80 flex items-start gap-2">
+                      <span className="font-bold text-amber-400 shrink-0">2. Embedded Preview Iframe:</span>
+                      <span>
+                        If you are viewing inside an embedded preview iframe, the browser may restrict mic access. Click <strong>"Open in New Tab"</strong> in the top-right toolbar to open the full app directly.
+                      </span>
+                    </div>
+
+                    <div className="p-2 bg-slate-900/80 rounded-lg border border-slate-800/80 flex items-start gap-2">
+                      <span className="font-bold text-amber-400 shrink-0">3. Device Occupied by Other Apps:</span>
+                      <span>
+                        Make sure applications like Zoom, Microsoft Teams, Discord, or Skype are not locking your microphone in exclusive mode.
+                      </span>
+                    </div>
+
+                    <div className="p-2 bg-slate-900/80 rounded-lg border border-slate-800/80 flex items-start gap-2">
+                      <span className="font-bold text-amber-400 shrink-0">4. Browser Recommendation:</span>
+                      <span>
+                        Live continuous wake-word detection (hot-mic) is natively optimized for <strong>Google Chrome</strong>, <strong>Microsoft Edge</strong>, and modern Chromium browsers.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div className="bg-[#070c16] border-t border-slate-800 p-3.5 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={resetAllAudioAndMic}
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-teal-500 text-teal-300 text-[10.5px] uppercase font-mono font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Reset & Reconnect Microphone</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowMicTroubleshooter(false)}
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold uppercase rounded-lg text-[10.5px] cursor-pointer border border-emerald-400 transition"
+                >
+                  Done
                 </button>
               </div>
             </motion.div>

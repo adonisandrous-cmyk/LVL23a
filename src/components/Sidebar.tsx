@@ -53,6 +53,7 @@ interface SidebarProps {
   onOpenResearch?: () => void;
   onOpenOmniUpload?: () => void;
   onOpenGoogleHosting?: () => void;
+  onOpenZenEntrance?: () => void;
 }
 
 export default function Sidebar({
@@ -67,7 +68,8 @@ export default function Sidebar({
   onOpenShortcuts,
   onOpenResearch,
   onOpenOmniUpload,
-  onOpenGoogleHosting
+  onOpenGoogleHosting,
+  onOpenZenEntrance
 }: SidebarProps) {
   const [driveSync, setDriveSync] = useState<DriveSyncState>(getDriveSyncState());
   const [isToastDismissed, setIsToastDismissed] = useState(false);
@@ -264,6 +266,29 @@ export default function Sidebar({
 
       {/* Sidebar Items Content */}
       <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
+        {/* Dedicated Full-Screen AI Co-Counsel Button */}
+        {onOpenZenEntrance && (
+          <button
+            type="button"
+            onClick={onOpenZenEntrance}
+            className="w-full mb-2 p-2 bg-gradient-to-r from-amber-500/15 via-teal-500/10 to-purple-500/10 hover:from-amber-500/25 hover:via-teal-500/20 hover:to-purple-500/20 border border-amber-500/40 hover:border-amber-400/70 rounded-xl flex items-center justify-between text-left transition-all group cursor-pointer shadow-sm"
+            title="Open Full Screen AI Co-Counsel Suite (Phoenix, EVE, Alure, Sentry)"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="p-1 rounded-lg bg-amber-500/20 text-amber-400 group-hover:scale-110 transition-transform shrink-0">
+                <Sparkles className="w-3.5 h-3.5" />
+              </div>
+              <div className="min-w-0 truncate">
+                <div className="text-[11px] font-bold text-amber-200 tracking-wide truncate">AI Co-Counsel</div>
+                <div className="text-[9px] text-slate-400 font-mono truncate">Phoenix • Voice • OCR</div>
+              </div>
+            </div>
+            <span className="text-[8.5px] font-mono font-bold px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded uppercase shrink-0">
+              Zen
+            </span>
+          </button>
+        )}
+
         {sidebarItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;

@@ -71,21 +71,24 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
     }
 
     try {
+      const cleanSpokenText = text
+        .replace(/https?:\/\/[^\s]+/g, 'the linked drive folder')
+        .replace(/[A-Za-z]:\\[^\s]+/g, 'your local desktop storage')
+        .replace(/[*#`_~\[\]{}()<>]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
       const response = await fetch('/api/gemini/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text,
+          text: cleanSpokenText,
           voiceName: selectedVoice
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`TTS server returned status ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (data.base64Audio) {
+      const data = response.ok ? await response.json() : null;
+      if (data && data.base64Audio) {
         // Initialize AudioContext
         if (!audioContextRef.current) {
           audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -137,69 +140,76 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
 
         source.start(0);
       } else {
-        throw new Error("No base64 audio returned");
+        // Direct seamless fallback to local high-fidelity browser speech synthesis
+        triggerBrowserSpeechFallback(cleanSpokenText);
       }
     } catch (e: any) {
-      console.warn("TTS API connection or quota issue, falling back to local high-fidelity browser synthesis:", e);
-      
-      // Fallback to local high-fidelity browser speechSynthesis
-      if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(text);
-        const voices = window.speechSynthesis.getVoices();
-        let matchedVoice = null;
-
-        if (selectedVoice === 'Aoede') {
-          // Find British UK English female voice - Case insensitive and extremely robust
-          matchedVoice = voices.find(v => {
-            const l = v.lang.toLowerCase();
-            const n = v.name.toLowerCase();
-            return (l.includes('gb') || l.includes('uk') || n.includes('british') || n.includes('united kingdom') || n.includes('england')) && (n.includes('female') || n.includes('natural') || n.includes('google'));
-          })
-          || voices.find(v => {
-            const l = v.lang.toLowerCase();
-            const n = v.name.toLowerCase();
-            return (l.includes('gb') || l.includes('uk') || n.includes('british') || n.includes('united kingdom') || n.includes('england'));
-          })
-          || voices.find(v => v.lang.toLowerCase().startsWith('en') && v.name.toLowerCase().includes('google'));
-        } else if (selectedVoice === 'Zephyr') {
-          matchedVoice = voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('zira'))
-                      || voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('female'))
-                      || voices.find(v => v.lang.toLowerCase().startsWith('en'));
-        } else if (selectedVoice === 'Eve') {
-          matchedVoice = voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('google'))
-                      || voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('siri'))
-                      || voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('female'))
-                      || voices.find(v => v.lang.toLowerCase().startsWith('en'));
-        } else {
-          matchedVoice = voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('samantha'))
-                      || voices.find(v => v.lang.toLowerCase().includes('us') && v.name.toLowerCase().includes('female'))
-                      || voices.find(v => v.lang.toLowerCase().startsWith('en'));
-        }
-
-        if (matchedVoice) utterance.voice = matchedVoice;
-        utterance.pitch = selectedVoice === 'Eve' ? 1.15 : 1.05;
-        utterance.rate = selectedVoice === 'Eve' ? 1.05 : 1.0;
-
-        utterance.onstart = () => {
-          setIsPlaying(true);
-        };
-        utterance.onend = () => {
-          setIsPlaying(false);
-        };
-        utterance.onerror = () => {
-          setIsPlaying(false);
-        };
-
-        // Pin reference to prevent garbage collection
-        activeUtteranceRef.current = utterance;
-        if (typeof window !== 'undefined') {
-          (window as any)._activeVoiceEngineUtterance = utterance;
-        }
-
-        window.speechSynthesis.speak(utterance);
-      }
+      triggerBrowserSpeechFallback(text);
     } finally {
       setIsSynthesizing(false);
+    }
+  };
+
+  const triggerBrowserSpeechFallback = (cleanSpoken: string) => {
+    if ('speechSynthesis' in window) {
+      const sanitized = cleanSpoken
+        .replace(/https?:\/\/[^\s]+/g, 'the online link')
+        .replace(/[A-Za-z]:\\[^\s]+/g, 'your local files')
+        .replace(/[*#`_~\[\]{}()<>]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const utterance = new SpeechSynthesisUtterance(sanitized);
+      const voices = window.speechSynthesis.getVoices();
+      const englishVoices = voices.filter(v => v.lang.toLowerCase().startsWith('en'));
+      let matchedVoice = null;
+
+      if (selectedVoice === 'Aoede') {
+        const ukVoices = englishVoices.filter(v => {
+          const l = v.lang.toLowerCase();
+          const n = v.name.toLowerCase();
+          return l.includes('gb') || l.includes('uk') || n.includes('british') || n.includes('united kingdom') || n.includes('england');
+        });
+        matchedVoice = ukVoices.find(v => {
+          const n = v.name.toLowerCase();
+          return (n.includes('natural') || n.includes('online') || n.includes('libby') || n.includes('sonia') || n.includes('serena') || n.includes('hazel') || n.includes('kate') || n.includes('fiona')) && !n.includes('david');
+        }) || ukVoices[0] || null;
+      } else if (selectedVoice === 'Zephyr') {
+        matchedVoice = englishVoices.find(v => {
+          const n = v.name.toLowerCase();
+          return (n.includes('natural') || n.includes('online') || n.includes('aria') || n.includes('ava') || n.includes('allison') || n.includes('karen')) && !n.includes('david');
+        }) || null;
+      } else {
+        matchedVoice = englishVoices.find(v => {
+          const n = v.name.toLowerCase();
+          return (n.includes('natural') || n.includes('online') || n.includes('jenny') || n.includes('samantha') || n.includes('google us') || n.includes('zira') || n.includes('female')) && !n.includes('david');
+        }) || null;
+      }
+
+      if (!matchedVoice) {
+        matchedVoice = englishVoices.find(v => !v.name.toLowerCase().includes('david') && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('natural') || v.name.toLowerCase().includes('google'))) || englishVoices[0] || voices[0] || null;
+      }
+
+      if (matchedVoice) utterance.voice = matchedVoice;
+      utterance.pitch = selectedVoice === 'Eve' ? 1.05 : 1.0;
+      utterance.rate = 0.98;
+
+      utterance.onstart = () => {
+        setIsPlaying(true);
+      };
+      utterance.onend = () => {
+        setIsPlaying(false);
+      };
+      utterance.onerror = () => {
+        setIsPlaying(false);
+      };
+
+      activeUtteranceRef.current = utterance;
+      if (typeof window !== 'undefined') {
+        (window as any)._activeVoiceEngineUtterance = utterance;
+      }
+
+      window.speechSynthesis.speak(utterance);
     }
   };
 

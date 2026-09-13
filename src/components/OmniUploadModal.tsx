@@ -25,7 +25,8 @@ import {
   Upload,
   Layers,
   FileUp,
-  UserPlus
+  UserPlus,
+  Clock
 } from 'lucide-react';
 import { Client, Matter, GeneratedDocument, EvidenceFile } from '../types';
 import { getAccessToken, googleSignIn } from '../lib/driveAuth';
@@ -67,7 +68,7 @@ export const OmniUploadModal: React.FC<OmniUploadModalProps> = ({
   const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
 
   // Google Drive Folder Batch Onboarding States
-  const [driveFolderInput, setDriveFolderInput] = useState<string>('https://drive.google.com/drive/folders/1St88KMt39_i9QtgUPf7GvVKu_cDvnSpU?usp=drive_link');
+  const [driveFolderInput, setDriveFolderInput] = useState<string>('https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH?usp=drive_link');
   const [isScanningDriveFolder, setIsScanningDriveFolder] = useState<boolean>(false);
   const [driveScanProgressText, setDriveScanProgressText] = useState<string>('');
   const [driveScanResult, setDriveScanResult] = useState<any | null>(null);
@@ -79,6 +80,9 @@ export const OmniUploadModal: React.FC<OmniUploadModalProps> = ({
   // Batch Multi-File Upload State
   const [batchUploadedFiles, setBatchUploadedFiles] = useState<{ name: string; size: string; contentText: string; type: string }[]>([]);
   const [isProcessingBatchFiles, setIsProcessingBatchFiles] = useState<boolean>(false);
+  const [mergeToOneClient, setMergeToOneClient] = useState<boolean>(true);
+  const [customClientNameOverride, setCustomClientNameOverride] = useState<string>('');
+  const [targetExistingClientId, setTargetExistingClientId] = useState<string>('');
 
   // Paste Roster State
   const [pastedRosterText, setPastedRosterText] = useState<string>('');
@@ -256,11 +260,16 @@ export const OmniUploadModal: React.FC<OmniUploadModalProps> = ({
 
       setBatchUploadedFiles(fileObjects);
 
-      // Call API to parse all files with Gemini
+      // Call API to parse all files with Gemini and merge to one identified client
       const res = await fetch('/api/drive/batch-process-uploaded-files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files: fileObjects })
+        body: JSON.stringify({ 
+          files: fileObjects,
+          mergeToOneClient: mergeToOneClient,
+          clientNameOverride: customClientNameOverride.trim() || undefined,
+          existingClients: clients.map(c => ({ id: c.id, name: c.name, email: c.email, phone: c.phone, practiceArea: c.practiceArea }))
+        })
       });
 
       const data = await res.json();
@@ -273,9 +282,10 @@ export const OmniUploadModal: React.FC<OmniUploadModalProps> = ({
       const idSet = new Set<string>(clientsList.map((c: any, idx: number) => c.id || `c-upload-${idx}`));
       setSelectedClientIdsToImport(idSet);
 
+      const summaryNote = data.result?.mergeSummary || `Extracted ${clientsList.length} client dossier(s) from ${files.length} uploaded files`;
       setStatusMessage({
         type: 'success',
-        text: `Extracted ${clientsList.length} actual client profiles & matters from your ${files.length} uploaded files!`
+        text: summaryNote
       });
     } catch (err: any) {
       console.error("Batch parse error:", err);
@@ -350,8 +360,9 @@ export const OmniUploadModal: React.FC<OmniUploadModalProps> = ({
 
     let addedCount = 0;
     for (const rawClient of clientsToCommit) {
+      const assignedClientId = targetExistingClientId || rawClient.id || `c-${Date.now()}-${addedCount}`;
       const newClientObj: Client = {
-        id: rawClient.id || `c-${Date.now()}-${addedCount}`,
+        id: assignedClientId,
         name: rawClient.name,
         email: rawClient.email || 'client@firm.legal',
         phone: rawClient.phone || '+1 (555) 019-2834',
@@ -370,7 +381,7 @@ export const OmniUploadModal: React.FC<OmniUploadModalProps> = ({
           id: rawClient.matter.id || `m-${Date.now()}-${addedCount}`,
           title: rawClient.matter.title || `${rawClient.name} Legal Filing`,
           caseNumber: `L-${Math.floor(1000 + Math.random() * 9000)}-2026`,
-          clientId: newClientObj.id,
+          clientId: assignedClientId,
           clientName: rawClient.name,
           practiceArea: rawClient.practiceArea || 'General',
           status: 'active',
@@ -387,15 +398,37 @@ export const OmniUploadModal: React.FC<OmniUploadModalProps> = ({
         onAddMatter(newMatterObj);
       }
 
-      if (onAddGeneratedDoc && rawClient.documents && rawClient.documents[0]) {
-        onAddGeneratedDoc({
-          id: `doc-${Date.now()}-${addedCount}`,
-          templateId: 'tpl-drive-intake',
-          title: `Intake: ${rawClient.documents[0].name}`,
-          content: rawClient.intakeNotes,
-          clientId: newClientObj.id,
-          clientName: rawClient.name,
-          generatedAt: new Date().toISOString()
+      // Attach ALL merged documents to the client ledger
+      if (rawClient.documents && Array.isArray(rawClient.documents)) {
+        rawClient.documents.forEach((docItem: any, docIdx: number) => {
+          if (onAddGeneratedDoc) {
+            onAddGeneratedDoc({
+              id: `doc-${Date.now()}-${addedCount}-${docIdx}`,
+              templateId: 'tpl-drive-intake',
+              title: `Intake: ${docItem.name || 'Document'}`,
+              content: rawClient.intakeNotes || `Merged document: ${docItem.name}`,
+              clientId: assignedClientId,
+              clientName: rawClient.name,
+              generatedAt: new Date().toISOString()
+            });
+          }
+          if (onAddEvidenceFile) {
+            onAddEvidenceFile({
+              id: `ev-${Date.now()}-${addedCount}-${docIdx}`,
+              name: docItem.name || 'Document',
+              mimeType: docItem.mimeType || 'application/pdf',
+              size: docItem.size || '150 KB',
+              uploadedAt: new Date().toISOString(),
+              clientId: assignedClientId,
+              clientName: rawClient.name,
+              fileCategory: rawClient.practiceArea || 'General',
+              extractedClientName: rawClient.name,
+              duressLevel: 'Low',
+              summary: rawClient.intakeNotes || `Merged evidence file: ${docItem.name}`,
+              extractedFacts: (rawClient.keyDates || []).map((kd: any) => `${kd.date}: ${kd.event}`),
+              status: 'scanned'
+            });
+          }
         });
       }
 
@@ -862,6 +895,109 @@ export const OmniUploadModal: React.FC<OmniUploadModalProps> = ({
           {/* MODE 2: Multi-File / Local Folder Drop */}
           {activeModalTab === 'batch_files' && (
             <div className="space-y-6">
+              {/* Client Consolidation & Merging Strategy Options */}
+              <div className="p-4 bg-slate-900/90 border border-indigo-500/30 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-300 text-xs">
+                      1
+                    </div>
+                    <span className="text-xs font-bold text-white font-mono uppercase tracking-wide">
+                      Client Intake & Merging Strategy
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
+                    Identity Resolution Active
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setMergeToOneClient(true)}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      mergeToOneClient
+                        ? 'bg-indigo-950/60 border-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.2)]'
+                        : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <input
+                        type="radio"
+                        name="mergeStrategy"
+                        checked={mergeToOneClient}
+                        onChange={() => setMergeToOneClient(true)}
+                        className="text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
+                      <span className="text-xs font-bold font-mono">Merge to ONE Identified Client</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 pl-5 leading-relaxed">
+                      Consolidates all uploaded forms, contracts, tax schedules, and statements into a single client record with all dates unified.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMergeToOneClient(false)}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      !mergeToOneClient
+                        ? 'bg-indigo-950/60 border-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.2)]'
+                        : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <input
+                        type="radio"
+                        name="mergeStrategy"
+                        checked={!mergeToOneClient}
+                        onChange={() => setMergeToOneClient(false)}
+                        className="text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
+                      <span className="text-xs font-bold font-mono">Detect Separate Clients per Doc</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 pl-5 leading-relaxed">
+                      Treats each document as a distinct individual (recommended only when uploading records for unrelated people).
+                    </p>
+                  </button>
+                </div>
+
+                {/* Optional Target Client Customization */}
+                {mergeToOneClient && (
+                  <div className="pt-2 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-mono text-slate-400 block mb-1">
+                        Optional: Force Identified Client Name
+                      </label>
+                      <input
+                        type="text"
+                        value={customClientNameOverride}
+                        onChange={(e) => setCustomClientNameOverride(e.target.value)}
+                        placeholder="Leave blank for AI auto-extraction..."
+                        className="w-full bg-[#050811] border border-slate-800 focus:border-indigo-500 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-mono text-slate-400 block mb-1">
+                        Or Merge into Existing Firm Client
+                      </label>
+                      <select
+                        value={targetExistingClientId}
+                        onChange={(e) => setTargetExistingClientId(e.target.value)}
+                        className="w-full bg-[#050811] border border-slate-800 focus:border-indigo-500 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                      >
+                        <option value="">-- Create New Identified Client --</option>
+                        {clients.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.practiceArea || 'General'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleBatchFileDrop}
@@ -883,7 +1019,9 @@ export const OmniUploadModal: React.FC<OmniUploadModalProps> = ({
                   Drag & Drop Multiple Client Files or Entire Folder Here
                 </h3>
                 <p className="text-xs text-slate-400 max-w-lg mb-3">
-                  Select all PDF questionnaires, Word documents, retainer agreements, or scanned records from your computer. The AI will extract the actual names, matter details, and fees automatically.
+                  {mergeToOneClient 
+                    ? 'Upload all intake questionnaires, FL-forms, financial schedules, and declarations. The AI will merge all dates, background facts, and files into ONE identified client record.'
+                    : 'Select all client files. The AI will extract distinct profiles and matters automatically.'}
                 </p>
                 <div className="flex items-center gap-2">
                   <span className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-xs font-mono text-white rounded-lg font-bold">
@@ -897,8 +1035,8 @@ export const OmniUploadModal: React.FC<OmniUploadModalProps> = ({
                 <div className="p-6 bg-indigo-950/30 border border-indigo-500/30 rounded-xl flex items-center gap-4 animate-pulse">
                   <RefreshCw className="w-6 h-6 text-indigo-400 animate-spin" />
                   <div>
-                    <h4 className="text-sm font-bold text-white font-mono">Parsing {batchUploadedFiles.length} Client Files via Gemini AI...</h4>
-                    <p className="text-xs text-indigo-300">Extracting verified names, addresses, case types, and drafting action plans...</p>
+                    <h4 className="text-sm font-bold text-white font-mono">Consolidating {batchUploadedFiles.length} Document(s) into Identified Client File...</h4>
+                    <p className="text-xs text-indigo-300">Resolving entity identities, synthesizing timeline dates, and assembling unified dossier...</p>
                   </div>
                 </div>
               )}
@@ -1002,14 +1140,29 @@ export const OmniUploadModal: React.FC<OmniUploadModalProps> = ({
           {/* EXTRACTED CLIENTS ROSTER READY FOR LEDGER PLACEMENT */}
           {driveScanResult && driveScanResult.detectedClients && driveScanResult.detectedClients.length > 0 && (
             <div className="space-y-4 pt-2 border-t border-slate-800">
+              {driveScanResult.mergeSummary && (
+                <div className="p-3.5 bg-emerald-950/40 border border-emerald-500/40 rounded-xl flex items-center justify-between gap-3 text-emerald-300 text-xs font-mono">
+                  <div className="flex items-center gap-2.5">
+                    <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 animate-pulse" />
+                    <div>
+                      <span className="font-bold text-white block">Identity Resolution & Synthesis Result</span>
+                      <span className="text-[11px] text-emerald-300/90">{driveScanResult.mergeSummary}</span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded text-[10px] uppercase font-bold shrink-0">
+                    Merged File
+                  </span>
+                </div>
+              )}
+
               <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-900/80 border border-slate-800 rounded-xl">
                 <div>
                   <h4 className="text-xs font-bold text-white font-mono uppercase flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    {driveScanResult.detectedClients.length} Extracted Client Records
+                    {driveScanResult.detectedClients.length} Identified Client Record{driveScanResult.detectedClients.length > 1 ? 's' : ''}
                   </h4>
                   <p className="text-[11px] text-slate-400">
-                    Review the extracted client records. Select the records you want placed into your active Practice Ledger & Matters roster.
+                    Review the consolidated client file. Select to place directly into your firm ledger and active matters roster.
                   </p>
                 </div>
 
@@ -1099,6 +1252,27 @@ export const OmniUploadModal: React.FC<OmniUploadModalProps> = ({
                           <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
                             {client.matter.description}
                           </p>
+                        </div>
+                      )}
+
+                      {/* Unified Timeline & Key Dates from all documents */}
+                      {client.keyDates && client.keyDates.length > 0 && (
+                        <div className="p-2 bg-indigo-950/20 border border-indigo-500/20 rounded-lg space-y-1">
+                          <span className="text-[9.5px] font-mono text-indigo-300 font-bold uppercase flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-indigo-400" />
+                            Merged Chronology & Timeline Dates ({client.keyDates.length})
+                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            {client.keyDates.map((kd: any, kdIdx: number) => (
+                              <span
+                                key={kdIdx}
+                                className="text-[9px] font-mono bg-[#070b14] text-slate-300 border border-slate-700/80 px-1.5 py-0.5 rounded"
+                                title={kd.event}
+                              >
+                                <span className="text-amber-300 font-semibold">{kd.date}</span>: {kd.event}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       )}
 

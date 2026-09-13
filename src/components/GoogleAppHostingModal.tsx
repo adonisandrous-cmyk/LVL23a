@@ -475,7 +475,7 @@ export default function GoogleAppHostingModal({ isOpen, onClose }: GoogleAppHost
                     </span>
                   </div>
                   <p className="text-slate-300 text-xs max-w-xl">
-                    Synchronizes your local hard drive folder (<code className="text-teal-300">C:\Users\Administrator\iiiamadex</code>) directly with Google Drive and this cloud workspace.
+                    Synchronizes your local hard drive folder (<code className="text-teal-300">C:\Users\Administrator\illamadex</code>) directly with Google Drive and this cloud workspace.
                   </p>
                 </div>
 
@@ -521,7 +521,7 @@ export default function GoogleAppHostingModal({ isOpen, onClose }: GoogleAppHost
                     </div>
                     <button
                       onClick={() => {
-                        const content = `@echo off\nTITLE LEVEL 23 Desktop Launcher\nCLS\nstart /b node iiiamadex-desktop-bridge.js\nstart "" "http://localhost:3000"\nexit`;
+                        const content = `@echo off\nTITLE LEVEL 23 Desktop Launcher\nCLS\nstart /b node illamadex-desktop-bridge.js\nstart "" "http://localhost:3000"\nexit`;
                         downloadFile('install-desktop.bat', content);
                       }}
                       className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-teal-300 font-mono text-[11px] font-bold rounded-lg border border-slate-700 flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
@@ -543,7 +543,7 @@ export default function GoogleAppHostingModal({ isOpen, onClose }: GoogleAppHost
                     </div>
                     <button
                       onClick={() => {
-                        const content = `Start-Process -NoNewWindow -FilePath "node" -ArgumentList "iiiamadex-desktop-bridge.js"\nStart-Process "http://localhost:3000"`;
+                        const content = `Start-Process -NoNewWindow -FilePath "node" -ArgumentList "illamadex-desktop-bridge.js"\nStart-Process "http://localhost:3000"`;
                         downloadFile('launch-desktop.ps1', content);
                       }}
                       className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-blue-300 font-mono text-[11px] font-bold rounded-lg border border-slate-700 flex items-center justify-center gap-1.5 cursor-pointer transition-colors"

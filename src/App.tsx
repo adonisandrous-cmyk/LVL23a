@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Sparkles,
@@ -50,11 +50,25 @@ import { Scale, BookOpen, Database, CloudOff, CloudLightning, Lock, Unlock, Uplo
 import { startPeriodicDriveSync } from './services/driveSyncService';
 
 import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, query, orderBy, limit, startAfter } from 'firebase/firestore';
-import { db, ensureAuthenticated, handleFirestoreError, OperationType } from './lib/firebase';
+import { db, ensureAuthenticated, handleFirestoreError, OperationType, sanitizeForFirestore } from './lib/firebase';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
-  const [isZenEntranceMode, setIsZenEntranceMode] = useState<boolean>(true);
+  const [isZenEntranceMode, setIsZenEntranceMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('practice_os_zen_mode');
+      return saved === 'true';
+    }
+    return false;
+  });
+
+  const handleSetZenMode = (val: boolean) => {
+    setIsZenEntranceMode(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('practice_os_zen_mode', String(val));
+    }
+  };
+
   const [systemConnected, setSystemConnected] = useState<boolean>(false);
   const [utcTime, setUtcTime] = useState<string>('');
   const [showResearchDrawer, setShowResearchDrawer] = useState<boolean>(false);
@@ -193,6 +207,8 @@ Petitioner Signature: Jane Doe`,
 
   // Master legal AI messages thread
   const [chatThread, setChatThread] = useState<LegalMessage[]>([]);
+  // Cached executive summary for Zen conversation history compression
+  const zenSummaryCacheRef = useRef<{ msgCount: number; summary: string }>({ msgCount: 0, summary: '' });
 
   // Master client evidence files lists with local persistence
   const [evidenceFiles, setEvidenceFiles] = useState<EvidenceFile[]>(() => {
@@ -429,10 +445,19 @@ Petitioner Signature: Jane Doe`,
         await ensureAuthenticated();
         
         // Check if DB is already seeded using a fast single-record limit query
-        const clientsCheckSnap = await getDocs(query(collection(db, 'clients'), limit(1))).catch(err => {
-          handleFirestoreError(err, OperationType.LIST, 'clients');
-          throw err;
-        });
+        let clientsCheckSnap;
+        try {
+          clientsCheckSnap = await getDocs(query(collection(db, 'clients'), limit(1)));
+        } catch (checkErr: any) {
+          const isPermission = checkErr?.code === 'permission-denied' || String(checkErr?.message).includes('permission-denied');
+          if (isPermission) {
+            handleFirestoreError(checkErr, OperationType.LIST, 'clients');
+          }
+          console.warn('Firestore backend offline or unreachable, switching to resilient local storage:', checkErr?.message || checkErr);
+          setDbSyncStatus('offline');
+          setSyncMessage('Local persistent storage active');
+          return;
+        }
         
         if (clientsCheckSnap.empty) {
           // DATABASE IS EMPTY -> SEED INITIAL STAGES
@@ -474,8 +499,14 @@ Petitioner Signature: Jane Doe`,
           // HYDRATE AND MERGE CLIENTS: Retrieve all remote client documents
           const clientsSnap = await getDocs(collection(db, 'clients')).catch(err => {
             handleFirestoreError(err, OperationType.LIST, 'clients');
-            throw err;
+            return null;
           });
+          
+          if (!clientsSnap) {
+            setDbSyncStatus('offline');
+            setSyncMessage('Local persistent storage active');
+            return;
+          }
           
           const remoteClients: Client[] = [];
           clientsSnap.forEach(snap => {
@@ -587,10 +618,10 @@ Petitioner Signature: Jane Doe`,
         setDbSyncStatus('synced');
         setSyncMessage('Persistent memory synced live');
       } catch (err: any) {
-        console.error("Firestore sync failed:", err);
-        setDbSyncStatus('error');
-        setSyncMessage('Sync offline. Local memory active.');
-        addLog('system', `Cloud Sync operating in resilient local mode (${err.message || 'database status'})`);
+        console.warn("Firestore sync status:", err?.message || err);
+        setDbSyncStatus('offline');
+        setSyncMessage('Local persistent storage active');
+        addLog('system', `Storage operating in resilient local mode.`);
       }
     };
     
@@ -653,6 +684,65 @@ Petitioner Signature: Jane Doe`,
 
   const handleAddClient = (newClient: Omit<Client, 'id' | 'createdAt'> | Client) => {
     if (checkStorageLocked('add new client profile')) return;
+
+    // Client Identity Resolution: Check if this client already exists in the ledger
+    const targetName = (newClient.name || '').trim();
+    const targetEmail = (newClient.email || '').trim().toLowerCase();
+    const targetPhone = (newClient.phone || '').replace(/[^0-9]/g, '');
+
+    const existingMatch = clients.find(c => {
+      if ((newClient as any).id && c.id === (newClient as any).id) return true;
+      const cName = (c.name || '').trim().toLowerCase();
+      const nName = targetName.toLowerCase();
+      if (cName && nName) {
+        if (cName === nName) return true;
+        // Substring / partial match for formal titles (e.g. "Jane Doe" vs "Jane Doe (Client)")
+        if (cName.length > 5 && nName.length > 5 && (cName.includes(nName) || nName.includes(cName))) return true;
+      }
+      if (targetEmail && c.email && c.email.trim().toLowerCase() === targetEmail && !targetEmail.includes('firm.legal')) {
+        return true;
+      }
+      if (targetPhone && targetPhone.length >= 7 && c.phone) {
+        const cPhone = c.phone.replace(/[^0-9]/g, '');
+        if (cPhone === targetPhone) return true;
+      }
+      return false;
+    });
+
+    if (existingMatch) {
+      // Merge into ONE identified client!
+      const isNewNotesRich = !!(newClient.intakeNotes && !existingMatch.intakeNotes?.includes(newClient.intakeNotes.slice(0, 30)));
+      const mergedIntakeNotes = isNewNotesRich
+        ? (existingMatch.intakeNotes 
+            ? `${existingMatch.intakeNotes}\n\n[CONSOLIDATED DOCUMENT INTAKE - ${new Date().toLocaleDateString()}]:\n${newClient.intakeNotes}`
+            : newClient.intakeNotes || '')
+        : (existingMatch.intakeNotes || newClient.intakeNotes || '');
+
+      const mergedClient: Client = {
+        ...existingMatch,
+        name: existingMatch.name || targetName,
+        email: existingMatch.email && !existingMatch.email.includes('example.com') && !existingMatch.email.includes('firm.legal') 
+          ? existingMatch.email 
+          : (newClient.email || existingMatch.email),
+        phone: existingMatch.phone && !existingMatch.phone.includes('000-0000') 
+          ? existingMatch.phone 
+          : (newClient.phone || existingMatch.phone),
+        practiceArea: existingMatch.practiceArea && existingMatch.practiceArea !== 'General' 
+          ? existingMatch.practiceArea 
+          : (newClient.practiceArea || existingMatch.practiceArea || 'General'),
+        status: newClient.status || existingMatch.status || 'active',
+        intakeNotes: mergedIntakeNotes
+      };
+
+      setClients(prev => prev.map(c => c.id === existingMatch.id ? mergedClient : c));
+      addLog('client', `Consolidated & merged uploaded data into identified client record: ${mergedClient.name}.`);
+      setDoc(doc(db, 'clients', mergedClient.id), sanitizeForFirestore(mergedClient)).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `clients/${mergedClient.id}`);
+      });
+      return;
+    }
+
+    // Otherwise, create new identified client record
     const client: Client = {
       ...newClient,
       id: (newClient as any).id || `c-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -662,14 +752,45 @@ Petitioner Signature: Jane Doe`,
       const filtered = prev.filter(c => c.id !== client.id);
       return [client, ...filtered];
     });
-    addLog('client', `Client record confirmed: ${client.name} (${client.practiceArea || 'General'}).`);
-    setDoc(doc(db, 'clients', client.id), client).catch(err => {
+    addLog('client', `Client file created: ${client.name} (${client.practiceArea || 'General'}).`);
+    setDoc(doc(db, 'clients', client.id), sanitizeForFirestore(client)).catch(err => {
       handleFirestoreError(err, OperationType.WRITE, `clients/${client.id}`);
     });
   };
 
   const handleAddMatter = (newMatter: Omit<Matter, 'id' | 'createdAt'> | Matter) => {
     if (checkStorageLocked('open new legal case matter')) return;
+
+    // Check if an existing matter for this client with same practice area or title already exists
+    const existingMatterMatch = matters.find(m => {
+      if ((newMatter as any).id && m.id === (newMatter as any).id) return true;
+      if (newMatter.clientId && m.clientId === newMatter.clientId) {
+        if (m.title.toLowerCase().trim() === newMatter.title.toLowerCase().trim()) return true;
+        if (m.practiceArea === newMatter.practiceArea && Math.abs(new Date(m.createdAt).getTime() - Date.now()) < 60000) return true;
+      }
+      return false;
+    });
+
+    if (existingMatterMatch) {
+      // Merge task lists and description into existing matter
+      const updatedMatter: Matter = {
+        ...existingMatterMatch,
+        description: existingMatterMatch.description.includes(newMatter.description.slice(0, 30))
+          ? existingMatterMatch.description
+          : `${existingMatterMatch.description}\n\n[Updated from Ingested Documents]:\n${newMatter.description}`,
+        tasks: [
+          ...existingMatterMatch.tasks,
+          ...(newMatter.tasks || []).filter(nt => !existingMatterMatch.tasks.some(et => et.title.toLowerCase() === nt.title.toLowerCase()))
+        ]
+      };
+      setMatters(prev => prev.map(m => m.id === existingMatterMatch.id ? updatedMatter : m));
+      addLog('matter', `Matter updated for identified client ${updatedMatter.clientName} ("${updatedMatter.title}").`);
+      setDoc(doc(db, 'matters', updatedMatter.id), sanitizeForFirestore(updatedMatter)).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `matters/${updatedMatter.id}`);
+      });
+      return;
+    }
+
     const matter: Matter = {
       ...newMatter,
       id: (newMatter as any).id || `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -680,7 +801,7 @@ Petitioner Signature: Jane Doe`,
       return [matter, ...filtered];
     });
     addLog('matter', `New Matter opened: ${matter.title} (${matter.caseNumber}) linked to ${matter.clientName}.`);
-    setDoc(doc(db, 'matters', matter.id), matter).catch(err => {
+    setDoc(doc(db, 'matters', matter.id), sanitizeForFirestore(matter)).catch(err => {
       handleFirestoreError(err, OperationType.WRITE, `matters/${matter.id}`);
     });
   };
@@ -689,7 +810,7 @@ Petitioner Signature: Jane Doe`,
     if (checkStorageLocked('update case file details')) return;
     setMatters(prev => prev.map(m => m.id === updatedMatter.id ? updatedMatter : m));
     addLog('matter', `Matter case file ${updatedMatter.caseNumber} ("${updatedMatter.title}") details updated.`);
-    setDoc(doc(db, 'matters', updatedMatter.id), updatedMatter).catch(err => {
+    setDoc(doc(db, 'matters', updatedMatter.id), sanitizeForFirestore(updatedMatter)).catch(err => {
       handleFirestoreError(err, OperationType.WRITE, `matters/${updatedMatter.id}`);
     });
   };
@@ -750,7 +871,7 @@ Petitioner Signature: Jane Doe`,
     });
 
     addLog('document', `Legal document saved (v${finalDoc.version || 1}): "${finalDoc.title}" for Client ${finalDoc.clientName}.`);
-    setDoc(doc(db, 'generatedDocs', finalDoc.id), finalDoc).catch(err => {
+    setDoc(doc(db, 'generatedDocs', finalDoc.id), sanitizeForFirestore(finalDoc)).catch(err => {
       handleFirestoreError(err, OperationType.WRITE, `generatedDocs/${finalDoc.id}`);
     });
   };
@@ -762,52 +883,173 @@ Petitioner Signature: Jane Doe`,
       return [file, ...filtered];
     });
     addLog('document', `Client evidence file indexed & OCR scanned: "${file.name}" for Client ${file.clientName}.`);
-    setDoc(doc(db, 'evidenceFiles', file.id), file).catch(err => {
+    setDoc(doc(db, 'evidenceFiles', file.id), sanitizeForFirestore(file)).catch(err => {
       handleFirestoreError(err, OperationType.WRITE, `evidenceFiles/${file.id}`);
     });
   };
 
   const handleAddMessage = (msg: LegalMessage) => {
-    if (checkStorageLocked('post chat message')) return;
     setChatThread(prev => [...prev, msg]);
     if (msg.sender === 'user') {
       addLog('system', `Consulted AI Specialist Agent: "${msg.agentName}" with case query.`);
     } else {
       addLog('system', `Legal Agent "${msg.agentName}" compiled response successfully.`);
     }
-    setDoc(doc(db, 'chatThread', msg.id), msg).catch(err => {
-      handleFirestoreError(err, OperationType.WRITE, `chatThread/${msg.id}`);
-    });
+    if (!isStorageLocked) {
+      const cleanPayload = sanitizeForFirestore(msg);
+      setDoc(doc(db, 'chatThread', msg.id), cleanPayload).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `chatThread/${msg.id}`);
+      });
+    }
   };
 
-  const handleSendZenMessage = async (userPrompt: string, agentName: 'PHOENIX' | 'EVE') => {
+  const handleSendZenMessage = async (
+    userPrompt: string,
+    agentName: 'PHOENIX' | 'EVE' | 'ALURE' | 'SENTRY' | string,
+    attachedFile?: { name: string; size: string; type?: string; content?: string }
+  ) => {
     const userMsg: LegalMessage = {
       id: `msg-${Date.now()}`,
       sender: 'user',
       content: userPrompt,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      agentName: 'Alex'
+      agentName: 'Alex',
+      ...(attachedFile ? {
+        fileAttachment: {
+          name: attachedFile.name || 'document',
+          size: attachedFile.size || '',
+          ...(attachedFile.type ? { type: attachedFile.type } : {}),
+          ...(attachedFile.content ? { content: attachedFile.content } : {})
+        }
+      } : {})
     };
     handleAddMessage(userMsg);
 
-    const historyForApi = chatThread.concat(userMsg).map(m => ({
-      role: m.sender === 'user' ? 'user' : 'model',
-      text: m.content
-    }));
+    // Keep active context concise: retain only recent messages (last 2 turns)
+    // and summarize all older messages using the AI model to prevent context-overflow and repetition loops.
+    const KEEP_RECENT_COUNT = 2;
+    const olderMessages = chatThread.slice(0, Math.max(0, chatThread.length - KEEP_RECENT_COUNT));
+    const recentMessages = chatThread.slice(Math.max(0, chatThread.length - KEEP_RECENT_COUNT));
+
+    let conversationSummary = '';
+    if (olderMessages.length > 0) {
+      if (zenSummaryCacheRef.current.msgCount === olderMessages.length && zenSummaryCacheRef.current.summary) {
+        conversationSummary = zenSummaryCacheRef.current.summary;
+      } else {
+        try {
+          const summaryController = new AbortController();
+          const summaryTimeout = setTimeout(() => summaryController.abort(), 7000);
+          const sRes = await fetch('/api/gemini/summarize-history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: olderMessages.map(m => ({
+                role: m.sender === 'user' ? 'user' : 'model',
+                text: m.content
+              }))
+            }),
+            signal: summaryController.signal
+          });
+          clearTimeout(summaryTimeout);
+          if (sRes.ok) {
+            const sData = await sRes.json();
+            conversationSummary = sData.summary || '';
+            if (conversationSummary) {
+              zenSummaryCacheRef.current = { msgCount: olderMessages.length, summary: conversationSummary };
+            }
+          }
+        } catch (sErr) {
+          console.warn('AI history summarization notice:', sErr);
+          const directives = olderMessages
+            .filter(m => m.sender === 'user')
+            .map(m => m.content.trim())
+            .slice(-3);
+          if (directives.length > 0) {
+            conversationSummary = `Directives established earlier: ${directives.join('; ')}.`;
+          }
+        }
+      }
+    }
+
+    // Build ultra-concise history payload for AI model
+    const historyForApi: { role: string; text: string }[] = [];
+
+    if (conversationSummary) {
+      historyForApi.push({
+        role: 'user',
+        text: `[Executive Summary of Earlier Discussion & Established Context]:\n${conversationSummary}`
+      });
+      historyForApi.push({
+        role: 'model',
+        text: 'Understood, Co-Counsel. I have recorded all established facts, case details, and directives from our earlier discussion.'
+      });
+    }
+
+    recentMessages.forEach(m => {
+      historyForApi.push({
+        role: m.sender === 'user' ? 'user' : 'model',
+        text: m.content
+      });
+    });
+
+    const promptWithAttachment = attachedFile ? (
+      `[ATTACHED FILE: "${attachedFile.name}" (${attachedFile.size})]\n--- FILE CONTENT START ---\n${attachedFile.content}\n--- FILE CONTENT END ---\n\n${userPrompt || `Please thoroughly review and analyze this attached document ("${attachedFile.name}"). Pinpoint critical findings, liabilities, strategic considerations, and next steps.`}`
+    ) : userPrompt;
+
+    historyForApi.push({
+      role: 'user',
+      text: promptWithAttachment
+    });
+
+    // Build real practice context so AI knows active roster and carries out the specific request
+    const practiceSummary = [
+      `Active Clients (${clients.length}): ` + clients.slice(0, 5).map(c => `${c.name} (${c.practiceArea || 'General'}, ${c.status})`).join('; '),
+      `Active Matters (${matters.length}): ` + matters.slice(0, 5).map(m => `${m.title} [${m.caseNumber}] - ${m.status}`).join('; '),
+      `Recent Generated Documents (${generatedDocs.length}): ` + generatedDocs.slice(0, 5).map(d => `${d.title} (${d.templateId || 'Form'})`).join('; '),
+      `Connected Google Drive: level23consulting@gmail.com & level23@gmail.com & adonisandrous@gmail.com (Folder ID: 1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH)`
+    ].join('\n');
+
+    const getAgentRole = () => {
+      const up = agentName.toUpperCase();
+      if (up === 'PHOENIX') return 'Senior Managing Partner & Litigation Lead';
+      if (up === 'EVE') return 'Office Manager, Operations Lead & Senior Practice AI';
+      if (up === 'ALURE') return 'Legal Research Associate & Case File Reviewer';
+      if (up === 'SENTRY') return 'Systems Security & Diagnostic Specialist';
+      return `${agentName} - Legal AI Specialist`;
+    };
+
+    const getAgentInstruction = () => {
+      const up = agentName.toUpperCase();
+      if (up === 'PHOENIX') {
+        return `You are Phoenix (#1 Seniority), Senior Managing Partner and Litigation Lead. You direct master case strategy, high-stakes litigation doctrine, cross-examination postures, and trial tactics. When documents or pleadings are provided, evaluate evidentiary strength, tri-jurisdictional risk (CA, NV, Federal), and litigation readiness.`;
+      }
+      if (up === 'EVE') {
+        return `You are EVE (#2 Seniority), Office Manager & Operations Lead. You coordinate client intakes, court docketing deadlines, document routing, file management, and client inquiries. When documents are provided, extract client particulars, dates, filing deadlines, and identify missing form requirements.`;
+      }
+      if (up === 'ALURE') {
+        return `You are Alure, Legal Research Associate & Case File Reviewer. You specialize in statutory citations, precedent analysis, forensic financial asset/debt dissection, and comprehensive brief outlines. When documents are provided, provide a granular forensic breakdown and identify relevant statutes or precedents.`;
+      }
+      if (up === 'SENTRY') {
+        return `You are Sentry, Systems Security & Diagnostic Specialist. You verify form accuracy, signature blocks, court rule compliance, notarization compliance, and system integrity audits. When documents are provided, audit the document structure, note any compliance gaps or unsigned sections.`;
+      }
+      return `You are ${agentName}, senior AI legal specialist for Level 23 Consulting.`;
+    };
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s immediate response threshold
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s reliable threshold
 
       const res = await fetch('/api/gemini/agent-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: historyForApi,
+          conversationSummary,
           isZenMode: true,
           speedPreference: 'fast',
-          agentRole: agentName === 'PHOENIX' ? 'Lead Co-Counsel' : 'Senior Practice AI Specialist',
-          agentInstruction: `You are ${agentName}, senior AI legal specialist for Level 23 Consulting. The user Alex is co-counsel. Connected Google account: level23consulting@gmail.com.`
+          practiceContext: practiceSummary,
+          agentRole: getAgentRole(),
+          agentInstruction: `${getAgentInstruction()} The user Alex is co-counsel. Connected Google accounts: level23@gmail.com, level23consulting@gmail.com, and adonisandrous@gmail.com.`
         }),
         signal: controller.signal
       });
@@ -815,10 +1057,51 @@ Petitioner Signature: Jane Doe`,
 
       if (res.ok) {
         const data = await res.json();
+        let replyContent = data.reply || 'Briefing completed successfully.';
+
+        // Real action execution: if response or prompt specifies client card creation
+        const actionMatch = replyContent.match(/\[ACTION:CREATE_CLIENT:(\{.*?\})\]/s);
+        let clientCreated = false;
+        if (actionMatch) {
+          try {
+            const clientData = JSON.parse(actionMatch[1]);
+            handleAddClient({
+              name: clientData.name || 'New Client',
+              practiceArea: clientData.practiceArea || 'General Practice',
+              email: clientData.email || '',
+              phone: clientData.phone || '',
+              status: 'active',
+              intakeNotes: clientData.intakeNotes || `Created by ${agentName} per co-counsel instruction.`
+            });
+            clientCreated = true;
+            replyContent = replyContent.replace(/\[ACTION:CREATE_CLIENT:\{.*?\}\]/gs, '').trim();
+          } catch (err) {
+            console.warn('Action parse error:', err);
+          }
+        }
+
+        // Direct intent backup
+        const makeClientMatch = userPrompt.match(/(?:make|create|add)\s+(?:a\s+)?client\s+card\s+(?:for|of|named)\s+([A-Za-z0-9\s'-]+)/i);
+        if (makeClientMatch && makeClientMatch[1] && !clientCreated) {
+          const candidateName = makeClientMatch[1].trim().replace(/\b(please|now|promptly|it|from drive)\b/gi, '').trim();
+          if (candidateName && candidateName.length >= 2) {
+            handleAddClient({
+              name: candidateName,
+              practiceArea: 'General Practice',
+              email: '',
+              phone: '',
+              status: 'active',
+              intakeNotes: `Created by ${agentName} per counsel instruction: "${userPrompt}"`
+            });
+          }
+        }
+
+        replyContent = replyContent.replace(/\[ACTION:[^\]]+\]/g, '').trim() || 'Directive received and executed.';
+
         const botMsg: LegalMessage = {
           id: `msg-${Date.now() + 1}`,
           sender: 'assistant',
-          content: data.reply || 'Analysis completed successfully.',
+          content: replyContent,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           agentName: agentName
         };
@@ -827,17 +1110,18 @@ Petitioner Signature: Jane Doe`,
         const fallbackMsg: LegalMessage = {
           id: `msg-${Date.now() + 1}`,
           sender: 'assistant',
-          content: `Understood, co-counsel. Regarding "${userPrompt}": All matter records and California/Nevada statutory frameworks are aligned. I have logged this directive for our active proceedings. How would you like to proceed with the draft or client file?`,
+          content: `Co-counsel, I received your request regarding "${userPrompt}". The legal intelligence service experienced a momentary response delay. Please speak or type your instruction again, or open the workspace dashboard to proceed directly.`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           agentName: agentName
         };
         handleAddMessage(fallbackMsg);
       }
-    } catch (e) {
+    } catch (e: any) {
+      console.warn("Zen message dispatch notice:", e);
       const fallbackMsg: LegalMessage = {
         id: `msg-${Date.now() + 1}`,
         sender: 'assistant',
-        content: `Co-Counsel briefing received regarding "${userPrompt}". I have verified our active pleadings and evidence indices. Ready to execute the next filing step or open the workspace dashboard whenever you are ready.`,
+        content: `Co-counsel, regarding "${userPrompt}": Please re-state your request or open the workspace to access client files, pleadings, and court forms directly.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         agentName: agentName
       };
@@ -848,7 +1132,7 @@ Petitioner Signature: Jane Doe`,
   const handleUpdateAgentProgress = (updatedProgress: AgentProgress) => {
     if (checkStorageLocked('update AI agent capability level')) return;
     setAgentProgressList(prev => prev.map(p => p.agentId === updatedProgress.agentId ? updatedProgress : p));
-    setDoc(doc(db, 'agentProgressList', updatedProgress.agentId), updatedProgress).catch(err => {
+    setDoc(doc(db, 'agentProgressList', updatedProgress.agentId), sanitizeForFirestore(updatedProgress)).catch(err => {
       handleFirestoreError(err, OperationType.WRITE, `agentProgressList/${updatedProgress.agentId}`);
     });
   };
@@ -857,7 +1141,7 @@ Petitioner Signature: Jane Doe`,
     if (checkStorageLocked('initialize video consultation room')) return;
     setConsultations(prev => [...prev, session]);
     addLog('system', `Active video Room initialized: "${session.roomName}" representing Client ${session.clientName}`);
-    setDoc(doc(db, 'consultations', session.id), session).catch(err => {
+    setDoc(doc(db, 'consultations', session.id), sanitizeForFirestore(session)).catch(err => {
       handleFirestoreError(err, OperationType.WRITE, `consultations/${session.id}`);
     });
   };
@@ -868,7 +1152,7 @@ Petitioner Signature: Jane Doe`,
     if (updatedSession.status === 'concluded') {
       addLog('system', `Concluded Video Consultation loop with ${updatedSession.clientName}. Transcripts saved as reference notes.`);
     }
-    setDoc(doc(db, 'consultations', updatedSession.id), updatedSession).catch(err => {
+    setDoc(doc(db, 'consultations', updatedSession.id), sanitizeForFirestore(updatedSession)).catch(err => {
       handleFirestoreError(err, OperationType.WRITE, `consultations/${updatedSession.id}`);
     });
   };
@@ -983,7 +1267,7 @@ Petitioner Signature: Jane Doe`,
     <ZenEntranceView
       onActivateWorkspace={(targetTab) => {
         if (targetTab) setActiveTab(targetTab);
-        setIsZenEntranceMode(false);
+        handleSetZenMode(false);
       }}
       chatThread={chatThread}
       onSendMessage={handleSendZenMessage}
@@ -1077,6 +1361,10 @@ Petitioner Signature: Jane Doe`,
                 setShowGoogleHostingModal(true);
                 addLog('system', 'Google Hosting, Desktop App & PWA Hub opened from sidebar.');
               }}
+              onOpenZenEntrance={() => {
+                handleSetZenMode(true);
+                addLog('system', 'Full-screen AI Co-Counsel Zen suite activated from sidebar.');
+              }}
               onRefreshDiagnostic={() => addLog('system', 'Manual diagnostic audit rerun.')}
               utcTime={utcTime}
             />
@@ -1158,12 +1446,16 @@ Petitioner Signature: Jane Doe`,
 
                   <button
                     type="button"
-                    onClick={() => setIsZenEntranceMode(true)}
+                    onClick={() => {
+                      handleSetZenMode(true);
+                      addLog('system', 'Full-screen AI Co-Counsel Zen suite opened from header tray.');
+                    }}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-mono font-bold uppercase transition-all cursor-pointer shadow-sm"
-                    title="Return to Phoenix AI Conversational Entrance Screen"
+                    title="Open Full-Screen AI Co-Counsel Suite (Phoenix, EVE, Alure, Sentry)"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-                    <span className="hidden sm:inline">Zen AI Entrance</span>
+                    <span className="hidden sm:inline">AI Co-Counsel</span>
+                    <span className="bg-amber-500/20 text-amber-300 text-[9px] px-1 py-0.5 rounded border border-amber-500/30">ZEN</span>
                   </button>
 
                   <button 
@@ -1321,6 +1613,10 @@ Petitioner Signature: Jane Doe`,
                       }}
                       agentProgressList={agentProgressList}
                       onUpdateAgentProgress={handleUpdateAgentProgress}
+                      clients={clients}
+                      onAddClient={handleAddClient}
+                      matters={matters}
+                      onAddMatter={handleAddMatter}
                     />
                   )}
 

@@ -25,8 +25,10 @@ import {
   Sparkles,
   ShieldCheck,
   FileText,
-  MessageSquare
+  MessageSquare,
+  FolderSync
 } from 'lucide-react';
+import PhoenixIngestionBridgeView from './PhoenixIngestionBridgeView';
 import {
   listGmailMessages,
   getGmailMessage,
@@ -58,11 +60,11 @@ import { getAccessToken, googleSignIn, logout } from '../lib/driveAuth';
 
 interface GoogleWorkspaceTabProps {
   onNotify?: (type: 'info' | 'success' | 'error', msg: string) => void;
-  defaultSubTab?: 'gmail' | 'calendar' | 'tasks' | 'forms' | 'meet' | 'keep';
+  defaultSubTab?: 'gmail' | 'calendar' | 'tasks' | 'forms' | 'meet' | 'keep' | 'bridge';
 }
 
 export default function GoogleWorkspaceTab({ onNotify, defaultSubTab = 'gmail' }: GoogleWorkspaceTabProps) {
-  const [subTab, setSubTab] = useState<'gmail' | 'calendar' | 'tasks' | 'forms' | 'meet' | 'keep'>(defaultSubTab);
+  const [subTab, setSubTab] = useState<'gmail' | 'calendar' | 'tasks' | 'forms' | 'meet' | 'keep' | 'bridge'>(defaultSubTab);
   const [token, setToken] = useState<string>(getAccessToken());
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -646,7 +648,8 @@ export default function GoogleWorkspaceTab({ onNotify, defaultSubTab = 'gmail' }
           { id: 'tasks', label: 'Google Tasks', icon: CheckSquare, badge: `${tasks.filter(t => t.status === 'needsAction').length} pending` },
           { id: 'forms', label: 'Google Forms', icon: FileQuestion, badge: `${forms.length}` },
           { id: 'meet', label: 'Google Meet', icon: Video, badge: 'HD Video' },
-          { id: 'keep', label: 'Keep Notes', icon: StickyNote, badge: `${keepNotes.length}` }
+          { id: 'keep', label: 'Keep Notes', icon: StickyNote, badge: `${keepNotes.length}` },
+          { id: 'bridge', label: 'Phoenix 23 Bridge', icon: FolderSync, badge: 'Multi-Account' }
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = subTab === tab.id;
@@ -1570,6 +1573,13 @@ export default function GoogleWorkspaceTab({ onNotify, defaultSubTab = 'gmail' }
                 })}
             </div>
           </div>
+        )}
+
+        {/* ==================================================== */}
+        {/* 7. PHOENIX 23 MULTI-ACCOUNT INGESTION & DISPATCH BRIDGE */}
+        {/* ==================================================== */}
+        {subTab === 'bridge' && (
+          <PhoenixIngestionBridgeView onNotify={onNotify} />
         )}
       </main>
 

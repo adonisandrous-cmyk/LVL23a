@@ -74,6 +74,12 @@ export interface LegalMessage {
   content: string;
   timestamp: string;
   agentName: string;
+  fileAttachment?: {
+    name: string;
+    size: string;
+    type?: string;
+    content?: string;
+  };
 }
 
 export interface VoiceAgentProfile {

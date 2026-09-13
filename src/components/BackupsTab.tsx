@@ -20,7 +20,9 @@ import {
   Cpu,
   HardDrive,
   Lock,
-  Unlock
+  Unlock,
+  FileCode,
+  ArrowDownToLine
 } from 'lucide-react';
 import { Client, Matter, GeneratedDocument, LegalMessage, AgentProgress, ConsultationSession } from '../types';
 
@@ -175,19 +177,33 @@ const PORT = 4321;
 app.use(cors());
 app.use(express.json({ limit: '60mb' }));
 
-const baseDir = path.join(os.homedir(), 'iiiamadex');
+// Check multiple candidate local folders (supporting illamadex, llamadex, and iiiamadex)
+const candidateBaseDirs = [
+  path.join(os.homedir(), 'illamadex'),
+  path.join(os.homedir(), 'llamadex'),
+  path.join(os.homedir(), 'iiiamadex'),
+  'C:\\\\Users\\\\Administrator\\\\illamadex',
+  'C:\\\\Users\\\\Administrator\\\\llamadex',
+  'C:\\\\Users\\\\Administrator\\\\iiiamadex'
+];
 
+let baseDir = candidateBaseDirs.find(p => fs.existsSync(p)) || candidateBaseDirs[0];
 if (!fs.existsSync(baseDir)) {
-  fs.mkdirSync(baseDir, { recursive: true });
+  try { fs.mkdirSync(baseDir, { recursive: true }); } catch (e) {}
 }
 
-// Locate Local Google Drive path (Standard Windows Installers)
+// Locate Local Google Drive path (Standard Windows Installers and custom folder mounts)
 const possibleDrivePaths = [
+  path.join(os.homedir(), 'Google Drive', 'My Drive', 'illamadex'),
+  path.join(os.homedir(), 'Google Drive', 'My Drive', 'llamadex'),
   path.join(os.homedir(), 'Google Drive', 'My Drive', 'iiiamadex'),
-  path.join(os.homedir(), 'Google Drive', 'iiiamadex'),
-  path.join(os.homedir(), 'Google Drive (level23consulting@gmail.com)', 'My Drive', 'iiiamadex'),
+  path.join(os.homedir(), 'Google Drive (level23consulting@gmail.com)', 'My Drive', 'illamadex'),
+  path.join(os.homedir(), 'Google Drive (level23consulting@gmail.com)', 'My Drive', 'llamadex'),
+  'G:\\\\My Drive\\\\illamadex',
+  'G:\\\\My Drive\\\\llamadex',
   'G:\\\\My Drive\\\\iiiamadex',
-  'G:\\\\iiiamadex'
+  'G:\\\\illamadex',
+  'G:\\\\llamadex'
 ];
 
 let activeGoogleDrivePath = null;
@@ -913,7 +929,7 @@ app.listen(PORT, '0.0.0.0', () => {
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold font-mono tracking-wider text-sky-400 uppercase flex items-center gap-2">
                   <HardDrive className="w-4 h-4 text-sky-400" />
-                  iiiamadex Desktop Bridge
+                  illamadex Desktop Storage Bridge
                 </h4>
                 <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold leading-none uppercase ${
                   bridgeStatus === 'connected' ? 'bg-emerald-500/15 text-emerald-400' :
@@ -925,7 +941,7 @@ app.listen(PORT, '0.0.0.0', () => {
               </div>
 
               <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                A simple local proxy allows this cloud web app to securely list, read, and write litigation briefs right inside your physical folder: <span className="text-sky-300 font-mono font-bold">C:\Users\Administrator\iiiamadex</span> on your computer.
+                A simple local proxy allows this cloud web app to securely list, read, and write litigation briefs right inside your physical desktop storage folder: <span className="text-sky-300 font-mono font-bold">C:\Users\Administrator\illamadex</span> (or <span className="text-sky-300 font-mono">C:\Users\Administrator\llamadex</span>) on your computer.
               </p>
 
               {bridgeStatus === 'connected' ? (
@@ -963,24 +979,56 @@ app.listen(PORT, '0.0.0.0', () => {
                       ⚠️ <strong className="text-white">DO NOT</strong> copy Javascript lines directly into your blank Command Prompt! Follow this three-step pipeline:
                     </p>
                     <div className="space-y-1 text-[10px] text-slate-400 leading-normal pl-1 select-text">
-                      <p>1. Open raw editor (Notepad) or VS Code, create a file named <code className="text-sky-300 font-mono font-bold select-text">bridge.js</code> inside <code className="text-sky-300 font-mono">C:\Users\Administrator\iiiamadex</code>.</p>
+                      <p>1. Open raw editor (Notepad) or VS Code, create a file named <code className="text-sky-300 font-mono font-bold select-text">bridge.js</code> inside <code className="text-sky-300 font-mono">C:\Users\Administrator\illamadex</code> (or <code className="text-sky-300 font-mono">C:\Users\Administrator\llamadex</code>).</p>
                       <p>2. Paste the script below into the Notepad file and save.</p>
                       <p>3. In Command Prompt run these commands:</p>
                       <pre className="p-1 px-2 bg-[#020408] rounded text-[9.5px] text-emerald-400 font-mono font-bold leading-normal select-text">
-                        cd C:\Users\Administrator\iiiamadex<br/>
+                        cd C:\Users\Administrator\illamadex<br/>
                         npm install express cors<br/>
                         node bridge.js
                       </pre>
                     </div>
                   </div>
 
-                  <button
-                    onClick={handleCopyBridgeScript}
-                    className="w-full py-2 bg-[#050810] hover:bg-slate-900 border border-[#1e293b] hover:border-sky-500/40 text-sky-400 font-bold font-mono text-[10.5px] uppercase rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>{copiedBridgeScript ? 'Copied Desktop Bridge JS Script!' : 'Copy Desktop Bridge JS script'}</span>
-                  </button>
+                  <div className="space-y-2">
+                    <button
+                      onClick={handleCopyBridgeScript}
+                      className="w-full py-2 bg-[#050810] hover:bg-slate-900 border border-[#1e293b] hover:border-sky-500/40 text-sky-400 font-bold font-mono text-[10.5px] uppercase rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>{copiedBridgeScript ? 'Copied Desktop Bridge JS Script!' : 'Copy Desktop Bridge JS script'}</span>
+                    </button>
+
+                    {/* 1-Click Batch File Download Button */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                      <a
+                        href="/api/download/script/deep-laptop-cleaner.bat"
+                        download="deep-laptop-cleaner.bat"
+                        className="py-2 px-2.5 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold font-mono text-[9.5px] uppercase rounded-xl flex items-center justify-center gap-1.5 shadow transition-all cursor-pointer no-underline text-center"
+                      >
+                        <ArrowDownToLine className="w-3 h-3" />
+                        <span>Laptop Deep Cleaner (.bat)</span>
+                      </a>
+
+                      <a
+                        href="/api/download/script/install-desktop.bat"
+                        download="install-desktop.bat"
+                        className="py-2 px-2.5 bg-gradient-to-r from-sky-600 to-blue-500 hover:from-sky-500 hover:to-blue-400 text-white font-bold font-mono text-[9.5px] uppercase rounded-xl flex items-center justify-center gap-1.5 shadow transition-all cursor-pointer no-underline text-center"
+                      >
+                        <ArrowDownToLine className="w-3 h-3" />
+                        <span>install-desktop.bat</span>
+                      </a>
+
+                      <a
+                        href="/api/download/script/diagnostics-repair.bat"
+                        download="diagnostics-repair.bat"
+                        className="py-2 px-2.5 bg-[#0e1a2f] hover:bg-sky-900/40 border border-sky-500/30 text-sky-300 font-bold font-mono text-[9.5px] uppercase rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer no-underline text-center"
+                      >
+                        <FileCode className="w-3 h-3 text-teal-400" />
+                        <span>diagnostics-repair.bat</span>
+                      </a>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

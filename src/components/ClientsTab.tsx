@@ -72,7 +72,7 @@ export default function ClientsTab({
   const [isExtractingCardData, setIsExtractingCardData] = useState(false);
   const [localFolderStatus, setLocalFolderStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const [bridgeFiles, setBridgeFiles] = useState<string[]>([]);
-  const [bridgeFolder, setBridgeFolder] = useState<string>('C:\\Users\\Administrator\\iiiamadex');
+  const [bridgeFolder, setBridgeFolder] = useState<string>('C:\\Users\\Administrator\\illamadex');
   const [clientFileSearch, setClientFileSearch] = useState<string>('');
   
   // File Editor state
@@ -352,7 +352,7 @@ export default function ClientsTab({
         const data = await res.json();
         if (data && data.success) {
           setBridgeFiles(data.files || []);
-          setBridgeFolder(data.folder || 'C:\\Users\\Administrator\\iiiamadex');
+          setBridgeFolder(data.folder || 'C:\\Users\\Administrator\\illamadex');
           setLocalFolderStatus('connected');
         } else {
           setLocalFolderStatus('disconnected');
@@ -517,14 +517,14 @@ END:VCARD`;
     if (localFolderStatus === 'connected') {
       const ok = await handleSaveFileToBridge(relativePath, vcfContent);
       if (ok) {
-        alert(`🎉 Connected Sentry! Created raw vCard inside desktop folder:\n📍 C:\\Users\\Administrator\\iiiamadex\\Clients\\${selectedClient.name.replace(/\s+/g, '_')}\\${fileName}`);
+        alert(`🎉 Connected Sentry! Created raw vCard inside desktop storage:\n📍 ${bridgeFolder}\\Clients\\${selectedClient.name.replace(/\s+/g, '_')}\\${fileName}`);
         await checkDesktopBridge();
       } else {
         saveContactCardToSimulated(fileName, vcfContent);
       }
     } else {
       saveContactCardToSimulated(fileName, vcfContent);
-      alert(`📂 Local Mode: Contact card established and synchronized inside client directory list! Connection to C:\\Users\\Administrator\\iiiamadex is active.`);
+      alert(`📂 Local Mode: Contact card established and synchronized inside client directory list! Connection to ${bridgeFolder} is active.`);
     }
   };
 
@@ -747,7 +747,7 @@ END:VCARD`;
                   type="button"
                   onClick={onOpenOmniUpload}
                   className="px-2.5 py-1.5 bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/35 hover:border-purple-400 rounded-lg text-xs font-semibold font-heading flex items-center gap-1.5 cursor-pointer transition-all shadow-[0_0_10px_rgba(168,85,247,0.2)]"
-                  title="Batch Ingest Client Documents from Google Drive Folder (1St88KMt39_i9QtgUPf7GvVKu_cDvnSpU)"
+                  title="Batch Ingest Client Documents from Google Drive Folder (1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH)"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-purple-400" />
                   <span>Drive Batch Onboard</span>
@@ -1464,7 +1464,7 @@ END:VCARD`;
                        <span className="text-[10px] font-mono text-teal-400 p-1 bg-slate-950 rounded select-all">
                          {localFolderStatus === 'connected' 
                            ? `${bridgeFolder}\\Clients\\${selectedClient.name.replace(/\s+/g, '_')}` 
-                           : `C:\\Users\\Administrator\\iiiamadex\\Clients\\${selectedClient.name.replace(/\s+/g, '_')}`}
+                           : `C:\\Users\\Administrator\\illamadex\\Clients\\${selectedClient.name.replace(/\s+/g, '_')}`}
                        </span>
                      </div>
                      <p className="text-[10px] text-slate-500 font-sans leading-none pt-1">
@@ -1920,7 +1920,7 @@ END:VCARD`;
                     <span>{isNewFile ? 'Create New Legal Document' : 'Connected Sentry File Editor'}</span>
                   </h3>
                   <p className="text-[11px] text-slate-500 font-sans mt-0.5">
-                    Target Folder: <code>iiiamadex/Clients/{selectedClient?.name}/</code>
+                    Target Folder: <code>illamadex/Clients/{selectedClient?.name}/</code>
                   </p>
                 </div>
                 <button
