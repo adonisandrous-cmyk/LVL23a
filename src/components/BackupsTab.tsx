@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Download,
@@ -40,6 +40,8 @@ interface BackupsTabProps {
   isStorageLocked?: boolean;
   onToggleStorageLock?: () => void;
   storagePin?: string;
+  isPasswordDisabled?: boolean;
+  onBypassPassword?: () => void;
 }
 
 export interface ImportedState {
@@ -63,7 +65,9 @@ export default function BackupsTab({
   syncMessage = 'Sync Status Offline',
   isStorageLocked = false,
   onToggleStorageLock,
-  storagePin = '1234'
+  storagePin = '1234',
+  isPasswordDisabled = true,
+  onBypassPassword
 }: BackupsTabProps) {
   const [copiedBackup, setCopiedBackup] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
@@ -83,7 +87,7 @@ export default function BackupsTab({
   const [copiedBridgeScript, setCopiedBridgeScript] = useState(false);
 
   // Poll Local Services Mount Check
-  React.useEffect(() => {
+  useEffect(() => {
     checkLocalOllama();
     checkLocalBridge();
   }, []);
@@ -571,61 +575,90 @@ app.listen(PORT, '0.0.0.0', () => {
 
       {/* Storage Security Write Lock Control Box */}
       <div className={`p-5 rounded-2.5xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl transition-all duration-500 bg-[#0d1626]/80 ${
-        isStorageLocked 
+        isPasswordDisabled
+          ? 'border-teal-500/30 bg-teal-950/10'
+          : isStorageLocked 
           ? 'border-rose-500/40 bg-[#1b0a0e]/40' 
           : 'border-emerald-500/25'
       }`}>
         <div className="flex items-start gap-3.5">
           <div className={`p-3 rounded-xl shrink-0 ${
-            isStorageLocked 
+            isPasswordDisabled
+              ? 'bg-teal-500/10 text-teal-400'
+              : isStorageLocked 
               ? 'bg-rose-500/10 text-rose-400' 
               : 'bg-emerald-500/10 text-emerald-400'
           }`}>
-            {isStorageLocked ? <Lock className="w-6 h-6 animate-pulse" /> : <Unlock className="w-6 h-6" />}
+            {isPasswordDisabled ? <Unlock className="w-6 h-6 text-teal-400" /> : isStorageLocked ? <Lock className="w-6 h-6 animate-pulse" /> : <Unlock className="w-6 h-6" />}
           </div>
           <div className="space-y-1">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              Client & Matter Write-Lock Protection
+              Client & Matter Write Protection & Password Security
               <span className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded ${
-                isStorageLocked 
+                isPasswordDisabled
+                  ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
+                  : isStorageLocked 
                   ? 'bg-rose-500/15 text-rose-400' 
                   : 'bg-emerald-500/15 text-emerald-400'
               }`}>
-                {isStorageLocked ? 'Sealed' : 'Mutable'}
+                {isPasswordDisabled ? 'Password Bypassed' : isStorageLocked ? 'Sealed' : 'Mutable'}
               </span>
             </h3>
             <p className="text-xs text-slate-400 leading-normal font-sans">
-              {isStorageLocked 
+              {isPasswordDisabled
+                ? 'Password and PIN verification have been bypassed per user instruction. All database operations, client records, and document generations execute immediately in Direct Access Mode without password prompts.'
+                : isStorageLocked 
                 ? 'Storage locking is currently active. Local index databases, client timeline ledgers, and bidirectional cloud collections are securely sealed. No create, edit, or delete actions can be executed.' 
                 : 'Write mutations are fully enabled for local caches and synchronized remote Firestore databases. Lock storage to freeze databases for archiving, public demonstrations, or offline reading.'}
             </p>
             <div className="text-[10.5px] font-mono text-slate-500 flex items-center gap-1.5">
-              <span>Security Method:</span>
-              <span className="text-slate-400">"{storagePin ? '4-Digit PIN Lock Code Verified' : 'Standard Session Key Lock'}"</span>
+              <span>Security Status:</span>
+              <span className={isPasswordDisabled ? "text-teal-400 font-semibold" : "text-slate-400"}>
+                {isPasswordDisabled ? 'Disabled / Bypassed (Direct Attorney Access)' : storagePin ? '4-Digit PIN Lock Code Verified' : 'Standard Session Key Lock'}
+              </span>
             </div>
           </div>
         </div>
 
-        <button
-          onClick={onToggleStorageLock}
-          className={`px-4 py-2.5 border rounded-xl text-xs font-bold font-mono uppercase cursor-pointer transition-all shrink-0 flex items-center gap-2 ${
-            isStorageLocked
-              ? 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/35 hover:border-emerald-500 text-emerald-400 font-bold'
-              : 'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/30 hover:border-rose-500 text-rose-400 font-bold'
-          }`}
-        >
-          {isStorageLocked ? (
-            <>
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {!isPasswordDisabled && onBypassPassword && (
+            <button
+              onClick={onBypassPassword}
+              className="px-3.5 py-2 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/30 text-teal-400 rounded-xl text-xs font-bold font-mono uppercase cursor-pointer transition-all flex items-center gap-1.5"
+            >
               <Unlock className="w-3.5 h-3.5" />
-              <span>Unlock Storage Cache</span>
-            </>
-          ) : (
-            <>
-              <Lock className="w-3.5 h-3.5" />
-              <span>Lock Storage Cache</span>
-            </>
+              <span>Bypass Password</span>
+            </button>
           )}
-        </button>
+
+          <button
+            onClick={onToggleStorageLock}
+            className={`px-4 py-2.5 border rounded-xl text-xs font-bold font-mono uppercase cursor-pointer transition-all shrink-0 flex items-center gap-2 ${
+              isPasswordDisabled
+                ? 'bg-slate-800/80 hover:bg-slate-700 border-slate-700 text-slate-300'
+                : isStorageLocked
+                ? 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/35 hover:border-emerald-500 text-emerald-400 font-bold'
+                : 'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/30 hover:border-rose-500 text-rose-400 font-bold'
+            }`}
+          >
+            {isPasswordDisabled ? (
+              <>
+                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                <span>Configure / Re-enable PIN</span>
+              </>
+            ) : isStorageLocked ? (
+              <>
+                <Unlock className="w-3.5 h-3.5" />
+                <span>Unlock Storage Cache</span>
+              </>
+            ) : (
+              <>
+                <Lock className="w-3.5 h-3.5" />
+                <span>Lock Storage Cache</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

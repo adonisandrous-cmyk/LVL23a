@@ -1,9 +1,9 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { activeFirebaseConfig, getResolvedFirebaseConfig } from './firebaseConfig';
 
-// Reuse existing app or initialize
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+// Reuse existing app or initialize with resolved config
+const app = getApps().length > 0 ? getApp() : initializeApp(activeFirebaseConfig);
 const auth = getAuth(app);
 
 const provider = new GoogleAuthProvider();
@@ -57,6 +57,14 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     return null;
   }
 
+  // Check config validity before prompting
+  const { validation } = getResolvedFirebaseConfig();
+  if (!validation.isValid) {
+    const errorMsg = `${validation.errorTitle || 'Firebase Configuration Issue'}: ${validation.errorMessage || 'Invalid JSON file.'} ${validation.remediationStep || ''}`;
+    console.error('Firebase configuration validation error:', validation);
+    throw new Error(errorMsg);
+  }
+
   try {
     isSigningIn = true;
     const result = await signInWithPopup(auth, provider);
@@ -70,6 +78,8 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     }
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
+    const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+
     if (
       error?.code === 'auth/popup-closed-by-user' ||
       error?.message?.includes('popup-closed-by-user') ||
@@ -79,6 +89,19 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
       console.info('Google sign-in popup closed or cancelled by user.');
       return null;
     }
+
+    if (error?.code === 'auth/unauthorized-domain') {
+      const unauthorizedMsg = `Firebase Unauthorized Domain: "${currentHost}" is not authorized for OAuth. In Firebase Console (console.firebase.google.com), open Authentication > Settings > Authorized Domains and click "Add domain" for "${currentHost}".`;
+      console.error(unauthorizedMsg);
+      throw new Error(unauthorizedMsg);
+    }
+
+    if (error?.code === 'auth/invalid-api-key' || error?.code === 'auth/configuration-not-found') {
+      const apiKeyMsg = `Firebase Config Error: The API key or project config is invalid. Ensure firebase-applet-config.json contains a valid Firebase Web App configuration (not a Google Cloud service account JSON).`;
+      console.error(apiKeyMsg);
+      throw new Error(apiKeyMsg);
+    }
+
     console.warn('Firebase OAuth warning:', error?.message || error);
     throw error;
   } finally {

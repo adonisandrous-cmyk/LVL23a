@@ -46,6 +46,8 @@ import OmniUploadModal from './components/OmniUploadModal';
 import GoogleTranslateBar from './components/GoogleTranslateBar';
 import ZenEntranceView from './components/ZenEntranceView';
 import GoogleAppHostingModal from './components/GoogleAppHostingModal';
+import { PhoenixModularStudio } from './components/PhoenixModularStudio';
+import { OfficialCaliforniaJudicialCouncilFormModal } from './components/OfficialCaliforniaJudicialCouncilFormModal';
 import { Scale, BookOpen, Database, CloudOff, CloudLightning, Lock, Unlock, UploadCloud, Languages, Globe } from 'lucide-react';
 import { startPeriodicDriveSync } from './services/driveSyncService';
 
@@ -75,14 +77,22 @@ export default function App() {
   const [showClientIntakeGeneratorModal, setShowClientIntakeGeneratorModal] = useState<boolean>(false);
   const [showOmniUploadModal, setShowOmniUploadModal] = useState<boolean>(false);
   const [showGoogleHostingModal, setShowGoogleHostingModal] = useState<boolean>(false);
+  const [showOfficialFormModal, setShowOfficialFormModal] = useState<boolean>(false);
+  const [selectedOfficialFormCode, setSelectedOfficialFormCode] = useState<'FL-120' | 'FL-105' | 'FL-311' | 'FL-160'>('FL-120');
+  const [selectedOfficialClient, setSelectedOfficialClient] = useState<Client | null>(null);
   const [currentAppLanguage, setCurrentAppLanguage] = useState<string>('en');
 
   // Firestore synchronization states
   const [dbSyncStatus, setDbSyncStatus] = useState<'offline' | 'connecting' | 'synced' | 'error'>('connecting');
   const [syncMessage, setSyncMessage] = useState<string>('Connecting to persistent cloud memory...');
 
-  // Storage Lock states
-  const [isStorageLocked, setIsStorageLocked] = useState<boolean>(() => localStorage.getItem('isStorageLocked') === 'true');
+  // Storage Lock states - Password bypassed & disabled per user request
+  const [isPasswordDisabled, setIsPasswordDisabled] = useState<boolean>(() => localStorage.getItem('passwordDisabled') !== 'false'); // Default to true (bypassed/disabled)
+  const [isStorageLocked, setIsStorageLocked] = useState<boolean>(() => {
+    // If password is bypassed/disabled, storage is never locked
+    if (localStorage.getItem('passwordDisabled') !== 'false') return false;
+    return localStorage.getItem('isStorageLocked') === 'true';
+  });
   const [storagePin, setStoragePin] = useState<string>(() => localStorage.getItem('storagePin') || '1234'); // default standard PIN
   const [showLockModal, setShowLockModal] = useState<boolean>(false);
   const [lockModalMode, setLockModalMode] = useState<'lock' | 'unlock' | 'change-pin'>('lock');
@@ -107,6 +117,7 @@ export default function App() {
   const isFictitiousLegacyName = (name?: string) => {
     if (!name) return false;
     const fictitiousNames = [
+      'Jane Doe', 'John Doe',
       'Don Watson', 'Eleanor Vance', 'Mateo Rodriguez', 'Samuel Miller', 'Sarah Jenkins',
       'Aisha Al-Mansoor', 'Marcus Sterling', 'Elena Rostova', 'David K. Chen', 'Gabriela Morales',
       'Harrison Vance', 'Fatima Zahra', 'Robert Thornton', 'Lucia Fontana', 'Benjamin O\'Connor',
@@ -125,6 +136,11 @@ export default function App() {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
             const clean = parsed.filter(c => !isFictitiousLegacyName(c.name));
+            const hasGuinto = clean.some(c => c.name.toLowerCase().includes('guinto'));
+            if (!hasGuinto) {
+              const guintoRecord = INITIAL_CLIENTS_ROSTER.find(c => c.name.toLowerCase().includes('guinto'));
+              if (guintoRecord) clean.unshift(guintoRecord);
+            }
             if (clean.length > 0) return clean;
           }
         }
@@ -144,6 +160,11 @@ export default function App() {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
             const clean = parsed.filter(m => !isFictitiousLegacyName(m.clientName) && !isFictitiousLegacyName(m.title));
+            const hasGuintoMatter = clean.some(m => m.clientName.toLowerCase().includes('guinto') || m.title.toLowerCase().includes('guinto'));
+            if (!hasGuintoMatter) {
+              const guintoMatter = INITIAL_MATTERS_ROSTER.find(m => m.clientName.toLowerCase().includes('guinto'));
+              if (guintoMatter) clean.unshift(guintoMatter);
+            }
             if (clean.length > 0) return clean;
           }
         }
@@ -673,7 +694,7 @@ Petitioner Signature: Jane Doe`,
   };
 
   const checkStorageLocked = (actionName: string): boolean => {
-    if (isStorageLocked) {
+    if (isStorageLocked && !isPasswordDisabled) {
       addLog('system', `⚠️ BLOCKED: Storage is WRITE-LOCKED. Attempted to: ${actionName}.`);
       setStorageLockedToast(`Storage is Write-Locked. Cannot ${actionName}.`);
       setTimeout(() => setStorageLockedToast(null), 4500);
@@ -895,7 +916,7 @@ Petitioner Signature: Jane Doe`,
     } else {
       addLog('system', `Legal Agent "${msg.agentName}" compiled response successfully.`);
     }
-    if (!isStorageLocked) {
+    if (!isStorageLocked || isPasswordDisabled) {
       const cleanPayload = sanitizeForFirestore(msg);
       setDoc(doc(db, 'chatThread', msg.id), cleanPayload).catch(err => {
         handleFirestoreError(err, OperationType.WRITE, `chatThread/${msg.id}`);
@@ -1208,7 +1229,27 @@ Petitioner Signature: Jane Doe`,
     setActiveTab(tab);
   };
 
+  const handleBypassPassword = () => {
+    setIsPasswordDisabled(true);
+    setIsStorageLocked(false);
+    localStorage.setItem('passwordDisabled', 'true');
+    localStorage.setItem('isStorageLocked', 'false');
+    setShowLockModal(false);
+    setPinInput('');
+    setLockError('');
+    setStorageLockedToast(null);
+    addLog('system', '🔓 Password and Security PIN verification bypassed & disabled. Direct unrestricted access enabled.');
+  };
+
   const handleToggleStorageLock = () => {
+    if (isPasswordDisabled) {
+      // Allow user to see lock modal and choose to re-enable if desired
+      setLockModalMode('unlock');
+      setPinInput('');
+      setLockError('');
+      setShowLockModal(true);
+      return;
+    }
     if (isStorageLocked) {
       setLockModalMode('unlock');
       setPinInput('');
@@ -1232,17 +1273,19 @@ Petitioner Signature: Jane Doe`,
 
   const handleConfirmLockAction = () => {
     if (lockModalMode === 'unlock') {
-      if (pinInput === storagePin) {
+      if (pinInput === storagePin || isPasswordDisabled) {
         setIsStorageLocked(false);
         localStorage.setItem('isStorageLocked', 'false');
         setShowLockModal(false);
         addLog('system', '🔓 Storage unlocked. Write & Sync permissions restored to local cache and Firestore cloud.');
       } else {
-        setLockError('Incorrect Security PIN. Please try again.');
+        setLockError('Incorrect Security PIN. Click "Bypass & Disable Password" to continue without PIN.');
       }
     } else if (lockModalMode === 'lock') {
       if (pinInput === storagePin) {
         setIsStorageLocked(true);
+        setIsPasswordDisabled(false);
+        localStorage.setItem('passwordDisabled', 'false');
         localStorage.setItem('isStorageLocked', 'true');
         setShowLockModal(false);
         addLog('system', '🔒 Storage write-locked. No local or cloud mutations allowed.');
@@ -1257,6 +1300,8 @@ Petitioner Signature: Jane Doe`,
       setStoragePin(pinInput);
       localStorage.setItem('storagePin', pinInput);
       setIsStorageLocked(true);
+      setIsPasswordDisabled(false);
+      localStorage.setItem('passwordDisabled', 'false');
       localStorage.setItem('isStorageLocked', 'true');
       setShowLockModal(false);
       addLog('system', `🔒 Storage write-locked with custom security PIN: ${pinInput.replace(/./g, '*')}`);
@@ -1489,13 +1534,20 @@ Petitioner Signature: Jane Doe`,
                   <button
                     onClick={handleToggleStorageLock}
                     className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-mono transition-all duration-300 select-none cursor-pointer hover:bg-slate-800/40 ${
-                      isStorageLocked
+                      isPasswordDisabled
+                        ? 'bg-teal-500/10 border-teal-500/30 text-teal-400'
+                        : isStorageLocked
                         ? 'bg-rose-500/15 border-rose-500/45 text-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.15)] animate-pulse'
                         : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
                     }`}
-                    title={isStorageLocked ? "Storage is Write-Locked (Click to unlock)" : "Storage is Active (Click to lock)"}
+                    title={isPasswordDisabled ? "Password Security Bypassed (Direct Access Mode - Click to configure)" : isStorageLocked ? "Storage is Write-Locked (Click to unlock)" : "Storage is Active (Click to lock)"}
                   >
-                    {isStorageLocked ? (
+                    {isPasswordDisabled ? (
+                      <>
+                        <Unlock className="w-3.5 h-3.5 text-teal-400" />
+                        <span>Password Bypassed</span>
+                      </>
+                    ) : isStorageLocked ? (
                       <>
                         <Lock className="w-3.5 h-3.5 text-rose-400" />
                         <span>Storage Locked</span>
@@ -1559,6 +1611,23 @@ Petitioner Signature: Jane Doe`,
                     />
                   )}
 
+                  {activeTab === 'modules' && (
+                    <PhoenixModularStudio
+                      key="modules"
+                      clients={clients}
+                      matters={matters}
+                      onNavigateTab={(tab) => setActiveTab(tab as any)}
+                      onOpenOfficialForm={(formCode, clientName) => {
+                        const matchedClient = clients.find(c => c.name.toLowerCase().includes(clientName?.toLowerCase() || 'guinto')) || clients[0] || null;
+                        if (matchedClient) {
+                          setSelectedOfficialClient(matchedClient);
+                          setSelectedOfficialFormCode(formCode);
+                          setShowOfficialFormModal(true);
+                        }
+                      }}
+                    />
+                  )}
+
                   {activeTab === 'workspace' && (
                     <GoogleWorkspaceTab
                       key="workspace"
@@ -1571,6 +1640,9 @@ Petitioner Signature: Jane Doe`,
                       key="clients"
                       clients={clients}
                       onAddClient={handleAddClient}
+                      onAddMatter={handleAddMatter}
+                      onAddGeneratedDoc={handleAddGeneratedDoc}
+                      onNavigateToTab={(tab) => setActiveTab(tab as any)}
                       loadMoreClients={loadMoreClients}
                       hasMoreClients={hasMoreClients}
                       isLoadingMoreClients={isLoadingMoreClients}
@@ -1617,6 +1689,7 @@ Petitioner Signature: Jane Doe`,
                       onAddClient={handleAddClient}
                       matters={matters}
                       onAddMatter={handleAddMatter}
+                      onNavigateTab={(tab) => setActiveTab(tab as any)}
                     />
                   )}
 
@@ -1653,6 +1726,8 @@ Petitioner Signature: Jane Doe`,
                       isStorageLocked={isStorageLocked}
                       onToggleStorageLock={handleToggleStorageLock}
                       storagePin={storagePin}
+                      isPasswordDisabled={isPasswordDisabled}
+                      onBypassPassword={handleBypassPassword}
                     />
                   )}
 
@@ -1855,11 +1930,12 @@ Petitioner Signature: Jane Doe`,
             >
               <div className="flex justify-between items-center pb-2 border-b border-[#1e293b]">
                 <div className="flex items-center gap-2">
-                  <Lock className="w-5 h-5 text-rose-400" />
+                  <Lock className={`w-5 h-5 ${isPasswordDisabled ? 'text-teal-400' : 'text-rose-400'}`} />
                   <h3 className="text-sm font-bold text-white uppercase tracking-wider font-sans">
-                    {lockModalMode === 'unlock' && 'Unlock Storage Cache'}
-                    {lockModalMode === 'lock' && 'Lock Storage Cache'}
-                    {lockModalMode === 'change-pin' && 'Set Security PIN & Lock'}
+                    {isPasswordDisabled && 'Password Security Bypassed'}
+                    {!isPasswordDisabled && lockModalMode === 'unlock' && 'Unlock Storage Cache'}
+                    {!isPasswordDisabled && lockModalMode === 'lock' && 'Lock Storage Cache'}
+                    {!isPasswordDisabled && lockModalMode === 'change-pin' && 'Set Security PIN & Lock'}
                   </h3>
                 </div>
                 <button
@@ -1872,48 +1948,76 @@ Petitioner Signature: Jane Doe`,
               </div>
 
               <div className="space-y-3.5 text-xs">
-                <p className="text-[11px] text-slate-400 leading-normal font-sans">
-                  {lockModalMode === 'unlock' && 'Enter your 4-digit Security PIN to restore write and remote synchronization permissions.'}
-                  {lockModalMode === 'lock' && 'Confirm your 4-digit Security PIN to seal all local database files and Firestore indexes.'}
-                  {lockModalMode === 'change-pin' && 'Establish a personalized 4-digit Security PIN (default is 1234). This PIN is stored in secure local sandboxes and will be requested to authorize future cache modifications.'}
-                </p>
+                {isPasswordDisabled ? (
+                  <div className="p-3 bg-teal-500/10 border border-teal-500/30 rounded-xl text-teal-300 space-y-1">
+                    <p className="font-bold flex items-center gap-1.5">
+                      <Unlock className="w-4 h-4 text-teal-400" />
+                      Direct Access Mode Active
+                    </p>
+                    <p className="text-[11px] text-slate-400 leading-normal">
+                      Password / PIN security requirements have been disabled. All local caches and Firestore sync operations are immediately authorized without prompts.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 leading-normal font-sans">
+                    {lockModalMode === 'unlock' && 'Enter your 4-digit Security PIN to restore write and remote synchronization permissions, or click "Bypass & Disable Password".'}
+                    {lockModalMode === 'lock' && 'Confirm your 4-digit Security PIN to seal all local database files and Firestore indexes.'}
+                    {lockModalMode === 'change-pin' && 'Establish a personalized 4-digit Security PIN (default is 1234). This PIN is stored in secure local sandboxes and will be requested to authorize future cache modifications.'}
+                  </p>
+                )}
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono text-slate-500 uppercase">Security PIN Code</label>
-                  <input
-                    type="password"
-                    maxLength={8}
-                    value={pinInput}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, '');
-                      setPinInput(val);
-                      setLockError('');
-                    }}
-                    placeholder="••••"
-                    className="w-full bg-[#060a12] border border-[#1e293b] rounded-xl px-3 py-2.5 text-center text-xl font-mono text-teal-400 focus:outline-none focus:border-teal-500/50"
-                  />
-                  {lockError && (
-                    <p className="text-[10px] font-mono text-rose-400">{lockError}</p>
-                  )}
-                </div>
+                {!isPasswordDisabled && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-slate-500 uppercase">Security PIN Code</label>
+                    <input
+                      type="password"
+                      maxLength={8}
+                      value={pinInput}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '');
+                        setPinInput(val);
+                        setLockError('');
+                      }}
+                      placeholder="••••"
+                      className="w-full bg-[#060a12] border border-[#1e293b] rounded-xl px-3 py-2.5 text-center text-xl font-mono text-teal-400 focus:outline-none focus:border-teal-500/50"
+                    />
+                    {lockError && (
+                      <p className="text-[10px] font-mono text-rose-400">{lockError}</p>
+                    )}
+                  </div>
+                )}
               </div>
 
-              <div className="flex gap-2.5 pt-2">
+              {/* Password Bypass Button & Action Buttons */}
+              <div className="space-y-2 pt-2">
                 <button
-                  onClick={() => setShowLockModal(false)}
-                  className="flex-1 py-2.5 bg-[#060a12] border border-[#1e293b] text-slate-400 hover:text-white rounded-xl text-xs font-bold font-mono uppercase transition-colors cursor-pointer"
+                  type="button"
+                  onClick={handleBypassPassword}
+                  className="w-full py-2 bg-teal-500/15 hover:bg-teal-500/25 border border-teal-500/35 hover:border-teal-400 text-teal-300 font-mono text-xs font-bold uppercase rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  Cancel
+                  <Unlock className="w-3.5 h-3.5 text-teal-400" />
+                  <span>{isPasswordDisabled ? 'Keep Password Bypassed' : 'Bypass & Disable Password'}</span>
                 </button>
-                <button
-                  onClick={handleConfirmLockAction}
-                  disabled={!pinInput}
-                  className="flex-1 py-2.5 bg-gradient-to-r from-teal-500 to-emerald-400 text-slate-950 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed font-bold font-mono text-xs uppercase rounded-xl transition-all cursor-pointer"
-                >
-                  {lockModalMode === 'unlock' && 'Unlock Cache'}
-                  {lockModalMode === 'lock' && 'Lock Cache'}
-                  {lockModalMode === 'change-pin' && 'Set & Lock'}
-                </button>
+
+                <div className="flex gap-2.5">
+                  <button
+                    onClick={() => setShowLockModal(false)}
+                    className="flex-1 py-2.5 bg-[#060a12] border border-[#1e293b] text-slate-400 hover:text-white rounded-xl text-xs font-bold font-mono uppercase transition-colors cursor-pointer"
+                  >
+                    Close
+                  </button>
+                  {!isPasswordDisabled && (
+                    <button
+                      onClick={handleConfirmLockAction}
+                      disabled={!pinInput}
+                      className="flex-1 py-2.5 bg-gradient-to-r from-teal-500 to-emerald-400 text-slate-950 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed font-bold font-mono text-xs uppercase rounded-xl transition-all cursor-pointer"
+                    >
+                      {lockModalMode === 'unlock' && 'Unlock Cache'}
+                      {lockModalMode === 'lock' && 'Lock Cache'}
+                      {lockModalMode === 'change-pin' && 'Set & Lock'}
+                    </button>
+                  )}
+                </div>
               </div>
             </motion.div>
           </div>
@@ -1996,6 +2100,19 @@ Petitioner Signature: Jane Doe`,
       <GoogleAppHostingModal
         isOpen={showGoogleHostingModal}
         onClose={() => setShowGoogleHostingModal(false)}
+      />
+
+      {/* Official California Judicial Council Form Modal */}
+      <OfficialCaliforniaJudicialCouncilFormModal
+        isOpen={showOfficialFormModal}
+        onClose={() => setShowOfficialFormModal(false)}
+        client={selectedOfficialClient || clients[0] || null}
+        clients={clients}
+        initialFormCode={selectedOfficialFormCode}
+        onAddGeneratedDoc={(doc) => {
+          handleAddGeneratedDoc(doc);
+          addLog('document', `Saved official California Judicial Council form ${doc.title} to client documents.`);
+        }}
       />
 
     </div>

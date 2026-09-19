@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DollarSign,
@@ -49,7 +49,7 @@ export function ClientLedgerDropdown({
   const [showAddModal, setShowAddModal] = useState(false);
 
   // Refresh when opened
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       setLedger(getOrCreateClientLedger(client.id, client.name, client.practiceArea));
     }
@@ -494,7 +494,7 @@ export function ClientFullLedgerView({ client, onReturnToCard }: ClientFullLedge
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     setLedger(getOrCreateClientLedger(client.id, client.name, client.practiceArea));
   }, [client.id]);
 

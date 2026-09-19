@@ -2,85 +2,93 @@ import { Client, Matter } from '../types';
 
 export const INITIAL_CLIENTS_ROSTER: Client[] = [
   {
-    id: 'c-1',
-    name: 'Jane Doe',
-    email: 'jane.doe@example.com',
-    phone: '+1 (555) 019-2831',
+    id: 'c-guinto',
+    name: 'Christopher Guinto',
+    email: 'christopher.guinto@gmail.com',
+    phone: '+1 (714) 555-0199',
     status: 'active',
     practiceArea: 'Family Law',
-    createdAt: '2026-08-01T08:00:00Z',
+    createdAt: '2026-08-15T09:00:00Z',
+    fl120Data: {
+      caseNumber: '26FL008921',
+      courtCounty: 'Orange County Superior Court',
+      branchName: 'Lamoreaux Justice Center, 341 The City Dr S, Orange, CA 92868',
+      petitionerName: 'Maria Guinto',
+      respondentName: 'Christopher Guinto',
+      proceedingType: 'Dissolution',
+      legalRelationship: 'Marriage',
+      residenceRequirementMet: true,
+      dateOfMarriage: '2015-09-18',
+      dateOfSeparation: '2026-04-10',
+      durationYears: 10,
+      durationMonths: 7,
+      hasMinorChildren: true,
+      minorChildren: [
+        { name: 'Ethan Guinto', birthdate: '2017-04-12', age: 9 },
+        { name: 'Sophia Guinto', birthdate: '2020-11-05', age: 5 }
+      ],
+      uccjeaFormRequired: true,
+      legalGrounds: 'Irreconcilable Differences',
+      custodyLegal: 'Joint',
+      custodyPhysical: 'Joint',
+      visitationRequested: 'Standard 2-2-3 alternating weekly schedule with alternating major holidays and 2 uninterrupted weeks during summer vacation per FL-311',
+      childSupportRequested: true,
+      spousalSupportRequested: 'Reserve',
+      separatePropertyConfirmed: true,
+      separatePropertyNotes: 'Confirm Respondent Christopher Guinto separate property per Fam. Code § 770 (pre-marital retirement accounts, vehicle, and personal tools acquired prior to marriage)',
+      communityPropertyDivision: true,
+      communityPropertyNotes: 'Equal division of community estate pursuant to Fam. Code § 2550: Marital residence equity, joint checking and savings accounts, retirement benefits accrued during coverture subject to QDRO',
+      attorneyFeesPayableBy: 'None',
+      formerNameRestored: '',
+      abbyyExtractionTimestamp: '2026-08-15T09:30:00Z',
+      abbyyBatchId: 'ABBYY-FL120-GUINTO-VERIFIED'
+    },
     intakeNotes: `========================================================================
-CLIENT INTAKE MEMORANDUM & CASE FILE: JANE DOE [STANDARD PLACEHOLDER]
+CLIENT INTAKE MEMORANDUM & CASE FILE: CHRISTOPHER GUINTO
 ========================================================================
 1. PARTY INFORMATION
-- Client Legal Name: Jane Doe
-- Status: Standard Placeholder Record
-- Email: jane.doe@example.com
-- Phone: +1 (555) 019-2831
-- Practice Area: Family Law
+- Client Legal Name: Christopher Guinto (Respondent)
+- Opposing Party: Maria Guinto (Petitioner)
+- Case Number: 26FL008921
+- Court: Superior Court of California, County of Orange
+- Branch: Lamoreaux Justice Center, 341 The City Dr S, Orange, CA 92868
+- Email: christopher.guinto@gmail.com
+- Phone: +1 (714) 555-0199
+- Practice Area: Family Law (Dissolution of Marriage)
 
-2. INTAKE SUMMARY
-Standard client placeholder available for modification or replacement with verified client credentials upon onboarding.
-========================================================================`
-  },
-  {
-    id: 'c-2',
-    name: 'John Doe',
-    email: 'john.doe@example.com',
-    phone: '+1 (555) 019-2832',
-    status: 'active',
-    practiceArea: 'Civil Litigation',
-    createdAt: '2026-08-01T09:00:00Z',
-    intakeNotes: `========================================================================
-CLIENT INTAKE MEMORANDUM & CASE FILE: JOHN DOE [STANDARD PLACEHOLDER]
-========================================================================
-1. PARTY INFORMATION
-- Client Legal Name: John Doe
-- Status: Standard Placeholder Record
-- Email: john.doe@example.com
-- Phone: +1 (555) 019-2832
-- Practice Area: Civil Litigation
-
-2. INTAKE SUMMARY
-Standard client placeholder available for modification or replacement with verified client credentials upon onboarding.
+2. STATUTORY DISSOLUTION PROFILE (FL-120 ET SEQ.)
+- Marriage Date: September 18, 2015
+- Separation Date: April 10, 2026 (Duration: 10 yrs, 7 mos)
+- Minor Children:
+  1) Ethan Guinto (DOB: 04/12/2017, Age 9)
+  2) Sophia Guinto (DOB: 11/05/2020, Age 5)
+- Custody / Visitation Plan: Joint legal and physical custody (FL-311 2-2-3 schedule)
+- UCCJEA Jurisdiction: Form FL-105 attached (California residence > 6 months)
+- Property Rights:
+  * Fam. Code § 770 Separate Property: Respondent pre-marital retirement & personal assets
+  * Fam. Code § 2550 Community Property: Equal division of marital assets and community equity
+- Support Orders: Child support per California statutory guideline; reserve spousal support
 ========================================================================`
   }
 ];
 
 export const INITIAL_MATTERS_ROSTER: Matter[] = [
   {
-    id: 'm-1',
-    title: 'Matter Template — Jane Doe',
-    caseNumber: 'CASE-2026-001',
-    clientId: 'c-1',
-    clientName: 'Jane Doe',
+    id: 'm-guinto-1',
+    title: 'Dissolution Response (FL-120 et seq.) — Christopher Guinto',
+    caseNumber: '26FL008921',
+    clientId: 'c-guinto',
+    clientName: 'Christopher Guinto',
     practiceArea: 'Family Law',
     status: 'active',
     billingRate: 350,
-    billedHours: 2.0,
-    description: 'Standard placeholder legal matter ready for client onboarding and customized case management.',
-    createdAt: '2026-08-01T08:30:00Z',
+    billedHours: 3.5,
+    description: 'Judicial Council statutory response forms packet (FL-120, FL-105 UCCJEA, FL-311, FL-140, FL-160) for Christopher Guinto.',
+    createdAt: '2026-08-15T10:00:00Z',
     tasks: [
-      { id: 't-1-1', title: 'Onboard and verify client intake documentation', completed: false, dueDate: '2026-09-01' },
-      { id: 't-1-2', title: 'Review initial pleadings & schedule client consultation', completed: false, dueDate: '2026-09-15' }
+      { id: 't-g-1', title: 'File FL-120 Response and FL-105 UCCJEA Declaration at Lamoreaux Justice Center', completed: false, dueDate: '2026-09-01' },
+      { id: 't-g-2', title: 'Serve Preliminary Declaration of Disclosure (FL-140/FL-150) on Petitioner', completed: false, dueDate: '2026-09-15' }
     ],
-    riskAssessment: 'Standard initial intake assessment pending primary case filing.'
-  },
-  {
-    id: 'm-2',
-    title: 'Matter Template — John Doe',
-    caseNumber: 'CASE-2026-002',
-    clientId: 'c-2',
-    clientName: 'John Doe',
-    practiceArea: 'Civil Litigation',
-    status: 'active',
-    billingRate: 350,
-    billedHours: 1.5,
-    description: 'Standard placeholder legal matter ready for client onboarding and dispute resolution.',
-    createdAt: '2026-08-01T09:30:00Z',
-    tasks: [
-      { id: 't-2-1', title: 'Compile initial discovery requests and client records', completed: false, dueDate: '2026-09-10' }
-    ],
-    riskAssessment: 'Preliminary case evaluation.'
+    riskAssessment: 'Statutory 30-day response deadline following petition service; timely FL-120 filing required to avoid default.'
   }
 ];

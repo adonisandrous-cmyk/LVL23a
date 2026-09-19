@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Briefcase,
@@ -211,17 +211,7 @@ export default function MattersTab({
         if (parsed && typeof parsed === 'object') return parsed;
       } catch (e) {}
     }
-    // Prepopulated folders out of the box!
-    return {
-      'm-1': [ // Joint Custody Dissolution case
-        { name: 'Separation_Timeline_Draft.md', type: 'Markdown', size: '2.5 KB', date: '2026-08-01', content: '### Case Joint Separation Timeline draft\n- Marriage Date: July 2nd, 2012.\n- Separation Date: April 10, 2026.\n- Minor Children: Two.\n\nKey issues claimed: structural duress, limits on community property liability.' },
-        { name: 'FL_100_Petition_Draft.md', type: 'Markdown', size: '3.1 KB', date: '2026-08-01', content: '### FAMILY LAW PETITION (CA FL-100)\n\nATTORNEY FOR: Jane Doe\nRESPONDENT: John Doe\n\n1. RESIDENCE REQUIREMENT: Petitioner has been a resident of this county.\n2. MINOR CHILDREN: Joint legal custody is requested.' },
-        { name: 'Joint_Property_Inventory.txt', type: 'Text Document', size: '1.1 KB', date: '2026-08-01', content: 'Property 1: Residence Unit\nValue: $920,000.\nOutstanding Liability: $120,000 (claimed community liability).' }
-      ],
-      'm-2': [ // Legal Matter Case
-        { name: 'Legal_Intake_Brief.md', type: 'Markdown', size: '2.8 KB', date: '2026-08-01', content: '### INITIAL LEGAL INTAKE BRIEF\n\nAPPLICANT: John Doe\nNARRATIVE BRIEF: Applicant requests comprehensive representation and filing support.' }
-      ]
-    };
+    return {};
   });
 
   const saveSimulatedMatters = (updated: Record<string, any>) => {
@@ -353,7 +343,7 @@ export default function MattersTab({
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     checkDesktopBridge();
     const interval = setInterval(checkDesktopBridge, 6000);
     return () => clearInterval(interval);

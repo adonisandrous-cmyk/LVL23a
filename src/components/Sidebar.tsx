@@ -26,7 +26,8 @@ import {
   ShieldAlert,
   CheckCircle2,
   X,
-  Key
+  Key,
+  Layers
 } from 'lucide-react';
 import {
   subscribeDriveSync,
@@ -103,6 +104,7 @@ export default function Sidebar({
 
   const sidebarItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'modules', label: 'Phoenix Modules', icon: Layers, badge: 'Standalone' },
     { id: 'workspace', label: 'Workspace Hub', icon: Sparkles, badge: 'Google' },
     { id: 'clients', label: 'Clients', icon: Users },
     { id: 'matters', label: 'Matters', icon: Briefcase },

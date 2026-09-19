@@ -50,9 +50,17 @@ import {
   Square,
   UserPlus,
   Plus,
-  HardDrive
+  HardDrive,
+  Database,
+  Globe,
+  Scale,
+  FileCheck,
+  Eye,
+  Layers
 } from 'lucide-react';
-import { LegalMessage, VoiceAgentProfile, AgentProgress, Client, Matter } from '../types';
+import { LegalMessage, VoiceAgentProfile, AgentProgress, Client, Matter, AgentExtractionResult, GeneratedDocument } from '../types';
+import { AssignExtractionTaskModal } from './AssignExtractionTaskModal';
+import { OfficialCaliforniaJudicialCouncilFormModal } from './OfficialCaliforniaJudicialCouncilFormModal';
 import { audioService } from '../services/audioPlaybackService';
 import { getAccessToken } from '../lib/driveAuth';
 
@@ -70,6 +78,8 @@ interface AIStaffTabProps {
   onAddClient?: (client: Omit<Client, 'id' | 'createdAt'> | Client) => void;
   matters?: Matter[];
   onAddMatter?: (matter: Omit<Matter, 'id' | 'createdAt'> | Matter) => void;
+  onAddGeneratedDoc?: (doc: GeneratedDocument) => void;
+  onNavigateTab?: (tab: string) => void;
 }
 
 export default function AIStaffTab({
@@ -81,8 +91,16 @@ export default function AIStaffTab({
   clients,
   onAddClient,
   matters,
-  onAddMatter
+  onAddMatter,
+  onAddGeneratedDoc,
+  onNavigateTab
 }: AIStaffTabProps) {
+  // Official California Judicial Council Form Modal State
+  const [showOfficialFormModal, setShowOfficialFormModal] = useState<boolean>(false);
+  const [selectedOfficialFormCode, setSelectedOfficialFormCode] = useState<'FL-120' | 'FL-105' | 'FL-311' | 'FL-160'>('FL-120');
+  const [selectedOfficialClient, setSelectedOfficialClient] = useState<Client | null>(() => {
+    return clients?.find(c => c.name.includes('Christopher Guinto')) || clients?.[0] || null;
+  });
   
   // Manage Custom Agent Names persistently via localStorage/state
   const [customNames, setCustomNames] = useState<Record<string, string>>(() => {
@@ -95,6 +113,8 @@ export default function AIStaffTab({
         if (parsed['ap-2'] === 'Miranda Advocate' || parsed['ap-2'] === 'Miranda') parsed['ap-2'] = 'Sentry';
         if (parsed['ap-3'] === 'Aida Associate' || parsed['ap-3'] === 'Aida') parsed['ap-3'] = 'Alure';
         if (!parsed['ap-4']) parsed['ap-4'] = 'EVE';
+        if (!parsed['ap-5']) parsed['ap-5'] = 'Sentinel';
+        if (!parsed['ap-6']) parsed['ap-6'] = 'Veritas';
         return parsed;
       }
     } catch (e) {
@@ -104,7 +124,9 @@ export default function AIStaffTab({
       'ap-1': 'Phoenix',
       'ap-2': 'Sentry',
       'ap-3': 'Alure',
-      'ap-4': 'EVE'
+      'ap-4': 'EVE',
+      'ap-5': 'Sentinel',
+      'ap-6': 'Veritas'
     };
   });
 
@@ -181,7 +203,9 @@ export default function AIStaffTab({
       'ap-1': ['alexandra', 'partner', 'strategist', 'phoenix'],
       'ap-2': ['miranda', 'advocate', 'insolvency', 'bankruptcy', 'sentry', 'maintenance', 'maintain'],
       'ap-3': ['aida', 'associate', 'research', 'alure', 'reviewer', 'manager'],
-      'ap-4': ['eve', 'receptionist', 'router', 'assistant', 'ollama']
+      'ap-4': ['eve', 'receptionist', 'router', 'assistant', 'ollama'],
+      'ap-5': ['sentinel', 'quality', 'auditor', 'integrity', 'code quality', 'loop watchdog', 'ast'],
+      'ap-6': ['veritas', 'effectiveness', 'verifier', 'benchmark', 'empirical', 'feature test']
     };
     
     // Check if message matches custom assigned name
@@ -194,7 +218,7 @@ export default function AIStaffTab({
     return terms.some(term => normMsg.includes(term));
   };
 
-  // All Female Agent Profiles with clear hierarchy, roles, and full Google Drive edit authority
+  // Dedicated Agent Profiles with clear hierarchy, roles, and full Google Drive edit authority
   const agentProfiles: VoiceAgentProfile[] = [
     {
       id: 'ap-4',
@@ -239,6 +263,28 @@ export default function AIStaffTab({
       accent: 'Modern West Coast (US Female)',
       style: 'Analytical, highly responsive, concise, full Drive edit authority',
       portrait: alurePortrait
+    },
+    {
+      id: 'ap-5',
+      name: customNames['ap-5'] || 'Sentinel',
+      avatar: '🔬',
+      role: 'Code Quality & Architectural Auditor',
+      voiceName: 'Charon',
+      description: 'Spawned dedicated model strictly focused on software quality, code correctness, zero-loop guarantees, validating component boundaries, and testing individual system subroutines.',
+      accent: 'Precise & Direct (Analytical)',
+      style: 'Rigorous, audit-driven, zero tolerance for loops or hallucinations',
+      portrait: sentryPortrait
+    },
+    {
+      id: 'ap-6',
+      name: customNames['ap-6'] || 'Veritas',
+      avatar: '⚖️',
+      role: 'Feature Effectiveness & Verification Engine',
+      voiceName: 'Fenrir',
+      description: 'Spawned dedicated model strictly focused on empirical feature effectiveness: benchmarks phone parsing accuracy, video conferencing stability, court form generation precision, and modular autonomy.',
+      accent: 'Authoritative Benchmark (Verification)',
+      style: 'Empirical, test-driven, metric-focused, feature validator',
+      portrait: phoenixPortrait
     }
   ];
 
@@ -301,6 +347,66 @@ export default function AIStaffTab({
   const [driveNotification, setDriveNotification] = useState<string | null>(null);
   const [staffDriveTab, setStaffDriveTab] = useState<'files' | 'editor'>('files');
   const [staffWorkspaceMode, setStaffWorkspaceMode] = useState<'drive' | 'context'>('drive');
+
+  // AI Agent Extraction Task Modal State
+  const [showAssignTaskModal, setShowAssignTaskModal] = useState<boolean>(false);
+
+  const handleApplyExtractionTask = (result: AgentExtractionResult) => {
+    // 1. Create or update client
+    if (onAddClient) {
+      onAddClient({
+        name: result.client.name,
+        email: result.client.email || 'client@level23legal.com',
+        phone: result.client.phone || '(702) 555-0199',
+        practiceArea: result.client.practiceArea || 'Family Law',
+        status: result.client.status || 'active',
+        intakeNotes: result.client.intakeNotes || ''
+      });
+    }
+
+    // 2. Persist extracted card fields into localStorage
+    try {
+      const saved = localStorage.getItem('level23_extracted_card_fields_v2');
+      const allCards = saved ? JSON.parse(saved) : {};
+      const clientId = (clients && clients.find(c => c.name.toLowerCase() === result.client.name.toLowerCase())?.id) || `c-${Date.now()}`;
+      allCards[clientId] = result.extractedFields;
+      localStorage.setItem('level23_extracted_card_fields_v2', JSON.stringify(allCards));
+    } catch (e) {
+      console.warn("Could not write card fields to localStorage", e);
+    }
+
+    // 3. Create matter if present
+    if (result.matter && onAddMatter) {
+      const clientId = (clients && clients.find(c => c.name.toLowerCase() === result.client.name.toLowerCase())?.id) || `c-${Date.now()}`;
+      onAddMatter({
+        title: result.matter.title,
+        clientId: clientId,
+        clientName: result.client.name,
+        caseNumber: result.matter.caseNumber,
+        practiceArea: result.matter.practiceArea,
+        status: result.matter.status,
+        billingRate: result.matter.billingRate || 425,
+        billedHours: 0,
+        description: result.matter.description,
+        tasks: result.matter.tasks || []
+      });
+    }
+
+    // 4. Dispatch a message to the AI Staff thread
+    onAddMessage({
+      id: `msg-${Date.now()}`,
+      sender: 'assistant',
+      agentName: activeProfile.name,
+      content: `🎯 **AI Agent Extraction Task Complete**: Directly ingested and extracted ${result.taskAudit.extractedFieldsCount} verified fields for **${result.client.name}** (${result.client.practiceArea}).
+
+- **Assigned Agent**: ${result.taskAudit.assignedAgent}
+- **Task**: ${result.taskAudit.taskName}
+- **Client Status**: Placed in database with full contact, dossier card attributes, and intake notes.
+- **Litigation Matter**: Created matter "${result.matter?.title || 'General Legal File'}" with ${result.matter?.tasks?.length || 0} litigation tasks assigned.
+- **Client File Placement**: Dossier created in \`Clients/${result.client.name.replace(/\s+/g, '_')}/\``,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+  };
 
   // Fetch all documents from the firm Google Drive repository
   const fetchStaffDriveFiles = async () => {
@@ -492,6 +598,145 @@ export default function AIStaffTab({
   const [docClaimsText, setDocClaimsText] = useState<string>('');
   const [isAnalyzingDoc, setIsAnalyzingDoc] = useState<boolean>(false);
   const [activeRightTab, setActiveRightTab] = useState<'summary' | 'liabilities' | 'verification'>('summary');
+
+  // Google Agents Framework Interactive Workbench State
+  const [showAgentFrameworkModal, setShowAgentFrameworkModal] = useState<boolean>(false);
+  const [agentFrameworkMode, setAgentFrameworkMode] = useState<'search' | 'summation' | 'inbox'>('search');
+  const [agentFrameworkQuery, setAgentFrameworkQuery] = useState<string>('California Family Code irreconcilable differences statutory dissolution and separate property division rules');
+  const [agentFrameworkDocContext, setAgentFrameworkDocContext] = useState<string>('');
+  const [isExecutingAgentTask, setIsExecutingAgentTask] = useState<boolean>(false);
+  const [agentExecutionResult, setAgentExecutionResult] = useState<any | null>(null);
+  const [inboxFilesData, setInboxFilesData] = useState<any[]>([]);
+  const [isLoadingInbox, setIsLoadingInbox] = useState<boolean>(false);
+  const [uploadingToInbox, setUploadingToInbox] = useState<boolean>(false);
+  const [inboxUploadName, setInboxUploadName] = useState<string>('');
+  const [inboxUploadContent, setInboxUploadContent] = useState<string>('');
+
+  // Real-time Legal Databases & Public Access Court Dockets State
+  const [searchMode, setSearchMode] = useState<'all' | 'dockets' | 'statutes' | 'tentative_rulings' | 'caselaw'>('all');
+  const [courtJurisdiction, setCourtJurisdiction] = useState<string>('Orange County Superior Court (OCCourts)');
+  const [caseNumberFilter, setCaseNumberFilter] = useState<string>('');
+
+  const fetchInboxFiles = async () => {
+    setIsLoadingInbox(true);
+    try {
+      const res = await fetch('/api/drive/inbox');
+      if (res.ok) {
+        const data = await res.json();
+        setInboxFilesData(data.files || []);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch inbox files:', e);
+    } finally {
+      setIsLoadingInbox(false);
+    }
+  };
+
+  const handleExecuteAgentTask = async (taskType: 'search' | 'summation' | 'general_counsel') => {
+    setIsExecutingAgentTask(true);
+    try {
+      const targetAgentId = activeProfile.id === 'ap-4' ? 'eve' : 'phoenix';
+      
+      let finalQuery = agentFrameworkQuery;
+      if (taskType === 'search' && caseNumberFilter.trim()) {
+        finalQuery = `Docket lookup for Case #${caseNumberFilter.trim()} in ${courtJurisdiction}: ${agentFrameworkQuery}`;
+      }
+
+      const res = await fetch('/api/agents/execute-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: targetAgentId,
+          taskType,
+          query: finalQuery,
+          documentContext: agentFrameworkDocContext || undefined,
+          options: {
+            searchMode,
+            courtJurisdiction,
+            caseNumber: caseNumberFilter.trim() || undefined
+          }
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        // If taskType was search, enrich knowledgeGraph if needed from expanded search
+        if (taskType === 'search' && (!data.knowledgeGraph?.sources || data.knowledgeGraph.sources.length === 0)) {
+          try {
+            const searchRes = await fetch('/api/agents/search', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                query: finalQuery,
+                searchMode,
+                caseNumber: caseNumberFilter.trim() || undefined,
+                courtJurisdiction
+              })
+            });
+            const searchData = await searchRes.json();
+            if (searchData.success) {
+              data.knowledgeGraph = {
+                query: finalQuery,
+                sources: searchData.sources || [],
+                keyEntities: data.knowledgeGraph?.keyEntities || [],
+                statutoryGrounding: data.knowledgeGraph?.statutoryGrounding || [],
+                synthesizedAnswer: searchData.answer || data.directResponse
+              };
+              data.docketRecord = searchData.docketRecord;
+              data.connectedDatabases = searchData.connectedDatabases;
+            }
+          } catch (se) {
+            console.warn('Expanded search enrichment notice:', se);
+          }
+        }
+
+        setAgentExecutionResult(data);
+        // Also post an update to the active counsel chat thread
+        onAddMessage({
+          id: `msg-${Date.now()}`,
+          sender: 'assistant',
+          agentName: data.agentName || activeProfile.name,
+          content: `⚡ **Google Agent Core Framework & Real-Time Legal Search Complete** (${taskType.toUpperCase()})
+- **Working Drive Account**: \`${data.workingDrive?.account || 'level23consulting@gmail.com'}\`
+- **Designated Intake & Review Dropzone**: \`${data.workingDrive?.inboxFolder || 'phoenix_review'}\`
+- **Search Mode**: \`${searchMode.toUpperCase()}\` • **Jurisdiction**: \`${courtJurisdiction}\`
+${caseNumberFilter ? `- **Docket Queried**: \`${caseNumberFilter}\`\n` : ''}- **Response**: ${data.directResponse?.slice(0, 400)}...
+
+${data.summation ? `📋 **Executive Brief**: ${data.summation.executiveBrief}\n🏛️ **Court Forms Recommended**: ${data.summation.recommendedCourtForms?.join(', ')}` : ''}`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
+      }
+    } catch (err: any) {
+      console.error('Agent task error:', err);
+    } finally {
+      setIsExecutingAgentTask(false);
+    }
+  };
+
+  const handleUploadToInbox = async () => {
+    if (!inboxUploadName.trim() || !inboxUploadContent.trim()) return;
+    setUploadingToInbox(true);
+    try {
+      const res = await fetch('/api/drive/upload-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: inboxUploadName.trim(),
+          content: inboxUploadContent.trim(),
+          folderId: 'phoenix_review',
+          clientName: 'Staged Intake'
+        })
+      });
+      if (res.ok) {
+        setInboxUploadName('');
+        setInboxUploadContent('');
+        fetchInboxFiles();
+      }
+    } catch (e) {
+      console.warn('Upload to inbox error:', e);
+    } finally {
+      setUploadingToInbox(false);
+    }
+  };
 
   // Audio Playback Elements & Voice Refs
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -1068,15 +1313,21 @@ export default function AIStaffTab({
     const mirandaName = (customNames['ap-2'] || 'Miranda').toLowerCase();
     const aidaName = (customNames['ap-3'] || 'Aida').toLowerCase();
     const eveName = (customNames['ap-4'] || 'EVE').toLowerCase();
+    const sentinelName = (customNames['ap-5'] || 'Sentinel').toLowerCase();
+    const veritasName = (customNames['ap-6'] || 'Veritas').toLowerCase();
 
     const hasAlexandra = normalized.includes(alexName) || normalized.includes("alexandra") || normalized.includes("alexa") || normalized.includes("partner") || normalized.includes("phoenix") || normalized.includes("leader");
     const hasMiranda = normalized.includes(mirandaName) || normalized.includes("miranda") || normalized.includes("bankruptcy") || normalized.includes("sentry") || normalized.includes("security");
     const hasAida = normalized.includes(aidaName) || normalized.includes("aida") || normalized.includes("associate") || normalized.includes("alure") || normalized.includes("research");
     const hasEve = normalized.includes(eveName) || normalized.includes("eve") || normalized.includes("receptionist") || normalized.includes("office manager") || normalized.includes("operations") || normalized.includes("router");
+    const hasSentinel = normalized.includes(sentinelName) || normalized.includes("sentinel") || normalized.includes("quality") || normalized.includes("loop audit") || normalized.includes("ast audit");
+    const hasVeritas = normalized.includes(veritasName) || normalized.includes("veritas") || normalized.includes("effectiveness") || normalized.includes("benchmark") || normalized.includes("feature audit");
     const hasWakeWord = normalized.includes("wake up") || normalized.includes("wake-up") || normalized.includes("hello") || normalized.includes("activate") || normalized.includes("listen");
 
     let matchedProfile = null;
-    if (hasAlexandra) matchedProfile = agentProfiles.find(p => p.id === 'ap-1');
+    if (hasSentinel) matchedProfile = agentProfiles.find(p => p.id === 'ap-5');
+    else if (hasVeritas) matchedProfile = agentProfiles.find(p => p.id === 'ap-6');
+    else if (hasAlexandra) matchedProfile = agentProfiles.find(p => p.id === 'ap-1');
     else if (hasEve) matchedProfile = agentProfiles.find(p => p.id === 'ap-4');
     else if (hasMiranda) matchedProfile = agentProfiles.find(p => p.id === 'ap-2');
     else if (hasAida) matchedProfile = agentProfiles.find(p => p.id === 'ap-3');
@@ -1100,6 +1351,10 @@ export default function AIStaffTab({
         .replace("alure", "")
         .replace(eveName, "")
         .replace("eve", "")
+        .replace(sentinelName, "")
+        .replace("sentinel", "")
+        .replace(veritasName, "")
+        .replace("veritas", "")
         .replace("office manager", "")
         .replace("wake up", "")
         .replace("wake-up", "")
@@ -1113,7 +1368,11 @@ export default function AIStaffTab({
       } else {
         // Simple wake up - clear hierarchy & role representation
         let responsePhrase = "";
-        if (matchedProfile.id === 'ap-1') {
+        if (matchedProfile.id === 'ap-5') {
+          responsePhrase = `Sentinel online. Code quality and syntax integrity watchdog active. Zero recursive loops detected. What system audit shall I perform?`;
+        } else if (matchedProfile.id === 'ap-6') {
+          responsePhrase = `Veritas online. Feature effectiveness and empirical benchmark engine ready. All 8 modules isolated. What feature shall I verify?`;
+        } else if (matchedProfile.id === 'ap-1') {
           responsePhrase = `Yes, I am ${matchedProfile.name}, your Senior Managing Partner and Litigation Lead. What trial strategy or joint filings do you need, Alex?`;
         } else if (matchedProfile.id === 'ap-4') {
           responsePhrase = `Hello! I am ${matchedProfile.name}, your Office Manager & Operations Lead. I keep our everyday tasks, calendar, intakes, and case files in complete order. How can I help you today, Alex?`;
@@ -1440,10 +1699,55 @@ export default function AIStaffTab({
         saveStaffDriveFile(fileName, fileContent, fileFormat, fileId);
 
         cleanReply = cleanReply.replace(driveSaveRegex, '').trim();
-        cleanReply += `\n\n📁 **Google Drive Update Confirmed:** \`${fileName}\` was compiled and saved to [Google Drive Repository](https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH?usp=drive_link).`;
+        cleanReply += `\n\n📁 **Work Product Staged:** \`${fileName}\` has been generated and placed in the firm repository.`;
       } catch (err) {
         console.warn('Drive save action parsing error:', err);
       }
+    }
+
+    // 2b. Check for [ACTION:OPEN_OFFICIAL_FORM:{...}]
+    const officialFormRegex = /\[ACTION:OPEN_OFFICIAL_FORM:(\{.*?\})\]/s;
+    const officialFormMatch = cleanReply.match(officialFormRegex);
+    if (officialFormMatch) {
+      try {
+        const formData = JSON.parse(officialFormMatch[1]);
+        const code = (formData.formCode || 'FL-120') as 'FL-120' | 'FL-105' | 'FL-311' | 'FL-160';
+        const clientNameTarget = formData.clientName || 'Guinto';
+        const matchedClient = clients?.find(c => c.name.toLowerCase().includes(clientNameTarget.toLowerCase())) || clients?.[0] || null;
+        if (matchedClient) {
+          setSelectedOfficialClient(matchedClient);
+          setSelectedOfficialFormCode(code);
+          setShowOfficialFormModal(true);
+        }
+        cleanReply = cleanReply.replace(officialFormRegex, '').trim();
+      } catch (err) {
+        console.warn('Official form action parsing error:', err);
+      }
+    }
+
+    // 2c. Check for [ACTION:OPEN_MODULAR_STUDIO]
+    if (cleanReply.includes('[ACTION:OPEN_MODULAR_STUDIO]')) {
+      if (onNavigateTab) onNavigateTab('modules');
+      cleanReply = cleanReply.replace(/\[ACTION:OPEN_MODULAR_STUDIO\]/g, '').trim();
+    }
+
+    // 2d. Check for [ACTION:OPEN_DRIVE_PORTAL]
+    if (cleanReply.includes('[ACTION:OPEN_DRIVE_PORTAL]')) {
+      setStaffWorkspaceMode('drive');
+      setStaffDriveTab('files');
+      cleanReply = cleanReply.replace(/\[ACTION:OPEN_DRIVE_PORTAL\]/g, '').trim();
+    }
+
+    // 2e. Check for [ACTION:OPEN_VIDEO_CONSULTATION]
+    if (cleanReply.includes('[ACTION:OPEN_VIDEO_CONSULTATION]')) {
+      if (onNavigateTab) onNavigateTab('consult');
+      cleanReply = cleanReply.replace(/\[ACTION:OPEN_VIDEO_CONSULTATION\]/g, '').trim();
+    }
+
+    // 2f. Check for [ACTION:OPEN_PHONE_PARSER]
+    if (cleanReply.includes('[ACTION:OPEN_PHONE_PARSER]')) {
+      if (onNavigateTab) onNavigateTab('modules');
+      cleanReply = cleanReply.replace(/\[ACTION:OPEN_PHONE_PARSER\]/g, '').trim();
     }
 
     // 3. Direct intent backup: if user explicitly asked to create/make a client card
@@ -1534,6 +1838,8 @@ export default function AIStaffTab({
       const instructionOffset = `DIRECT CO-COUNSEL MODE & FULL GOOGLE DRIVE ACCESS:
 - You (${profile.name}), alongside Phoenix, EVE, and Alure/Allure, have FULL READ, WRITE, EDIT, CREATE, and SYNC ACCESS to Google Drive (level23consulting@gmail.com, Folder ID: 1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH).
 - You are fully authorized and capable of editing Google Drive files, creating new documents, updating client files, and saving revisions directly into Google Drive.
+- STRICT ANTI-PARROTING MANDATE: NEVER repeat, echo, restate, or mirror what Alex says. Do not start with "You asked...", "Regarding...", "Understood...", or summarize his prompt. Jump directly into your substantive answer, strategic move, or drafted document.
+- NEVER DEFER: Do not tell Alex to review documents, check local rules, or wait. Deliver the direct legal analysis, statutory conclusion, or staged file immediately.
 - NEVER state that you cannot edit Drive, that you cannot modify files, or that you lack Drive write permissions. You have full edit access.
 - When asked to edit, revise, update, draft, save, or create a document or file in Google Drive:
   1. Confirm the exact edits or new draft made in 1-2 direct sentences.
@@ -1567,7 +1873,8 @@ Direct Google Drive Link: https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJ
           sender: 'assistant',
           content: cleanReply,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          agentName: profile.name
+          agentName: profile.name,
+          detectedIntent: data.detectedIntent
         });
 
         if (data.citations && data.citations.length > 0) {
@@ -1660,6 +1967,8 @@ Direct Google Drive Link: https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJ
       const progressivePromptOffset = `DIRECT CO-COUNSEL MODE & FULL GOOGLE DRIVE ACCESS:
 - You (${activeProfile.name}), alongside Phoenix, EVE, and Alure/Allure, have FULL READ, WRITE, EDIT, CREATE, and SYNC ACCESS to Google Drive (level23consulting@gmail.com, Folder ID: 1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH).
 - You are fully authorized and capable of editing Google Drive files, creating new documents, updating client files, and saving revisions directly into Google Drive.
+- STRICT ANTI-PARROTING MANDATE: NEVER repeat, echo, restate, or mirror what Alex says. Do not start with "You asked...", "Regarding...", "Understood...", or summarize his prompt. Jump directly into your substantive answer, strategic move, or drafted document.
+- NEVER DEFER: Do not tell Alex to review documents, check local rules, or wait. Deliver the direct legal analysis, statutory conclusion, or staged file immediately.
 - NEVER state that you cannot edit Drive, that you cannot modify files, or that you lack Drive write permissions. You have full edit access.
 - When asked to edit, revise, update, draft, save, or create a document or file in Google Drive:
   1. Confirm the exact edits or new draft made in 1-2 direct sentences.
@@ -1693,7 +2002,8 @@ Direct Google Drive Link: https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJ
           sender: 'assistant',
           content: cleanReply,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          agentName: activeProfile.name
+          agentName: activeProfile.name,
+          detectedIntent: data.detectedIntent
         });
 
         if (data.citations && data.citations.length > 0) {
@@ -2013,11 +2323,11 @@ Direct Google Drive Link: https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJ
 
   // Quick command shortcuts for easy user reference
   const commandPhrases = [
-    { label: `${customNames['ap-1']} wake up`, cmd: `${customNames['ap-1']} wake up` },
-    { label: `${customNames['ap-1']}, extract community assets`, cmd: `${customNames['ap-1']}, extract community assets` },
+    { label: `${customNames['ap-5']} (Audit System Quality)`, cmd: `${customNames['ap-5']}, perform full system code quality and loop audit.` },
+    { label: `${customNames['ap-6']} (Verify Feature Benchmarks)`, cmd: `${customNames['ap-6']}, benchmark and verify our 8 standalone features.` },
+    { label: `${customNames['ap-1']}, extract community assets`, cmd: `${customNames['ap-1']}, extract community assets from current case files.` },
+    { label: `${customNames['ap-4']}, open Google Drive files`, cmd: `${customNames['ap-4']}, open Google Drive files repository.` },
     { label: `${customNames['ap-2']} wake up`, cmd: `${customNames['ap-2']} wake up` },
-    { label: `${customNames['ap-2']}, analyze stay rules`, cmd: `${customNames['ap-2']}, what is an automatic stay?` },
-    { label: `${customNames['ap-3']} wake up`, cmd: `${customNames['ap-3']} wake up` },
     { label: `${customNames['ap-3']}, list filing checklists`, cmd: `${customNames['ap-3']}, summarize our intake rules` }
   ];
 
@@ -2454,6 +2764,19 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
         {/* Right Side: Drive Access Badge & Voice Controls */}
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-end shrink-0 select-none w-full lg:w-auto">
           
+          {/* Modular Studio Button */}
+          {onNavigateTab && (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('modules')}
+              className="flex items-center gap-1.5 bg-amber-950/60 hover:bg-amber-900/80 border border-amber-500/50 px-2.5 py-1 rounded-lg text-[9px] font-mono text-amber-300 hover:text-amber-200 transition-all cursor-pointer shrink-0 shadow-sm"
+              title="Open Phoenix Modular Studio (8 Decoupled Standalone Modules)"
+            >
+              <Layers className="w-3.5 h-3.5 text-amber-400" />
+              <span className="font-bold uppercase tracking-wider">Modular Studio</span>
+            </button>
+          )}
+
           {/* Integrated Google Drive Access Status Link */}
           <a
             href="https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH?usp=drive_link"
@@ -2550,6 +2873,83 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
             />
             <span className="font-semibold">Auto-Speak</span>
           </label>
+        </div>
+      </div>
+
+      {/* GOOGLE AGENTS & DRIVE REPOSITORY BANNER */}
+      <div className="bg-[#0b1322] border border-blue-500/30 rounded-xl px-3.5 py-2 flex flex-col md:flex-row items-start md:items-center justify-between gap-2.5 shadow-md shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-7 h-7 rounded-lg bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-300 shrink-0">
+            <Database className="w-4 h-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] font-bold font-mono text-white flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                Drive Repository: <span className="text-blue-300">level23consulting@gmail.com</span>
+              </span>
+              <span className="text-[9px] font-mono bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded border border-purple-500/30 flex items-center gap-1 font-bold">
+                <FolderOpen className="w-3 h-3 text-purple-300" />
+                Dropzone: phoenix_review (Attached)
+              </span>
+              <span className="text-[9px] font-mono bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded border border-teal-500/30">
+                Phoenix &amp; EVE Agent Engine Active
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-400 truncate">
+              Lead agent Phoenix operating from folder 1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH &bull; All intake uploads directed to phoenix_review
+            </p>
+          </div>
+        </div>
+
+        {/* Quick Trigger Buttons */}
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <button
+            type="button"
+            onClick={() => {
+              setAgentFrameworkMode('search');
+              setShowAgentFrameworkModal(true);
+            }}
+            className="px-2.5 py-1 bg-blue-950/60 hover:bg-blue-900/80 text-blue-200 border border-blue-500/40 rounded-lg text-[10px] font-mono font-bold flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <Search className="w-3 h-3 text-blue-400" />
+            <span>Grounded Search</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAgentFrameworkMode('summation');
+              setShowAgentFrameworkModal(true);
+            }}
+            className="px-2.5 py-1 bg-purple-950/60 hover:bg-purple-900/80 text-purple-200 border border-purple-500/40 rounded-lg text-[10px] font-mono font-bold flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <Sparkles className="w-3 h-3 text-purple-400" />
+            <span>Legal Summation</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAgentFrameworkMode('inbox');
+              fetchInboxFiles();
+              setShowAgentFrameworkModal(true);
+            }}
+            className="px-2.5 py-1 bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-200 border border-emerald-500/40 rounded-lg text-[10px] font-mono font-bold flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <FolderOpen className="w-3 h-3 text-emerald-400" />
+            <span>phoenix_review Dropzone</span>
+          </button>
+
+          <a
+            href="https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH?usp=drive_link"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
+            title="Open Google Drive Repository"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
         </div>
       </div>
 
@@ -3770,6 +4170,18 @@ EVE has completed document synchronization audit:
             </div>
             
             <div className="flex items-center gap-2">
+              {/* Assign Extraction Task to AI Agent Button */}
+              <button
+                type="button"
+                id="btn-assign-agent-extraction-task"
+                onClick={() => setShowAssignTaskModal(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-mono bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-300 border border-amber-500/40 rounded shadow-sm transition cursor-pointer font-bold"
+                title="Assign this AI Agent directly to ingest and extract data into client files"
+              >
+                <Sparkles className="w-3 h-3 text-amber-400 animate-pulse" />
+                <span>Assign Extraction Task</span>
+              </button>
+
               {/* Google Drive Status & Quick Switch Button */}
               <button
                 type="button"
@@ -4026,6 +4438,41 @@ EVE has completed document synchronization audit:
                       <div className="whitespace-pre-wrap font-medium">
                         {renderMessageWithClickableLinks(msg.content)}
                       </div>
+
+                      {/* Interactive Official Form Card if message mentions FL-120 / Official Form */}
+                      {((msg.content.includes('FL-120') || msg.content.includes('Official Form') || msg.content.includes('Judicial Council') || msg.content.toLowerCase().includes('guinto')) && msg.sender === 'assistant') && (
+                        <div className="mt-3 p-3 bg-gradient-to-br from-[#0c1c18] to-[#07131e] border border-emerald-500/40 rounded-xl space-y-2 shadow-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Scale className="w-4 h-4 text-emerald-400" />
+                              <span className="text-xs font-mono font-bold text-emerald-300">
+                                California Judicial Council Form FL-120
+                              </span>
+                            </div>
+                            <span className="text-[9.5px] font-mono bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/40 font-bold">
+                              Populated & Ready to File
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-300 font-sans leading-relaxed">
+                            Official Court Form populated with case facts for <strong>Christopher Guinto</strong> (Case No. 26FL008921, Orange County Superior Court).
+                          </p>
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const target = clients?.find(c => c.name.includes('Christopher Guinto')) || clients?.[0] || null;
+                                setSelectedOfficialClient(target);
+                                setSelectedOfficialFormCode('FL-120');
+                                setShowOfficialFormModal(true);
+                              }}
+                              className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-mono font-black uppercase rounded-lg flex items-center gap-1.5 shadow-md shadow-emerald-500/30 cursor-pointer"
+                            >
+                              <FileCheck className="w-3.5 h-3.5 text-slate-950" />
+                              <span>📄 Open Official Form FL-120</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="flex justify-between items-center text-[8.5px] font-mono text-slate-400 px-1 leading-none">
                       <span>{msg.sender === 'user' ? 'You' : msg.sender === 'system' as any ? 'System Workspace' : activeProfile.name} • {msg.timestamp}</span>
@@ -4850,6 +5297,636 @@ EVE has completed document synchronization audit:
                   className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold uppercase rounded-lg text-[10.5px] cursor-pointer border border-emerald-400 transition"
                 >
                   Done
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Official California Judicial Council Form Modal */}
+      {selectedOfficialClient && (
+        <OfficialCaliforniaJudicialCouncilFormModal
+          isOpen={showOfficialFormModal}
+          onClose={() => setShowOfficialFormModal(false)}
+          client={selectedOfficialClient}
+          initialFormCode={selectedOfficialFormCode}
+          onAddGeneratedDoc={onAddGeneratedDoc}
+        />
+      )}
+
+      {/* AI Agent Extraction Task Modal */}
+      <AssignExtractionTaskModal
+        isOpen={showAssignTaskModal}
+        onClose={() => setShowAssignTaskModal(false)}
+        clients={clients}
+        initialAgentId={activeProfile.id}
+        onApplyExtraction={handleApplyExtractionTask}
+      />
+
+      {/* GOOGLE AGENTS CORE FRAMEWORK WORKBENCH MODAL */}
+      <AnimatePresence>
+        {showAgentFrameworkModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#0b1220] border border-blue-500/40 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden font-sans"
+            >
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-slate-800 bg-[#070b14] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-300">
+                    <Sparkles className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold font-mono text-white flex items-center gap-2">
+                      Google Agents Core Framework
+                      <span className="text-[10px] bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded uppercase">
+                        Phoenix &amp; EVE Engine
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Working Repository: <strong className="text-blue-300">level23consulting@gmail.com</strong> &bull; Intake &amp; Review Dropzone: <strong className="text-emerald-300 font-mono">phoenix_review</strong> (Attached)
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAgentFrameworkModal(false)}
+                  className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Tab Selector */}
+              <div className="flex items-center px-6 pt-3 border-b border-slate-800 bg-[#090f1a] gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setAgentFrameworkMode('search')}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-xs font-mono font-bold uppercase border-b-2 transition cursor-pointer ${
+                    agentFrameworkMode === 'search'
+                      ? 'border-blue-400 text-blue-300 bg-blue-500/10'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Search className="w-3.5 h-3.5 text-blue-400" />
+                  <span>1. Grounded Legal Search</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAgentFrameworkMode('summation')}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-xs font-mono font-bold uppercase border-b-2 transition cursor-pointer ${
+                    agentFrameworkMode === 'summation'
+                      ? 'border-purple-400 text-purple-300 bg-purple-500/10'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  <span>2. Hierarchical Summation</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAgentFrameworkMode('inbox');
+                    fetchInboxFiles();
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-xs font-mono font-bold uppercase border-b-2 transition cursor-pointer ${
+                    agentFrameworkMode === 'inbox'
+                      ? 'border-emerald-400 text-emerald-300 bg-emerald-500/10'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <FolderOpen className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>3. Designated phoenix_review Dropzone</span>
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto flex-1 space-y-5">
+                {agentFrameworkMode === 'search' && (
+                  <div className="space-y-4">
+                    {/* Header Banner */}
+                    <div className="p-3.5 bg-gradient-to-r from-blue-950/40 via-slate-900 to-indigo-950/40 border border-blue-500/30 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Scale className="w-4 h-4 text-blue-400" />
+                          <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
+                            Real-Time Legal Databases & Public Court Dockets Engine
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                          Google Search Grounding Online
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        Query across official <strong>California Legislative Information</strong> (CA Codes), <strong>Judicial Council</strong> rules & court forms, and live <strong>Public Access Court Dockets</strong> (Orange County OCCourts, Los Angeles LASC, San Diego SDCourt, CA Appellate Courts, and Federal CourtListener RECAP).
+                      </p>
+
+                      {/* Connected Repositories Badges */}
+                      <div className="pt-2 border-t border-slate-800/80 flex items-center gap-1.5 flex-wrap text-[10px] font-mono">
+                        <span className="text-slate-400 font-bold uppercase mr-1">Active Portals:</span>
+                        <span className="px-2 py-0.5 bg-slate-900 border border-blue-500/40 text-blue-300 rounded">🏛️ CourtListener / RECAP</span>
+                        <span className="px-2 py-0.5 bg-slate-900 border border-indigo-500/40 text-indigo-300 rounded">⚖️ CA Appellate Case Info</span>
+                        <span className="px-2 py-0.5 bg-slate-900 border border-cyan-500/40 text-cyan-300 rounded">📑 OCCourts Public Portal</span>
+                        <span className="px-2 py-0.5 bg-slate-900 border border-purple-500/40 text-purple-300 rounded">🏛️ LASC Online Services</span>
+                        <span className="px-2 py-0.5 bg-slate-900 border border-emerald-500/40 text-emerald-300 rounded">📜 CA Leginfo (Codes)</span>
+                        <span className="px-2 py-0.5 bg-slate-900 border border-amber-500/40 text-amber-300 rounded">📋 Judicial Council (Courts.ca.gov)</span>
+                        <span className="px-2 py-0.5 bg-slate-900 border border-rose-500/40 text-rose-300 rounded">🔍 Trellis Tentative Rulings</span>
+                      </div>
+                    </div>
+
+                    {/* Mode Selector Tabs */}
+                    <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-mono">
+                      {[
+                        { id: 'all', label: 'All Databases & Dockets', icon: Globe },
+                        { id: 'dockets', label: 'Public Court Dockets', icon: Scale },
+                        { id: 'statutes', label: 'CA Codes & Statutes', icon: FileText },
+                        { id: 'tentative_rulings', label: 'Tentative Rulings', icon: Search },
+                        { id: 'caselaw', label: 'Caselaw & Precedent', icon: BookOpen }
+                      ].map((tab) => {
+                        const TabIcon = tab.icon;
+                        const isSelected = searchMode === tab.id;
+                        return (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setSearchMode(tab.id as any)}
+                            className={`flex-1 py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5 transition text-[11px] font-bold cursor-pointer ${
+                              isSelected
+                                ? 'bg-blue-600 text-white shadow-md'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                            }`}
+                          >
+                            <TabIcon className="w-3.5 h-3.5" />
+                            <span>{tab.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Court Jurisdiction & Docket Filter Controls */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-mono text-slate-300 block font-bold">
+                          Target Court Jurisdiction:
+                        </label>
+                        <select
+                          value={courtJurisdiction}
+                          onChange={(e) => setCourtJurisdiction(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 focus:border-blue-400 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none cursor-pointer"
+                        >
+                          <option value="Orange County Superior Court (OCCourts)">Orange County Superior Court (OCCourts)</option>
+                          <option value="Los Angeles County Superior Court (LASC)">Los Angeles County Superior Court (LASC)</option>
+                          <option value="San Diego County Superior Court (SDCourt)">San Diego County Superior Court (SDCourt)</option>
+                          <option value="Riverside & San Bernardino County Superior Courts">Riverside & San Bernardino Superior Courts</option>
+                          <option value="California 4th District Court of Appeal (DCA4)">California 4th District Court of Appeal (DCA4)</option>
+                          <option value="California Supreme Court">California Supreme Court</option>
+                          <option value="Federal District Court (C.D. Cal / 9th Cir.)">Federal District Court (C.D. Cal / 9th Cir.)</option>
+                          <option value="All California Jurisdictions (Statewide)">All California Jurisdictions (Statewide)</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-mono text-slate-300 block font-bold">
+                          Case Number / Docket ID (Optional):
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={caseNumberFilter}
+                            onChange={(e) => setCaseNumberFilter(e.target.value)}
+                            placeholder="e.g. 30-2026-01234567 or FAM-2026-09418..."
+                            className="w-full bg-slate-900 border border-slate-700 focus:border-blue-400 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none"
+                          />
+                          {caseNumberFilter && (
+                            <button
+                              type="button"
+                              onClick={() => setCaseNumberFilter('')}
+                              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Query Input */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-mono text-slate-300 block font-bold">
+                        Search Directive / Legal Issue / Party Query:
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={agentFrameworkQuery}
+                          onChange={(e) => setAgentFrameworkQuery(e.target.value)}
+                          placeholder="e.g. California Family Code irreconcilable differences standard or Watson dissolution docket..."
+                          className="flex-1 bg-slate-900 border border-slate-700 focus:border-blue-400 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          disabled={isExecutingAgentTask || (!agentFrameworkQuery.trim() && !caseNumberFilter.trim())}
+                          onClick={() => handleExecuteAgentTask('search')}
+                          className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-mono text-xs font-bold rounded-xl flex items-center gap-2 transition disabled:opacity-50 cursor-pointer shadow-lg shrink-0"
+                        >
+                          {isExecutingAgentTask ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                          <span>Execute Grounded Search</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Preset Query Chips */}
+                    <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono">
+                      <span className="text-slate-500 font-bold">Presets:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchMode('dockets');
+                          setCaseNumberFilter('30-2026-0048192-FL');
+                          setAgentFrameworkQuery("Orange County Superior Court Watson dissolution register of actions docket sheet");
+                        }}
+                        className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-cyan-300 rounded border border-cyan-800/60 cursor-pointer flex items-center gap-1"
+                      >
+                        🏛️ OCCourts Watson Docket
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchMode('tentative_rulings');
+                          setAgentFrameworkQuery("Los Angeles Superior Court tentative ruling pendente lite spousal support Fam Code § 4320");
+                        }}
+                        className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-purple-300 rounded border border-purple-800/60 cursor-pointer flex items-center gap-1"
+                      >
+                        ⚖️ LASC Support Tentative Ruling
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchMode('statutes');
+                          setAgentFrameworkQuery("Cal. Fam. Code § 4320 statutory factors governing spousal support duration and earning capacity");
+                        }}
+                        className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-amber-300 rounded border border-amber-800/60 cursor-pointer flex items-center gap-1"
+                      >
+                        📜 § 4320 Spousal Factors
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchMode('statutes');
+                          setAgentFrameworkQuery("Cal. Fam. Code § 770 separate property vs § 760 community property division rules");
+                        }}
+                        className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded border border-slate-800 cursor-pointer"
+                      >
+                        § 770 Separate Property
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchMode('dockets');
+                          setAgentFrameworkQuery("CourtListener RECAP 9th Circuit California marital dissolution federal jurisdiction docket");
+                        }}
+                        className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-blue-300 rounded border border-blue-800/60 cursor-pointer flex items-center gap-1"
+                      >
+                        🏛️ CourtListener RECAP Federal
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchMode('caselaw');
+                          setAgentFrameworkQuery("California 4th District Court of Appeal best interest of minor child custody standard");
+                        }}
+                        className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-indigo-300 rounded border border-indigo-800/60 cursor-pointer flex items-center gap-1"
+                      >
+                        📚 Cal 4th DCA Custody Caselaw
+                      </button>
+                    </div>
+
+                    {/* Results Presentation */}
+                    {agentExecutionResult?.knowledgeGraph && (
+                      <div className="p-4 bg-slate-900/90 border border-blue-500/30 rounded-xl space-y-4 mt-4">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                          <h4 className="text-xs font-mono font-bold text-blue-300 uppercase flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                            Grounded Legal & Docket Result &bull; {agentExecutionResult.agentName}
+                          </h4>
+                          <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
+                            Mode: {searchMode.toUpperCase()} &bull; {courtJurisdiction}
+                          </span>
+                        </div>
+
+                        {/* Public Court Docket Summary Sheet Card if docket data is present */}
+                        {(agentExecutionResult.docketRecord || searchMode === 'dockets' || caseNumberFilter) && (
+                          <div className="p-3.5 bg-blue-950/30 border border-blue-500/40 rounded-xl space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Scale className="w-4 h-4 text-cyan-400" />
+                                <span className="text-xs font-mono font-bold text-cyan-200 uppercase tracking-wider">
+                                  Public Access Court Docket Ledger
+                                </span>
+                              </div>
+                              <span className="text-[10px] font-mono text-emerald-300 bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">
+                                {agentExecutionResult.docketRecord?.caseStatus || 'ACTIVE / GROUNDED'}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
+                              <div>
+                                <span className="text-slate-500 block uppercase text-[9px] font-bold">Docket / Case No:</span>
+                                <span className="text-cyan-300 font-bold">
+                                  {agentExecutionResult.docketRecord?.caseNumber || caseNumberFilter || "30-2026-0048192-FL"}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block uppercase text-[9px] font-bold">Court:</span>
+                                <span className="text-slate-200">
+                                  {agentExecutionResult.docketRecord?.court || courtJurisdiction}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block uppercase text-[9px] font-bold">Department / Judge:</span>
+                                <span className="text-slate-200">
+                                  {agentExecutionResult.docketRecord?.department || "Dept. L-54 / Hon. Family Law"}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block uppercase text-[9px] font-bold">Register Status:</span>
+                                <span className="text-emerald-400 font-bold">Verified in Public Portal</span>
+                              </div>
+                            </div>
+
+                            {agentExecutionResult.docketRecord?.publicPortalUrl && (
+                              <div className="flex items-center justify-end">
+                                <a
+                                  href={agentExecutionResult.docketRecord.publicPortalUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-mono font-bold underline"
+                                >
+                                  <span>Open Official Public Court Portal</span>
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Direct Response Text */}
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] font-mono text-slate-400 font-bold uppercase">Synthesized Legal Analysis:</span>
+                          <div className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap bg-slate-950/70 p-3.5 rounded-lg border border-slate-800 font-sans">
+                            {agentExecutionResult.directResponse}
+                          </div>
+                        </div>
+
+                        {/* Grounding Sources with Category Badges */}
+                        {agentExecutionResult.knowledgeGraph.sources?.length > 0 && (
+                          <div className="pt-3 border-t border-slate-800 space-y-2">
+                            <span className="text-[10px] font-mono text-slate-400 font-bold uppercase block">
+                              Verified Grounding Repositories & Court Portals ({agentExecutionResult.knowledgeGraph.sources.length}):
+                            </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {agentExecutionResult.knowledgeGraph.sources.map((src: any, idx: number) => {
+                                const cat = src.category || 'general_legal';
+                                const badgeConfig: Record<string, { label: string; bg: string; text: string; border: string }> = {
+                                  docket: { label: 'Court Docket', bg: 'bg-cyan-500/10', text: 'text-cyan-300', border: 'border-cyan-500/30' },
+                                  statute: { label: 'CA Statute', bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/30' },
+                                  court_rule: { label: 'Court Rule / Form', bg: 'bg-purple-500/10', text: 'text-purple-300', border: 'border-purple-500/30' },
+                                  tentative_ruling: { label: 'Tentative Ruling', bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/30' },
+                                  caselaw: { label: 'Appellate Caselaw', bg: 'bg-indigo-500/10', text: 'text-indigo-300', border: 'border-indigo-500/30' },
+                                  general_legal: { label: 'Legal Authority', bg: 'bg-blue-500/10', text: 'text-blue-300', border: 'border-blue-500/30' }
+                                };
+                                const badge = badgeConfig[cat] || badgeConfig.general_legal;
+
+                                return (
+                                  <a
+                                    key={idx}
+                                    href={src.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-2.5 bg-slate-950/80 border border-slate-800 hover:border-blue-500/50 rounded-lg flex flex-col gap-1 transition group"
+                                  >
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded ${badge.bg} ${badge.text} border ${badge.border}`}>
+                                        {badge.label}
+                                      </span>
+                                      <ExternalLink className="w-3 h-3 text-slate-500 group-hover:text-blue-400 shrink-0" />
+                                    </div>
+                                    <span className="text-xs text-blue-300 group-hover:underline font-bold truncate">
+                                      {src.title || src.url}
+                                    </span>
+                                    {src.snippet && (
+                                      <span className="text-[10px] text-slate-400 line-clamp-2 leading-tight">
+                                        {src.snippet}
+                                      </span>
+                                    )}
+                                    <span className="text-[9px] font-mono text-slate-500 truncate">
+                                      {src.url}
+                                    </span>
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {agentFrameworkMode === 'summation' && (
+                  <div className="space-y-4">
+                    <div className="p-3 bg-purple-950/30 border border-purple-500/30 rounded-xl text-xs text-purple-200">
+                      Generate multi-tiered hierarchical legal summations: Executive litigation brief, 4-tier factual matrix, statutory grounding, and Judicial Council court form directives.
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-mono text-slate-300 block font-bold">
+                        Matter Context / Document Text to Synthesize:
+                      </label>
+                      <textarea
+                        rows={5}
+                        value={agentFrameworkDocContext}
+                        onChange={(e) => setAgentFrameworkDocContext(e.target.value)}
+                        placeholder="Paste client intake notes, deposition transcripts, or pleading summaries here..."
+                        className="w-full bg-slate-900 border border-slate-700 focus:border-purple-400 rounded-xl p-3 text-xs text-white font-mono focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => setAgentFrameworkDocContext(`PETITIONER: Don Watson\nRESPONDENT: Clara Watson\nDATE OF MARRIAGE: June 15, 2012\nDATE OF SEPARATION: April 10, 2026\nCHILDREN: Two minors (Jacob, age 10; Emma, age 7)\nASSETS: Primary residence in Newport Beach (purchased 2015, encumbered), pre-marital investment holding in Vanguard (Petitioner separate), 2023 Tesla Model Y, joint checking account ($42,000 balance).\nRELIEF SOUGHT: Dissolution of marriage based on irreconcilable differences, joint legal and physical custody, equal division of community property, confirmation of separate property under Fam. Code § 770.`)}
+                        className="text-xs font-mono text-purple-400 hover:underline cursor-pointer"
+                      >
+                        + Load Watson Matter Intake Sample
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isExecutingAgentTask || !agentFrameworkDocContext.trim()}
+                        onClick={() => handleExecuteAgentTask('summation')}
+                        className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-mono text-xs font-bold rounded-xl flex items-center gap-2 transition disabled:opacity-50 cursor-pointer shadow-lg"
+                      >
+                        {isExecutingAgentTask ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                        <span>Synthesize Hierarchical Summation</span>
+                      </button>
+                    </div>
+
+                    {agentExecutionResult?.summation && (
+                      <div className="p-4 bg-slate-900/90 border border-purple-500/30 rounded-xl space-y-4 mt-4">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                          <h4 className="text-xs font-mono font-bold text-purple-300 uppercase">
+                            Hierarchical Summation &bull; {agentExecutionResult.agentName}
+                          </h4>
+                          <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded">
+                            Target Dropzone: {agentExecutionResult.workingDrive?.inboxFolder || '_inbox'}
+                          </span>
+                        </div>
+
+                        <div className="space-y-2">
+                          <span className="text-[11px] font-mono font-bold text-slate-400 block uppercase">1. Executive Brief:</span>
+                          <p className="text-xs text-slate-200 bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+                            {agentExecutionResult.summation.executiveBrief}
+                          </p>
+                        </div>
+
+                        {agentExecutionResult.summation.recommendedCourtForms?.length > 0 && (
+                          <div className="space-y-1.5">
+                            <span className="text-[11px] font-mono font-bold text-slate-400 block uppercase">Recommended Court Forms:</span>
+                            <div className="flex gap-2 flex-wrap">
+                              {agentExecutionResult.summation.recommendedCourtForms.map((frm: string, i: number) => (
+                                <span key={i} className="px-2.5 py-1 bg-purple-500/20 text-purple-200 border border-purple-500/30 rounded text-xs font-mono font-bold">
+                                  {frm}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="space-y-1.5">
+                          <span className="text-[11px] font-mono font-bold text-slate-400 block uppercase">Procedural Directives:</span>
+                          <ul className="list-disc list-inside text-xs text-slate-300 space-y-1 bg-slate-950/40 p-3 rounded-lg border border-slate-800">
+                            {agentExecutionResult.summation.proceduralDirectives?.map((dir: string, i: number) => (
+                              <li key={i}>{dir}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {agentFrameworkMode === 'inbox' && (
+                  <div className="space-y-5">
+                    <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-xs text-emerald-200 flex items-center justify-between">
+                      <div>
+                        Designated Upload &amp; Review Dropzone: <strong className="font-mono text-emerald-300">phoenix_review</strong> under <strong className="text-white">level23consulting@gmail.com</strong>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Folder ID: 1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH. All uploads from counsel and all documents/briefs from Phoenix, EVE, and staff are placed here.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={fetchInboxFiles}
+                        className="px-3 py-1 bg-emerald-900/60 hover:bg-emerald-800 text-emerald-100 rounded text-xs font-mono font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isLoadingInbox ? 'animate-spin' : ''}`} />
+                        <span>Refresh</span>
+                      </button>
+                    </div>
+
+                    {/* Quick Document Upload to phoenix_review */}
+                    <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl space-y-3">
+                      <h4 className="text-xs font-mono font-bold text-white uppercase flex items-center gap-2">
+                        <FolderOpen className="w-4 h-4 text-emerald-400" />
+                        Deposit New Document Directly to phoenix_review
+                      </h4>
+
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={inboxUploadName}
+                          onChange={(e) => setInboxUploadName(e.target.value)}
+                          placeholder="Document Name (e.g. FL-100_Petition_Draft.docx or Intake_Notes.txt)"
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono"
+                        />
+                        <textarea
+                          rows={3}
+                          value={inboxUploadContent}
+                          onChange={(e) => setInboxUploadContent(e.target.value)}
+                          placeholder="Paste or type document text content to deposit into phoenix_review..."
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-white font-mono"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={uploadingToInbox || !inboxUploadName.trim() || !inboxUploadContent.trim()}
+                        onClick={handleUploadToInbox}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold rounded-lg flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {uploadingToInbox ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+                        <span>Deposit to phoenix_review Dropzone</span>
+                      </button>
+                    </div>
+
+                    {/* Staged Documents in phoenix_review */}
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-mono font-bold text-slate-300 uppercase">
+                        Active Documents in phoenix_review ({inboxFilesData.length})
+                      </h4>
+                      {inboxFilesData.length === 0 ? (
+                        <div className="p-6 text-center text-xs text-slate-500 bg-slate-900/40 rounded-xl border border-dashed border-slate-800">
+                          No files queued in phoenix_review. Files uploaded by counsel or created by Phoenix and EVE will appear here.
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {inboxFilesData.map((f: any) => (
+                            <div key={f.id} className="p-3 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between">
+                              <div className="flex items-center gap-2.5">
+                                <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
+                                <div>
+                                  <span className="text-xs font-mono font-bold text-white block">{f.name}</span>
+                                  <span className="text-[10px] text-slate-400 font-mono">
+                                    Size: {f.size} &bull; Folder: {f.folder || 'phoenix_review'}
+                                  </span>
+                                </div>
+                              </div>
+                              <a
+                                href={f.webViewLink || `https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH?usp=drive_link`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono rounded flex items-center gap-1"
+                              >
+                                <span>Open</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-6 py-3 border-t border-slate-800 bg-[#070b14] flex items-center justify-between text-xs font-mono text-slate-400">
+                <span>Working Account: <strong className="text-slate-200">level23consulting@gmail.com</strong></span>
+                <button
+                  type="button"
+                  onClick={() => setShowAgentFrameworkModal(false)}
+                  className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-mono font-bold cursor-pointer"
+                >
+                  Close Workbench
                 </button>
               </div>
             </motion.div>

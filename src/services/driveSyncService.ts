@@ -1,4 +1,10 @@
 // Google Drive Background & Periodic Synchronization Service for level23consulting@gmail.com
+import {
+  safeFetchJson,
+  clientMapDriveFolder,
+  clientListDriveFiles,
+  clientUploadDriveFile
+} from '../lib/driveClient';
 
 export interface DriveSyncedFile {
   id: string;
@@ -37,6 +43,8 @@ const LOCAL_STORAGE_KEY_FOLDER_MAP = 'legal_suite_drive_folder_map';
 const LOCAL_STORAGE_KEY_AUTH_TOKEN = 'google_drive_access_token';
 export const DEFAULT_TARGET_FOLDER_ID = '1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH';
 export const DEFAULT_ACCOUNT_EMAIL = 'level23consulting@gmail.com';
+export const DEFAULT_INBOX_FOLDER = 'phoenix_review';
+export const DESIGNATED_REVIEW_FOLDER = 'phoenix_review';
 export const GOOGLE_DRIVE_FOLDER_URL = 'https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH?usp=drive_link';
 
 // Central in-memory state
@@ -46,7 +54,7 @@ let currentSyncState: DriveSyncState = {
   lastSyncedAt: new Date().toISOString(),
   status: 'idle',
   syncedFilesCount: 0,
-  mappedFoldersCount: 4,
+  mappedFoldersCount: 5,
   error: null,
   errorType: null,
   lastErrorAt: null,
@@ -84,9 +92,11 @@ export function clearDriveSyncError() {
  * Fetch and map the Google Drive folder hierarchy for level23consulting@gmail.com
  */
 export async function mapDriveFolderStructure(folderId = DEFAULT_TARGET_FOLDER_ID): Promise<DriveFolderNode | null> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_KEY_AUTH_TOKEN) : null;
+
   try {
-    const token = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_KEY_AUTH_TOKEN) : null;
-    const res = await fetch('/api/drive/map-folder', {
+    // 1. Try server API with safe JSON response checking
+    const res = await safeFetchJson('/api/drive/map-folder', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -95,15 +105,32 @@ export async function mapDriveFolderStructure(folderId = DEFAULT_TARGET_FOLDER_I
       body: JSON.stringify({ folderId })
     });
 
-    const data = await res.json();
-    if (res.ok && data.success && data.folderStructure) {
+    const data = res.data;
+    if (res.ok && data && data.success && data.folderStructure) {
       if (typeof window !== 'undefined') {
         localStorage.setItem(LOCAL_STORAGE_KEY_FOLDER_MAP, JSON.stringify(data.folderStructure));
       }
       currentSyncState.mappedFoldersCount = data.folderStructure.subfolders?.length || 4;
       notifyListeners();
       return data.folderStructure;
-    } else if (res.status === 401 || res.status === 403 || (data && data.error && (data.error.includes('auth') || data.error.includes('token') || data.error.includes('permission')))) {
+    }
+
+    // 2. If running on Vercel/Static PWA (HTML response or 404), fall back to direct client-side Google Drive API
+    if ((res.isHtml || res.status === 404 || !res.ok) && token && !token.startsWith('ya29.Level23Consulting_Drive')) {
+      try {
+        const clientStructure = await clientMapDriveFolder(token, folderId);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(LOCAL_STORAGE_KEY_FOLDER_MAP, JSON.stringify(clientStructure));
+        }
+        currentSyncState.mappedFoldersCount = clientStructure.subfolders?.length || 0;
+        notifyListeners();
+        return clientStructure as any;
+      } catch (clientErr: any) {
+        console.warn('Direct client Drive folder map fallback failed:', clientErr);
+      }
+    }
+
+    if (res.status === 401 || res.status === 403 || (data && data.error && (data.error.includes('auth') || data.error.includes('token') || data.error.includes('permission')))) {
       currentSyncState.status = 'error';
       currentSyncState.errorType = 'auth_required';
       currentSyncState.error = `Google Drive authentication error: Valid access token required to map folder ${folderId} (${DEFAULT_ACCOUNT_EMAIL}).`;
@@ -136,11 +163,11 @@ export async function syncDriveFiles(folderId = DEFAULT_TARGET_FOLDER_ID): Promi
   currentSyncState.status = 'syncing';
   notifyListeners();
 
+  const token = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_KEY_AUTH_TOKEN) : null;
+
   try {
-    const token = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_KEY_AUTH_TOKEN) : null;
-    
-    // Check if token exists in client browser session
-    const res = await fetch('/api/drive/sync-folder', {
+    // 1. Try server API with safe JSON response checking
+    const res = await safeFetchJson('/api/drive/sync-folder', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -149,8 +176,8 @@ export async function syncDriveFiles(folderId = DEFAULT_TARGET_FOLDER_ID): Promi
       body: JSON.stringify({ folderId })
     });
 
-    const data = await res.json();
-    if (res.ok && data.success) {
+    const data = res.data;
+    if (res.ok && data && data.success) {
       const result = {
         lastSyncedAt: data.lastSyncedAt || new Date().toISOString(),
         syncedFilesCount: data.syncedFilesCount || 0,
@@ -170,16 +197,53 @@ export async function syncDriveFiles(folderId = DEFAULT_TARGET_FOLDER_ID): Promi
       notifyListeners();
 
       return result;
-    } else {
-      const isAuthError = res.status === 401 || res.status === 403 || (data && data.error && (data.error.includes('auth') || data.error.includes('token') || data.error.includes('permission')));
-      currentSyncState.status = 'error';
-      currentSyncState.errorType = isAuthError ? 'auth_required' : 'sync_failed';
-      currentSyncState.error = isAuthError 
-        ? `Google Drive Authentication / Access Error: Permission required for folder ${folderId} (${DEFAULT_ACCOUNT_EMAIL}).`
-        : (data.error || 'Periodic synchronization encountered an unexpected connection error.');
-      currentSyncState.lastErrorAt = new Date().toISOString();
-      notifyListeners();
     }
+
+    // 2. Direct client Google Drive fallback for Vercel / PWA environments
+    if ((res.isHtml || res.status === 404 || !res.ok) && token && !token.startsWith('ya29.Level23Consulting_Drive')) {
+      try {
+        const clientFiles = await clientListDriveFiles(token);
+        const result = {
+          lastSyncedAt: new Date().toISOString(),
+          syncedFilesCount: clientFiles.length,
+          manifest: clientFiles.map(f => ({
+            id: f.id,
+            name: f.name,
+            mimeType: f.mimeType,
+            size: f.size,
+            modifiedTime: f.modifiedTime,
+            webViewLink: f.webViewLink,
+            offlineAvailable: true,
+            syncedAt: new Date().toISOString()
+          }))
+        };
+
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(LOCAL_STORAGE_KEY_OFFLINE_CACHE, JSON.stringify(result));
+        }
+
+        currentSyncState.status = 'synced';
+        currentSyncState.lastSyncedAt = result.lastSyncedAt;
+        currentSyncState.syncedFilesCount = result.syncedFilesCount;
+        currentSyncState.manifest = result.manifest;
+        currentSyncState.error = null;
+        currentSyncState.errorType = null;
+        notifyListeners();
+
+        return result;
+      } catch (clientErr: any) {
+        console.warn('Direct client Drive list fallback failed:', clientErr);
+      }
+    }
+
+    const isAuthError = res.status === 401 || res.status === 403 || (data && data.error && (data.error.includes('auth') || data.error.includes('token') || data.error.includes('permission')));
+    currentSyncState.status = 'error';
+    currentSyncState.errorType = isAuthError ? 'auth_required' : 'sync_failed';
+    currentSyncState.error = isAuthError 
+      ? `Google Drive Authentication / Access Error: Permission required for folder ${folderId} (${DEFAULT_ACCOUNT_EMAIL}).`
+      : (data?.error || 'Periodic synchronization encountered an unexpected connection error.');
+    currentSyncState.lastErrorAt = new Date().toISOString();
+    notifyListeners();
   } catch (err: any) {
     console.warn('⚠️ Sync Drive files network/auth error fallback:', err);
     currentSyncState.status = 'error';
@@ -204,6 +268,7 @@ export async function forceDriveSync(folderId = DEFAULT_TARGET_FOLDER_ID): Promi
 
 /**
  * Auto-upload a new client intake document or case evidence file directly to Google Drive
+ * Defaults directly to the designated 'phoenix_review' folder in level23consulting@gmail.com
  */
 export async function uploadClientDocumentToDrive(params: {
   name: string;
@@ -213,9 +278,10 @@ export async function uploadClientDocumentToDrive(params: {
   mimeType?: string;
 }): Promise<any> {
   const token = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_KEY_AUTH_TOKEN) : null;
-  const targetFolderId = params.folderId || DEFAULT_TARGET_FOLDER_ID;
+  const targetFolderId = params.folderId || DESIGNATED_REVIEW_FOLDER;
 
-  const res = await fetch('/api/drive/upload-document', {
+  // 1. Try server API with safe JSON handling
+  const res = await safeFetchJson('/api/drive/upload-document', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -230,15 +296,46 @@ export async function uploadClientDocumentToDrive(params: {
     })
   });
 
-  const data = await res.json();
-  if (res.ok && data.success) {
-    // Re-trigger background sync to update local manifest
-    syncDriveFiles(targetFolderId).catch(() => {});
+  const data = res.data;
+  if (res.ok && data && data.success) {
+    syncDriveFiles(DEFAULT_TARGET_FOLDER_ID).catch(() => {});
     return data.file;
   }
 
-  throw new Error(data.error || 'Failed to upload document to Google Drive.');
+  // 2. Direct client Google Drive upload fallback for Vercel / PWA environments
+  if ((res.isHtml || res.status === 404 || !res.ok) && token && !token.startsWith('ya29.Level23Consulting_Drive')) {
+    try {
+      const uploaded = await clientUploadDriveFile(token, {
+        name: params.name,
+        content: params.content,
+        folderId: DEFAULT_TARGET_FOLDER_ID
+      });
+      syncDriveFiles(DEFAULT_TARGET_FOLDER_ID).catch(() => {});
+      return uploaded;
+    } catch (clientErr: any) {
+      console.warn('Direct client Drive upload fallback failed:', clientErr);
+    }
+  }
+
+  throw new Error(data?.error || 'Failed to upload document to Google Drive.');
 }
+
+/**
+ * Dedicated helper to upload directly to Phoenix's designated phoenix_review folder
+ */
+export async function uploadToPhoenixReview(name: string, content: string, clientName?: string): Promise<any> {
+  return uploadClientDocumentToDrive({
+    name,
+    content,
+    clientName,
+    folderId: DESIGNATED_REVIEW_FOLDER
+  });
+}
+
+/**
+ * Backward compatibility alias for uploadToPhoenixReview
+ */
+export const uploadToInbox = uploadToPhoenixReview;
 
 /**
  * Retrieve offline cached drive state

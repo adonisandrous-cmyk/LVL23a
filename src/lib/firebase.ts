@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, User } from 'firebase/auth';
 import { 
   initializeFirestore, 
@@ -9,9 +9,9 @@ import {
   doc,
   getDocFromServer
 } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { activeFirebaseConfig } from './firebaseConfig';
 
-const app = initializeApp(firebaseConfig);
+const app = getApps().length > 0 ? getApp() : initializeApp(activeFirebaseConfig);
 
 // Silence internal WebChannel reconnect and offline warning logs in browser console
 try {
@@ -26,9 +26,9 @@ try {
     localCache: persistentLocalCache({
       tabManager: persistentMultipleTabManager()
     })
-  }, (firebaseConfig as any).firestoreDatabaseId);
+  }, (activeFirebaseConfig as any).firestoreDatabaseId);
 } catch {
-  firestoreDb = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
+  firestoreDb = getFirestore(app, (activeFirebaseConfig as any).firestoreDatabaseId);
 }
 
 export const db = firestoreDb;

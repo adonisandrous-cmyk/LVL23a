@@ -830,6 +830,23 @@ export const OmniUploadModal: React.FC<OmniUploadModalProps> = ({
                   </span>
                 </div>
 
+                {/* Designated Drive Working Repository & Attached Review Banner */}
+                <div className="p-3 bg-emerald-950/40 border border-emerald-500/40 rounded-xl flex items-center justify-between text-xs text-emerald-200">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>
+                      Designated Repository: <strong>level23consulting@gmail.com</strong> &bull; Attached Intake & Review Dropzone: <code className="bg-emerald-900/50 px-1.5 py-0.5 rounded text-emerald-300 font-mono">phoenix_review</code>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDriveFolderInput('https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH?usp=drive_link')}
+                    className="text-[11px] font-mono text-emerald-300 hover:text-white underline cursor-pointer"
+                  >
+                    Reset to Firm Folder
+                  </button>
+                </div>
+
                 <p className="text-xs text-slate-300">
                   Target folder containing your actual client PDF intakes, questionnaires, or petitions:
                 </p>

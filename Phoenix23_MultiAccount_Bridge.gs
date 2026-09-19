@@ -18,10 +18,11 @@
  */
 
 // Configuration Constants
-const STAGING_FOLDER_ID = "YOUR_GOOGLE_DRIVE_FOLDER_ID"; // Replace with your Drive Folder ID
+const STAGING_FOLDER_ID = "1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH"; // Level 23 Drive Folder ID
+const INBOX_FOLDER_NAME = "_inbox"; // Designated intake folder Phoenix works from
 const AUTHORIZED_SENDERS = [
-  "level23@gmail.com",
   "level23consulting@gmail.com",
+  "level23@gmail.com",
   "adonisandrous@gmail.com"
 ];
 const PHOENIX_WEBHOOK_URL = "https://ais-dev-tu43nr3iiqhbuewih2z7pa-536963766745.us-west2.run.app/api/phoenix/webhook-intake";
@@ -211,25 +212,34 @@ Level 23 Legal AI Suite`;
 }
 
 /**
- * Helper to get existing Staging Folder or create one automatically
+ * Helper to get existing Staging Folder (_inbox) or create one automatically
  */
 function getOrCreateStagingFolder() {
-  if (STAGING_FOLDER_ID && STAGING_FOLDER_ID !== "YOUR_GOOGLE_DRIVE_FOLDER_ID") {
+  if (STAGING_FOLDER_ID) {
     try {
-      return DriveApp.getFolderById(STAGING_FOLDER_ID);
+      const rootFolder = DriveApp.getFolderById(STAGING_FOLDER_ID);
+      // Search for _inbox child folder
+      const childFolders = rootFolder.getFoldersByName(INBOX_FOLDER_NAME);
+      if (childFolders.hasNext()) {
+        return childFolders.next();
+      }
+      // Create _inbox inside designated parent folder
+      const inboxFolder = rootFolder.createFolder(INBOX_FOLDER_NAME);
+      inboxFolder.setDescription("Designated _inbox staging repository for Phoenix 23 Legal OS client intakes.");
+      return inboxFolder;
     } catch (e) {
-      Logger.log("[DRIVE_NOTICE] Specified folder ID not found, creating or locating default folder.");
+      Logger.log("[DRIVE_NOTICE] Specified folder ID not found or permission check: " + e.toString());
     }
   }
 
-  const folderName = "Phoenix23_Intake_Staging";
+  const folderName = INBOX_FOLDER_NAME;
   const existingFolders = DriveApp.getFoldersByName(folderName);
   if (existingFolders.hasNext()) {
     return existingFolders.next();
   }
   
   const newFolder = DriveApp.createFolder(folderName);
-  newFolder.setDescription("Staging repository for Phoenix 23 Legal OS client intakes.");
+  newFolder.setDescription("Designated _inbox staging repository for Phoenix 23 Legal OS client intakes.");
   return newFolder;
 }
 

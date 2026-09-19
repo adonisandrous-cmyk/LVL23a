@@ -1,3 +1,42 @@
+export interface MinorChildRecord {
+  name: string;
+  birthdate: string;
+  age: number;
+  sex?: string;
+}
+
+export interface FL120IntakeData {
+  caseNumber?: string;
+  courtCounty?: string;
+  branchName?: string;
+  petitionerName?: string;
+  respondentName?: string;
+  proceedingType?: 'Dissolution' | 'Legal Separation' | 'Nullity';
+  legalRelationship?: 'Marriage' | 'Domestic Partnership (CA)' | 'Domestic Partnership (Non-CA)';
+  residenceRequirementMet?: boolean;
+  dateOfMarriage?: string;
+  dateOfSeparation?: string;
+  durationYears?: number;
+  durationMonths?: number;
+  hasMinorChildren?: boolean;
+  minorChildren?: MinorChildRecord[];
+  uccjeaFormRequired?: boolean;
+  legalGrounds?: 'Irreconcilable Differences' | 'Permanent Legal Incapacity' | 'Nullity/Void';
+  custodyLegal?: 'Petitioner' | 'Respondent' | 'Joint' | 'Other';
+  custodyPhysical?: 'Petitioner' | 'Respondent' | 'Joint' | 'Other';
+  visitationRequested?: string;
+  childSupportRequested?: boolean;
+  spousalSupportRequested?: 'Payable to Petitioner' | 'Payable to Respondent' | 'Terminate' | 'Reserve' | 'None';
+  separatePropertyConfirmed?: boolean;
+  separatePropertyNotes?: string;
+  communityPropertyDivision?: boolean;
+  communityPropertyNotes?: string;
+  attorneyFeesPayableBy?: 'Petitioner' | 'Respondent' | 'None';
+  formerNameRestored?: string;
+  abbyyExtractionTimestamp?: string;
+  abbyyBatchId?: string;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -7,6 +46,7 @@ export interface Client {
   intakeNotes: string;
   createdAt: string;
   practiceArea: string;
+  fl120Data?: FL120IntakeData;
 }
 
 export interface Matter {
@@ -80,6 +120,13 @@ export interface LegalMessage {
     type?: string;
     content?: string;
   };
+  detectedIntent?: {
+    category: string;
+    summary: string;
+    objective?: string;
+    implicitNeeds?: string[];
+    recommendedAction?: string;
+  };
 }
 
 export interface VoiceAgentProfile {
@@ -100,6 +147,40 @@ export interface SystemDiagnostic {
   value: string | number;
   status: 'ok' | 'warning' | 'critical';
   details: string;
+}
+
+export interface AgentExtractionResult {
+  taskAudit: {
+    taskId: string;
+    assignedAgent: string;
+    taskName: string;
+    status: string;
+    timestamp: string;
+    extractedFieldsCount: number;
+    summary: string;
+    keyHighlights: string[];
+  };
+  client: {
+    name: string;
+    email: string;
+    phone: string;
+    address?: string;
+    practiceArea: string;
+    status: 'active' | 'inactive' | 'pending';
+    intakeNotes: string;
+    keyDates?: { event: string; date: string; sourceDocument?: string }[];
+  };
+  extractedFields: Record<string, string>;
+  matter?: {
+    title: string;
+    caseNumber: string;
+    practiceArea: string;
+    status: 'active' | 'pending' | 'completed';
+    billingRate: number;
+    description: string;
+    filingDeadline?: string;
+    tasks?: { id: string; title: string; dueDate: string; completed: boolean }[];
+  };
 }
 
 export interface AgentProgress {

@@ -45,11 +45,13 @@ import {
   Table,
   CheckCircle2,
   AlertCircle,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Globe
 } from 'lucide-react';
 import { Client, DocumentTemplate, GeneratedDocument, Matter } from '../types';
 import { ALL_DOCUMENT_TEMPLATES } from '../data/legalFormsCatalog';
 import { getAccessToken } from '../lib/driveAuth';
+import { OfficialCaliforniaJudicialCouncilFormModal } from './OfficialCaliforniaJudicialCouncilFormModal';
 
 interface LegalFormsTemplateManagerProps {
   clients: Client[];
@@ -57,6 +59,7 @@ interface LegalFormsTemplateManagerProps {
   onAddGeneratedDoc?: (doc: GeneratedDocument) => void;
   onOpenInDrive?: (title: string, content: string) => void;
   onExportToDrive?: (title: string, content: string, format?: 'docx' | 'pdf' | 'text') => void;
+  onOpenHarvesterModal?: () => void;
 }
 
 export default function LegalFormsTemplateManager({
@@ -64,7 +67,8 @@ export default function LegalFormsTemplateManager({
   matters = [],
   onAddGeneratedDoc,
   onOpenInDrive,
-  onExportToDrive
+  onExportToDrive,
+  onOpenHarvesterModal
 }: LegalFormsTemplateManagerProps) {
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -83,6 +87,13 @@ export default function LegalFormsTemplateManager({
   const [showSampleData, setShowSampleData] = useState<boolean>(true);
   const [expandedTab, setExpandedTab] = useState<'preview' | 'specifications' | 'raw_code'>('preview');
   const [copiedPreview, setCopiedPreview] = useState<boolean>(false);
+
+  // Official California Judicial Council Form Modal
+  const [showOfficialFormModal, setShowOfficialFormModal] = useState<boolean>(false);
+  const [selectedOfficialFormCode, setSelectedOfficialFormCode] = useState<'FL-120' | 'FL-105' | 'FL-311' | 'FL-160'>('FL-120');
+  const [selectedOfficialClient, setSelectedOfficialClient] = useState<Client | null>(() => {
+    return clients?.find(c => c.name.includes('Christopher Guinto')) || clients?.[0] || null;
+  });
 
   // Modal form inputs
   const [selectedClient, setSelectedClient] = useState<Client | null>(clients[0] || null);
@@ -127,43 +138,48 @@ export default function LegalFormsTemplateManager({
   const runFallbackFieldExtractor = (client: Client | null, notes: string, fields: string[]) => {
     const extracted: Record<string, string> = {};
     const clientAny = client as any;
+    const fl = clientAny?.fl120Data;
 
     fields.forEach(f => {
       const lowerF = f.toLowerCase();
-      if (lowerF.includes('client name') || lowerF.includes('petitioner') || lowerF.includes('applicant') || lowerF.includes('plaintiff')) {
-        extracted[f] = client?.name || 'Jane Doe';
-      } else if (lowerF.includes('spouse') || lowerF.includes('respondent') || lowerF.includes('defendant') || lowerF.includes('opposing')) {
-        extracted[f] = clientAny?.spouseName || clientAny?.opposingParty || 'John Doe';
+      if (lowerF.includes('petitioner') || lowerF.includes('applicant') || lowerF.includes('plaintiff')) {
+        extracted[f] = fl?.petitionerName || clientAny?.petitionerName || 'Maria Guinto';
+      } else if (lowerF.includes('respondent') || lowerF.includes('defendant') || lowerF.includes('opposing')) {
+        extracted[f] = fl?.respondentName || client?.name || clientAny?.opposingParty || 'Christopher Guinto';
+      } else if (lowerF.includes('client name')) {
+        extracted[f] = client?.name || 'Christopher Guinto';
       } else if (lowerF.includes('county')) {
-        extracted[f] = clientAny?.county || 'Orange County';
+        extracted[f] = fl?.courtCounty || clientAny?.county || 'Orange County';
       } else if (lowerF.includes('case no') || lowerF.includes('docket') || lowerF.includes('matter') || lowerF.includes('case number')) {
-        extracted[f] = clientAny?.caseNumber || `FL-2026-${client?.id?.slice(0, 6) || '99201'}`;
+        extracted[f] = fl?.caseNumber || clientAny?.caseNumber || '26FL008921';
       } else if (lowerF.includes('marriage') || lowerF.includes('wedding')) {
-        const m = notes.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}/i);
-        extracted[f] = m ? m[0] : 'June 18, 2015';
+        extracted[f] = fl?.dateOfMarriage || 'September 18, 2015';
       } else if (lowerF.includes('separat')) {
-        const m = notes.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}/i);
-        extracted[f] = m ? m[0] : 'May 15, 2025';
-      } else if (lowerF.includes('custody') || lowerF.includes('child') || lowerF.includes('minor')) {
-        extracted[f] = 'Joint legal custody requested; Primary physical care with Petitioner.';
+        extracted[f] = fl?.dateOfSeparation || 'April 10, 2026';
+      } else if (lowerF.includes('custody') || lowerF.includes('visitation') || lowerF.includes('child') || lowerF.includes('minor')) {
+        extracted[f] = fl?.visitationRequested || 'Joint legal and physical custody requested (FL-311 2-2-3 schedule); Minor children: Ethan Guinto (age 9), Sophia Guinto (age 5).';
       } else if (lowerF.includes('support') || lowerF.includes('alimony')) {
-        extracted[f] = 'Temporary spousal support of $1,250/month requested per Family Code 3600.';
-      } else if (lowerF.includes('property') || lowerF.includes('asset')) {
-        extracted[f] = 'Marital home in Orange County is community property; Inheritance personal account is separate.';
+        extracted[f] = fl?.spousalSupportRequested === 'Reserve'
+          ? 'Reserve jurisdiction over spousal support for Respondent; terminate authority to award to Petitioner (Fam. Code § 4336).'
+          : 'Spousal support per California Family Code § 4320 guidelines.';
+      } else if (lowerF.includes('separate property')) {
+        extracted[f] = fl?.separatePropertyNotes || 'Confirm Respondent Christopher Guinto separate property per Fam. Code § 770 (pre-marital retirement accounts, vehicle, and trade equipment).';
+      } else if (lowerF.includes('community property') || lowerF.includes('property') || lowerF.includes('asset')) {
+        extracted[f] = fl?.communityPropertyNotes || 'Equal division of community estate pursuant to Fam. Code § 2550: Marital residence equity, joint checking/savings accounts, retirement accrued during coverture.';
       } else if (lowerF.includes('income') || lowerF.includes('wage') || lowerF.includes('salary')) {
-        extracted[f] = '$4,850/month gross earned through administrative consulting services.';
+        extracted[f] = '$6,500/month gross earned income; W-2 and recent earnings statements attached.';
       } else if (lowerF.includes('debt') || lowerF.includes('liability')) {
-        extracted[f] = '$12,400 community credit balance; $3,200 separate medical bill.';
+        extracted[f] = 'Mortgage and home equity line on marital residence; joint credit balance.';
       } else if (lowerF.includes('threat') || lowerF.includes('persecut') || lowerF.includes('fear')) {
-        extracted[f] = 'Documented threats and coercion concerning joint accounts and property division.';
+        extracted[f] = 'No threats or domestic violence restraining orders reported.';
       } else if (lowerF.includes('date') || lowerF.includes('current')) {
         extracted[f] = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       } else if (lowerF.includes('attorney') || lowerF.includes('counsel') || lowerF.includes('bar')) {
-        extracted[f] = 'Level 23 Practice Management, SBN #298410';
-      } else if (lowerF.includes('court address') || lowerF.includes('street')) {
-        extracted[f] = '341 The City Drive South, Orange, CA 92868';
+        extracted[f] = 'Alex Mercer, Esq. / Level 23 Legal Practice Management';
+      } else if (lowerF.includes('court address') || lowerF.includes('street') || lowerF.includes('branch')) {
+        extracted[f] = fl?.branchName || 'Lamoreaux Justice Center, 341 The City Drive South, Orange, CA 92868';
       } else {
-        extracted[f] = notes ? `Disclosed in intake notes: ${notes.slice(0, 50)}...` : `Verified standard parameter for ${f}`;
+        extracted[f] = notes ? `Disclosed in client record: ${notes.slice(0, 60)}...` : `Verified parameter for ${f}`;
       }
     });
 
@@ -277,18 +293,51 @@ export default function LegalFormsTemplateManager({
     }
   };
 
+  // Dynamic & Managed Template catalog (synchronizes defaults with harvested and local templates)
+  const [allTemplates, setAllTemplates] = useState<DocumentTemplate[]>(() => {
+    const saved = localStorage.getItem('level23_templates_v2');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const existingIds = new Set(parsed.map((p: any) => p.id));
+          const missingDefaults = ALL_DOCUMENT_TEMPLATES.filter(d => !existingIds.has(d.id));
+          return [...parsed, ...missingDefaults];
+        }
+      } catch (e) {}
+    }
+    return ALL_DOCUMENT_TEMPLATES;
+  });
+
+  // Listen for newly harvested or saved templates
+  React.useEffect(() => {
+    const handleTemplateUpdated = (e: any) => {
+      if (e.detail?.template) {
+        setAllTemplates(prev => {
+          const exists = prev.find(t => t.id === e.detail.template.id);
+          if (exists) {
+            return prev.map(t => t.id === e.detail.template.id ? e.detail.template : t);
+          }
+          return [e.detail.template, ...prev];
+        });
+      }
+    };
+    window.addEventListener('l23_templates_updated', handleTemplateUpdated);
+    return () => window.removeEventListener('l23_templates_updated', handleTemplateUpdated);
+  }, []);
+
   // Extract unique categories from template list
   const categories = useMemo(() => {
     const cats = new Set<string>();
-    ALL_DOCUMENT_TEMPLATES.forEach(t => cats.add(t.category));
+    allTemplates.forEach(t => cats.add(t.category));
     return ['all', ...Array.from(cats)];
-  }, []);
+  }, [allTemplates]);
 
   // Filter templates based on search, jurisdiction & category
   const filteredTemplates = useMemo(() => {
-    return ALL_DOCUMENT_TEMPLATES.filter(t => {
+    return allTemplates.filter(t => {
       // Jurisdiction match
-      const isCA = t.category.includes('(CA)') || t.id.startsWith('ca-');
+      const isCA = t.category.includes('(CA)') || t.id.startsWith('ca-') || t.id.startsWith('online-jc-') || t.id.startsWith('research-jc-');
       const isNV = t.category.includes('Nevada') || t.id.startsWith('nv-');
       const isFED = t.category.includes('Immigration') || t.id.startsWith('uscis-') || t.id.startsWith('ch7-');
 
@@ -312,7 +361,7 @@ export default function LegalFormsTemplateManager({
 
       return true;
     });
-  }, [searchQuery, selectedJurisdiction, selectedCategory]);
+  }, [allTemplates, searchQuery, selectedJurisdiction, selectedCategory]);
 
   // Handle open modal for generating form
   const handleOpenFillModal = (template: DocumentTemplate) => {
@@ -560,18 +609,18 @@ export default function LegalFormsTemplateManager({
           {/* Quick Metrics Badges */}
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <div className="bg-[#070c16] border border-[#1e293b] px-3 py-2 text-center">
-              <div className="text-lg font-mono font-black text-teal-400">{ALL_DOCUMENT_TEMPLATES.length}</div>
+              <div className="text-lg font-mono font-black text-teal-400">{allTemplates.length}</div>
               <div className="text-[9px] font-mono text-slate-500 uppercase tracking-wider font-bold">Court Templates</div>
             </div>
             <div className="bg-[#070c16] border border-[#1e293b] px-3 py-2 text-center">
               <div className="text-lg font-mono font-black text-sky-400">
-                {ALL_DOCUMENT_TEMPLATES.filter(t => t.id.startsWith('ca-')).length}
+                {allTemplates.filter(t => t.id.startsWith('ca-') || t.id.startsWith('online-jc-') || t.id.startsWith('research-jc-') || t.category.includes('(CA)')).length}
               </div>
               <div className="text-[9px] font-mono text-slate-500 uppercase tracking-wider font-bold">California (CA)</div>
             </div>
             <div className="bg-[#070c16] border border-[#1e293b] px-3 py-2 text-center">
               <div className="text-lg font-mono font-black text-purple-400">
-                {ALL_DOCUMENT_TEMPLATES.filter(t => t.id.startsWith('nv-')).length}
+                {allTemplates.filter(t => t.id.startsWith('nv-')).length}
               </div>
               <div className="text-[9px] font-mono text-slate-500 uppercase tracking-wider font-bold">Nevada (NV)</div>
             </div>
@@ -691,6 +740,35 @@ export default function LegalFormsTemplateManager({
               FED
             </button>
           </div>
+
+          {/* Online Judicial Council Harvester Button */}
+          {onOpenHarvesterModal && (
+            <button
+              type="button"
+              onClick={onOpenHarvesterModal}
+              className="px-3 py-1.5 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-[#090d16] font-mono text-[10.5px] font-black uppercase cursor-pointer flex items-center gap-1.5 transition-all shadow-[2px_2px_0px_#000] shrink-0"
+              title="Grab Judicial Council Form Online & Map for Auto-Population"
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>Grab Form Online</span>
+            </button>
+          )}
+
+          {/* Quick Open Official California Judicial Council Form Modal */}
+          <button
+            type="button"
+            onClick={() => {
+              const guinto = clients?.find(c => c.name.includes('Christopher Guinto')) || clients?.[0] || null;
+              setSelectedOfficialClient(guinto);
+              setSelectedOfficialFormCode('FL-120');
+              setShowOfficialFormModal(true);
+            }}
+            className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-mono text-[10.5px] font-black uppercase cursor-pointer flex items-center gap-1.5 transition-all shadow-[2px_2px_0px_#000] shrink-0"
+            title="Open official California Judicial Council Form FL-120 populated with client data"
+          >
+            <FileCheck className="w-3.5 h-3.5 text-slate-950" />
+            <span>Official Form FL-120</span>
+          </button>
 
           {/* View Mode Toggle */}
           <div className="flex items-center border border-[#1e293b] bg-[#070b13] p-1 shrink-0">
@@ -1229,9 +1307,26 @@ export default function LegalFormsTemplateManager({
                       <Sparkles className="w-3.5 h-3.5 text-teal-400" />
                       Live California Judicial Council Form Render:
                     </span>
-                    <span className="text-[9px] font-mono text-emerald-400 font-bold uppercase bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5">
-                      All Fields Synced
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const guinto = selectedClient || clients?.find(c => c.name.includes('Christopher Guinto')) || clients?.[0] || null;
+                          setSelectedOfficialClient(guinto);
+                          const code = (activeFormModal.name.includes('FL-120') || activeFormModal.id.includes('fl-120')) ? 'FL-120' : (activeFormModal.name.includes('FL-105') ? 'FL-105' : (activeFormModal.name.includes('FL-311') ? 'FL-311' : 'FL-120'));
+                          setSelectedOfficialFormCode(code);
+                          setShowOfficialFormModal(true);
+                        }}
+                        className="px-2.5 py-1 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-mono text-[10px] font-black uppercase rounded flex items-center gap-1 cursor-pointer shadow"
+                        title="Switch to official California Judicial Council official court document layout"
+                      >
+                        <Scale className="w-3 h-3 text-slate-950" />
+                        <span>View Official Court Layout</span>
+                      </button>
+                      <span className="text-[9px] font-mono text-emerald-400 font-bold uppercase bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5">
+                        All Fields Synced
+                      </span>
+                    </div>
                   </div>
 
                   {/* Rendered Canvas Box */}
@@ -2100,6 +2195,17 @@ export default function LegalFormsTemplateManager({
 
           </div>
         </div>
+      )}
+
+      {/* Official California Judicial Council Form Modal */}
+      {selectedOfficialClient && (
+        <OfficialCaliforniaJudicialCouncilFormModal
+          isOpen={showOfficialFormModal}
+          onClose={() => setShowOfficialFormModal(false)}
+          client={selectedOfficialClient}
+          initialFormCode={selectedOfficialFormCode}
+          onAddGeneratedDoc={onAddGeneratedDoc}
+        />
       )}
 
     </div>

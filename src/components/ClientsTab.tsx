@@ -36,16 +36,25 @@ import {
   DollarSign,
   CreditCard,
   ShieldCheck,
-  X
+  X,
+  Copy,
+  CheckCheck,
+  Scale
 } from 'lucide-react';
-import { Client } from '../types';
+import { Client, Matter, AgentExtractionResult, GeneratedDocument } from '../types';
 import { getAccessToken } from '../lib/driveAuth';
 import { ClientLedgerDropdown, ClientFullLedgerView } from './ClientLedgerView';
 import { getOrCreateClientLedger, formatCurrency } from '../data/ledgerData';
+import { AssignExtractionTaskModal } from './AssignExtractionTaskModal';
+import { FL120ResponseDossier } from './FL120ResponseDossier';
+import { OfficialCaliforniaJudicialCouncilFormModal } from './OfficialCaliforniaJudicialCouncilFormModal';
 
 interface ClientsTabProps {
   clients: Client[];
-  onAddClient: (newClient: Omit<Client, 'id' | 'createdAt'>) => void;
+  onAddClient: (newClient: Omit<Client, 'id' | 'createdAt'> | Client) => void;
+  onAddMatter?: (newMatter: Omit<Matter, 'id' | 'createdAt'> | Matter) => void;
+  onAddGeneratedDoc?: (doc: GeneratedDocument) => void;
+  onNavigateToTab?: (tab: string, clientId?: string) => void;
   loadMoreClients?: () => Promise<void>;
   hasMoreClients?: boolean;
   isLoadingMoreClients?: boolean;
@@ -55,6 +64,9 @@ interface ClientsTabProps {
 export default function ClientsTab({ 
   clients, 
   onAddClient,
+  onAddMatter,
+  onAddGeneratedDoc,
+  onNavigateToTab,
   loadMoreClients,
   hasMoreClients = false,
   isLoadingMoreClients = false,
@@ -68,7 +80,38 @@ export default function ClientsTab({
   const [activeSubView, setActiveSubView] = useState<'card' | 'roster' | 'ledger' | 'files' | 'notes'>('card'); // Default to Client Intake Card view!
   const [openLedgerClientId, setOpenLedgerClientId] = useState<string | null>(null);
   const [openTableLedgerClientId, setOpenTableLedgerClientId] = useState<string | null>(null);
-  const [extractedCardFields, setExtractedCardFields] = useState<Record<string, Record<string, string>>>({});
+  
+  // AI Agent Extraction Task Modal State
+  const [showAssignTaskModal, setShowAssignTaskModal] = useState(false);
+  const [stagedFileForTask, setStagedFileForTask] = useState<{ name: string; content?: string } | null>(null);
+  const [taskNotice, setTaskNotice] = useState<{ agent: string; message: string } | null>(null);
+
+  // Official California Judicial Council Form Modal State
+  const [showOfficialFormModal, setShowOfficialFormModal] = useState<boolean>(false);
+  const [officialFormCode, setOfficialFormCode] = useState<'FL-120' | 'FL-105' | 'FL-311' | 'FL-160'>('FL-120');
+
+  // Extracted card fields with local storage persistence
+  const [extractedCardFields, setExtractedCardFields] = useState<Record<string, Record<string, string>>>(() => {
+    try {
+      const saved = localStorage.getItem('level23_extracted_card_fields_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (e) {}
+    return {};
+  });
+
+  const saveExtractedFields = (updater: (prev: Record<string, Record<string, string>>) => Record<string, Record<string, string>>) => {
+    setExtractedCardFields(prev => {
+      const next = updater(prev);
+      try {
+        localStorage.setItem('level23_extracted_card_fields_v2', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
   const [isExtractingCardData, setIsExtractingCardData] = useState(false);
   const [localFolderStatus, setLocalFolderStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const [bridgeFiles, setBridgeFiles] = useState<string[]>([]);
@@ -241,6 +284,8 @@ export default function ClientsTab({
     if (!selectedClient) return;
 
     let successCount = 0;
+    let firstUploaded: { name: string; content?: string } | null = null;
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const reader = new FileReader();
@@ -262,6 +307,10 @@ export default function ClientsTab({
             ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
             : `${(file.size / 1024).toFixed(1)} KB`;
 
+          if (!firstUploaded) {
+            firstUploaded = { name: baseName, content };
+          }
+
           if (localFolderStatus === 'connected') {
             const ok = await handleSaveFileToBridge(relativePath, content);
             if (ok) {
@@ -282,8 +331,9 @@ export default function ClientsTab({
       });
     }
     
-    if (successCount > 0) {
-      alert(`🎉 Successfully synchronized ${successCount} dossier file(s) into ${selectedClient.name}'s directory structure!`);
+    if (firstUploaded) {
+      setStagedFileForTask(firstUploaded);
+      setShowAssignTaskModal(true);
     }
   };
 
@@ -314,7 +364,7 @@ export default function ClientsTab({
     });
   };
 
-  // Fallback / Standalone simulated files database
+  // Fallback / Standalone simulated files database (starts clean with no phantom files)
   const [simulatedFiles, setSimulatedFiles] = useState<Record<string, { name: string; content: string; size: string; type: string; date: string }[]>>(() => {
     const saved = localStorage.getItem('l23_simulated_client_files_v3');
     if (saved) {
@@ -323,22 +373,29 @@ export default function ClientsTab({
         if (parsed && typeof parsed === 'object') return parsed;
       } catch (e) {}
     }
-    return {
-      'c-1': [
-        { name: 'Intake_Record_JaneDoe.md', type: 'Markdown', size: '1.4 KB', date: '2026-08-01', content: '### Jane Doe Intake Details\n\nStandard Client Intake Placeholder Record.\nReady for replacement or onboarding of active client.' },
-        { name: 'Contact_Card.vcf', type: 'VCard', size: '0.6 KB', date: '2026-08-01', content: 'BEGIN:VCARD\nVERSION:3.0\nN:Doe;Jane;;;\nFN:Jane Doe\nEMAIL:jane.doe@example.com\nTEL:+1 (555) 019-2831\nORG:Level 23 Client\nEND:VCARD' }
-      ],
-      'c-2': [
-        { name: 'Intake_Record_JohnDoe.md', type: 'Markdown', size: '1.4 KB', date: '2026-08-01', content: '### John Doe Intake Details\n\nStandard Client Intake Placeholder Record.\nReady for replacement or onboarding of active client.' },
-        { name: 'Contact_Card.vcf', type: 'VCard', size: '0.6 KB', date: '2026-08-01', content: 'BEGIN:VCARD\nVERSION:3.0\nN:Doe;John;;;\nFN:John Doe\nEMAIL:john.doe@example.com\nTEL:+1 (555) 019-2832\nORG:Level 23 Client\nEND:VCARD' }
-      ]
-    };
+    return {};
   });
 
   // Save simulated files to localStorage
   const saveSimulated = (updated: Record<string, any>) => {
     setSimulatedFiles(updated);
     localStorage.setItem('l23_simulated_client_files_v3', JSON.stringify(updated));
+  };
+
+  // User Action: Purge all client files & clear simulated/mock storage
+  const handlePurgeAllClientFiles = () => {
+    if (window.confirm('Are you sure you want to PURGE ALL CLIENT FILES? This will completely remove all simulated, cached, and placeholder client files.')) {
+      setSimulatedFiles({});
+      setExtractedCardFields({});
+      localStorage.removeItem('l23_simulated_client_files_v3');
+      localStorage.removeItem('level23_extracted_card_fields_v2');
+      localStorage.removeItem('l23_persistent_clients_v3');
+      setTaskNotice({
+        agent: 'Purge Protocol',
+        message: 'All client files, simulated documents, and local caches have been permanently purged.'
+      });
+      setTimeout(() => setTaskNotice(null), 7000);
+    }
   };
 
   // Poll Local Editor Bridge for changes
@@ -657,7 +714,7 @@ END:VCARD`;
       });
       const data = await res.json();
       if (data.extractedFields) {
-        setExtractedCardFields(prev => ({
+        saveExtractedFields(prev => ({
           ...prev,
           [selectedClient.id]: data.extractedFields
         }));
@@ -669,63 +726,167 @@ END:VCARD`;
     }
   };
 
+  const handleApplyExtractionTask = (result: AgentExtractionResult, targetClientId?: string) => {
+    const targetId = targetClientId || selectedClient?.id || `c-${Date.now()}`;
+    
+    // 1. Save extracted dossier fields to localStorage & state
+    saveExtractedFields(prev => ({
+      ...prev,
+      [targetId]: result.extractedFields
+    }));
+
+    // 2. Update or create client
+    onAddClient({
+      id: targetId,
+      name: result.client.name,
+      email: result.client.email || 'client@firm.legal',
+      phone: result.client.phone || '+1 (555) 019-2834',
+      practiceArea: result.client.practiceArea || 'Family Law',
+      status: result.client.status || 'active',
+      intakeNotes: result.client.intakeNotes
+    } as any);
+
+    // 3. Create simulated dossier markdown in client filing cabinet
+    const fileDate = new Date().toISOString().split('T')[0];
+    const cleanAgent = (result.taskAudit.assignedAgent || 'EVE').replace(/[^A-Za-z0-9]/g, '_');
+    const mdName = `AI_Dossier_${cleanAgent}_${fileDate}.md`;
+    const mdContent = `# Legal Intake Dossier — ${result.client.name}\n\n**Processed By:** ${result.taskAudit.assignedAgent}\n**Task ID:** ${result.taskAudit.taskId}\n**Date:** ${fileDate}\n**Status:** COMPLETED & VERIFIED\n\n${result.client.intakeNotes}\n\n## 16 Extracted Data Points Placed in Client File\n${Object.entries(result.extractedFields).map(([k, v]) => `* **${k}:** ${v}`).join('\n')}`;
+
+    saveProcessedFileToSimulated(mdName, mdContent, `${(mdContent.length / 1024).toFixed(1)} KB`);
+
+    // 4. Create Matter & litigation procedural tasks if provided
+    if (result.matter && onAddMatter) {
+      onAddMatter({
+        title: result.matter.title || `Matter: ${result.client.name} — ${result.client.practiceArea}`,
+        caseNumber: result.matter.caseNumber || `FL-${Date.now().toString().slice(-5)}`,
+        clientId: targetId,
+        clientName: result.client.name,
+        practiceArea: result.matter.practiceArea || result.client.practiceArea,
+        status: 'active',
+        billingRate: result.matter.billingRate || 350,
+        billedHours: 0,
+        description: result.matter.description || 'Procedural litigation initiated via AI Agent intake extraction.',
+        tasks: (result.matter.tasks || []).map((t, idx) => ({
+          id: t.id || `task-${Date.now()}-${idx}`,
+          title: t.title,
+          completed: t.completed ?? false,
+          dueDate: t.dueDate || fileDate
+        }))
+      });
+    }
+
+    // 5. Select this client and switch to card view to inspect populated fields
+    const updatedClientObj: Client = {
+      id: targetId,
+      name: result.client.name,
+      email: result.client.email || 'client@firm.legal',
+      phone: result.client.phone || '+1 (555) 019-2834',
+      practiceArea: result.client.practiceArea || 'Family Law',
+      status: 'active',
+      intakeNotes: result.client.intakeNotes,
+      createdAt: new Date().toISOString()
+    };
+    setSelectedClient(updatedClientObj);
+    setActiveSubView('card');
+
+    setTaskNotice({
+      agent: result.taskAudit.assignedAgent,
+      message: `Extracted ${result.taskAudit.extractedFieldsCount} fields from document and placed into ${result.client.name}'s file with litigation tasks.`
+    });
+    setTimeout(() => setTaskNotice(null), 6000);
+  };
+
   const getClientCardData = (client: Client): Record<string, string> => {
     if (extractedCardFields[client.id]) {
       return extractedCardFields[client.id];
     }
+
+    // Dynamic field extraction from client intake notes if structured
+    const notes = client.intakeNotes || '';
+    const findField = (regex: RegExp, fallback: string) => {
+      const match = notes.match(regex);
+      return match && match[1] ? match[1].trim() : fallback;
+    };
+
+    // Structured CA Judicial Council Form FL-120 data from ABBYY OCR or Intake
+    if (client.fl120Data) {
+      const fl = client.fl120Data;
+      const childrenStr = fl.minorChildren && fl.minorChildren.length > 0
+        ? fl.minorChildren.map(c => `${c.name} (DOB: ${c.birthdate}, Age: ${c.age})`).join('; ')
+        : (fl.hasMinorChildren ? 'Minor children declared (FL-105 UCCJEA Attached)' : 'None');
+
+      return {
+        'Full Legal Name': client.name,
+        'Date of Birth / Age': findField(/(?:DOB|Date of Birth|Age)[:\s]+([^\n\r,]+)/i, 'Recorded in Confidential Record'),
+        'Residential Address': findField(/(?:Address|Residence)[:\s]+([^\n\r]+)/i, '200 Coastal Way, Newport Beach, CA 92660'),
+        'Phone Number': client.phone || '+1 (555) 019-2832',
+        'Email Address': client.email || 'john.doe@example.com',
+        'Occupation / Employer': findField(/(?:Employer|Occupation|Job)[:\s]+([^\n\r,]+)/i, 'Client Intake Dossier'),
+        'Spouse / Opposing Party': fl.petitionerName || 'Jane Doe',
+        'Date of Marriage / Entry Date': fl.dateOfMarriage || 'June 15, 2012',
+        'Date of Separation / Visa Class': fl.dateOfSeparation || 'April 10, 2026',
+        'Filing Court / County Jurisdiction': `${fl.courtCounty || 'Superior Court of CA'} — Case No. ${fl.caseNumber || '26FL008921'}`,
+        'Minor Children & DOBs': childrenStr,
+        'Requested Custody & Relief': `Legal: ${fl.custodyLegal || 'Joint'} | Physical: ${fl.custodyPhysical || 'Joint'} (Parenting: ${fl.visitationRequested || 'FL-311'})`,
+        'Community Assets & Debts': fl.communityPropertyNotes || 'Equal Division of Community Estate (200 Coastal Way, Accounts)',
+        'Primary Legal Risks & Next Steps': `Grounds: ${fl.legalGrounds || 'Irreconcilable Differences'} | ABBYY Batch: ${fl.abbyyBatchId || 'Verified'}`
+      };
+    }
+
     // Fallback parsed defaults for standard placeholders
     if (client.name.includes('Jane Doe')) {
       return {
         'Full Legal Name': 'Jane Doe',
-        'Date of Birth / Age': 'Standard Client Placeholder',
-        'Residential Address': '100 Main Street, Suite 200, Santa Ana, CA 92701',
+        'Date of Birth / Age': findField(/(?:DOB|Date of Birth|Age)[:\s]+([^\n\r,]+)/i, 'Standard Client Placeholder'),
+        'Residential Address': findField(/(?:Address|Residence)[:\s]+([^\n\r]+)/i, '100 Main Street, Suite 200, Santa Ana, CA 92701'),
         'Phone Number': client.phone || '+1 (555) 019-2831',
         'Email Address': client.email || 'jane.doe@example.com',
-        'Occupation / Employer': 'Client Intake Record',
-        'Spouse / Opposing Party': 'John Doe',
-        'Date of Marriage / Entry Date': 'August 1, 2020',
-        'Date of Separation / Visa Class': 'August 1, 2026',
-        'Filing Court / County Jurisdiction': 'Superior Court of CA, County of Orange',
-        'Minor Children & DOBs': 'Pending Intake Disclosure',
-        'Requested Custody & Relief': 'Standard Dissolution / Legal Action',
-        'Community Assets & Debts': 'Pending Disclosure',
-        'Primary Legal Risks & Next Steps': 'Complete initial client intake documentation and review pleading drafts'
+        'Occupation / Employer': findField(/(?:Employer|Occupation|Job)[:\s]+([^\n\r,]+)/i, 'Client Intake Record'),
+        'Spouse / Opposing Party': findField(/(?:Spouse|Opposing Party|Husband|Wife)[:\s]+([^\n\r,]+)/i, 'John Doe'),
+        'Date of Marriage / Entry Date': findField(/(?:Date of Marriage|Married)[:\s]+([^\n\r,]+)/i, 'August 1, 2020'),
+        'Date of Separation / Visa Class': findField(/(?:Date of Separation|Separated)[:\s]+([^\n\r,]+)/i, 'August 1, 2026'),
+        'Filing Court / County Jurisdiction': findField(/(?:Court|Jurisdiction)[:\s]+([^\n\r]+)/i, 'Superior Court of CA, County of Orange'),
+        'Minor Children & DOBs': findField(/(?:Children|Minor Children)[:\s]+([^\n\r]+)/i, 'Pending Intake Disclosure'),
+        'Requested Custody & Relief': findField(/(?:Custody|Relief Requested)[:\s]+([^\n\r]+)/i, 'Standard Dissolution / Legal Action'),
+        'Community Assets & Debts': findField(/(?:Assets|Debts|Property)[:\s]+([^\n\r]+)/i, 'Pending Disclosure'),
+        'Primary Legal Risks & Next Steps': findField(/(?:Risks|Next Steps)[:\s]+([^\n\r]+)/i, 'Complete initial client intake documentation and review pleading drafts')
       };
     }
     if (client.name.includes('John Doe')) {
       return {
         'Full Legal Name': 'John Doe',
-        'Date of Birth / Age': 'Standard Client Placeholder',
-        'Residential Address': '200 Coastal Way, Newport Beach, CA 92660',
+        'Date of Birth / Age': findField(/(?:DOB|Date of Birth|Age)[:\s]+([^\n\r,]+)/i, 'Standard Client Placeholder'),
+        'Residential Address': findField(/(?:Address|Residence)[:\s]+([^\n\r]+)/i, '200 Coastal Way, Newport Beach, CA 92660'),
         'Phone Number': client.phone || '+1 (555) 019-2832',
         'Email Address': client.email || 'john.doe@example.com',
-        'Occupation / Employer': 'Client Intake Record',
-        'Spouse / Opposing Party': 'Jane Doe',
-        'Date of Marriage / Entry Date': 'August 1, 2020',
-        'Date of Separation / Visa Class': 'August 1, 2026',
-        'Filing Court / County Jurisdiction': 'Superior Court of CA, County of Orange',
-        'Minor Children & DOBs': 'Pending Intake Disclosure',
-        'Requested Custody & Relief': 'Standard Legal Action',
-        'Community Assets & Debts': 'Pending Disclosure',
-        'Primary Legal Risks & Next Steps': 'Complete initial client intake documentation and review pleading drafts'
+        'Occupation / Employer': findField(/(?:Employer|Occupation|Job)[:\s]+([^\n\r,]+)/i, 'Client Intake Record'),
+        'Spouse / Opposing Party': findField(/(?:Spouse|Opposing Party|Husband|Wife)[:\s]+([^\n\r,]+)/i, 'Jane Doe'),
+        'Date of Marriage / Entry Date': findField(/(?:Date of Marriage|Married)[:\s]+([^\n\r,]+)/i, 'August 1, 2020'),
+        'Date of Separation / Visa Class': findField(/(?:Date of Separation|Separated)[:\s]+([^\n\r,]+)/i, 'August 1, 2026'),
+        'Filing Court / County Jurisdiction': findField(/(?:Court|Jurisdiction)[:\s]+([^\n\r]+)/i, 'Superior Court of CA, County of Orange'),
+        'Minor Children & DOBs': findField(/(?:Children|Minor Children)[:\s]+([^\n\r]+)/i, 'Pending Intake Disclosure'),
+        'Requested Custody & Relief': findField(/(?:Custody|Relief Requested)[:\s]+([^\n\r]+)/i, 'Standard Legal Action'),
+        'Community Assets & Debts': findField(/(?:Assets|Debts|Property)[:\s]+([^\n\r]+)/i, 'Pending Disclosure'),
+        'Primary Legal Risks & Next Steps': findField(/(?:Risks|Next Steps)[:\s]+([^\n\r]+)/i, 'Complete initial client intake documentation and review pleading drafts')
       };
     }
+
     // Generic auto-parsed representation from client properties & intake notes
     return {
       'Full Legal Name': client.name,
-      'Date of Birth / Age': 'Extracted from intake records',
-      'Residential Address': 'Client Primary Address File',
+      'Date of Birth / Age': findField(/(?:DOB|Date of Birth|Age)[:\s]+([^\n\r,]+)/i, 'Extracted from intake records'),
+      'Residential Address': findField(/(?:Address|Residence)[:\s]+([^\n\r]+)/i, 'Client Primary Address File'),
       'Phone Number': client.phone || 'N/A',
       'Email Address': client.email || 'N/A',
-      'Occupation / Employer': 'Extracted from intake dossier',
-      'Spouse / Opposing Party': 'Extracted from intake notes',
-      'Date of Marriage / Entry Date': 'Extracted from intake notes',
-      'Date of Separation / Visa Class': 'Extracted from intake notes',
-      'Filing Court / County Jurisdiction': `Superior Court (${client.practiceArea})`,
-      'Minor Children & DOBs': 'Extracted from intake notes',
-      'Requested Custody & Relief': 'Extracted from intake notes',
-      'Community Assets & Debts': 'Extracted from intake notes',
-      'Primary Legal Risks & Next Steps': client.intakeNotes ? client.intakeNotes.slice(0, 150) + '...' : 'Intake record compiled.'
+      'Occupation / Employer': findField(/(?:Employer|Occupation|Job)[:\s]+([^\n\r,]+)/i, 'Extracted from intake dossier'),
+      'Spouse / Opposing Party': findField(/(?:Spouse|Opposing Party|Husband|Wife)[:\s]+([^\n\r,]+)/i, 'Extracted from intake notes'),
+      'Date of Marriage / Entry Date': findField(/(?:Date of Marriage|Married|Entry Date)[:\s]+([^\n\r,]+)/i, 'Extracted from intake notes'),
+      'Date of Separation / Visa Class': findField(/(?:Date of Separation|Separated|Visa Class)[:\s]+([^\n\r,]+)/i, 'Extracted from intake notes'),
+      'Filing Court / County Jurisdiction': findField(/(?:Court|Jurisdiction)[:\s]+([^\n\r]+)/i, `Superior Court (${client.practiceArea})`),
+      'Minor Children & DOBs': findField(/(?:Children|Minor Children)[:\s]+([^\n\r]+)/i, 'Extracted from intake notes'),
+      'Requested Custody & Relief': findField(/(?:Custody|Relief Requested)[:\s]+([^\n\r]+)/i, 'Extracted from intake notes'),
+      'Community Assets & Debts': findField(/(?:Assets|Debts|Property)[:\s]+([^\n\r]+)/i, 'Extracted from intake notes'),
+      'Primary Legal Risks & Next Steps': findField(/(?:Risks|Next Steps)[:\s]+([^\n\r]+)/i, client.intakeNotes ? client.intakeNotes.slice(0, 150) + '...' : 'Intake record compiled.')
     };
   };
 
@@ -778,6 +939,20 @@ END:VCARD`;
               >
                 <Table className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Sheets Sync</span>
+              </button>
+
+              <button
+                id="btn-assign-ai-extraction-task"
+                type="button"
+                onClick={() => {
+                  setStagedFileForTask(null);
+                  setShowAssignTaskModal(true);
+                }}
+                className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-300 border border-amber-500/40 hover:border-amber-300 rounded-lg text-xs font-semibold font-heading flex items-center gap-1.5 cursor-pointer transition-all shadow-[0_0_10px_rgba(245,158,11,0.2)]"
+                title="Assign an AI Agent (EVE, Elena, Sophia, Alex) to extract information from a document and place it into client files"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                <span>Assign to AI Agent</span>
               </button>
 
               <button
@@ -1097,6 +1272,35 @@ END:VCARD`;
 
                      {/* Header Buttons */}
                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                       {selectedClient.fl120Data && (
+                         <button
+                           type="button"
+                           id="btn-open-official-fl120-card"
+                           onClick={() => {
+                             setOfficialFormCode('FL-120');
+                             setShowOfficialFormModal(true);
+                           }}
+                           className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-mono text-xs font-black uppercase rounded-lg cursor-pointer transition-all flex items-center gap-1.5 shadow-md shadow-emerald-500/30 ring-1 ring-emerald-400/50"
+                           title="Open authentic California Judicial Council Form FL-120 populated with extracted facts"
+                         >
+                           <FileCheck className="w-3.5 h-3.5 text-slate-950" />
+                           <span>📄 Open Official Form FL-120</span>
+                         </button>
+                       )}
+                       <button
+                         type="button"
+                         id="btn-assign-task-from-card"
+                         onClick={() => {
+                           setStagedFileForTask(null);
+                           setShowAssignTaskModal(true);
+                         }}
+                         className="px-3 py-1.5 bg-gradient-to-r from-teal-500 to-emerald-400 hover:from-teal-400 hover:to-emerald-300 text-slate-950 font-mono text-xs font-black uppercase rounded-lg cursor-pointer transition-all flex items-center gap-1.5 shadow-sm"
+                         title="Assign an AI Agent to extract document facts and place directly into this client file"
+                       >
+                         <Sparkles className="w-3.5 h-3.5 text-slate-950" />
+                         <span>🤖 Assign Task to Agent</span>
+                       </button>
+
                        <button
                          type="button"
                          onClick={handleExtractCardData}
@@ -1252,6 +1456,16 @@ END:VCARD`;
                          </div>
 
                        </div>
+
+                       {/* FL-120 STATUTORY RESPONSE DOSSIER (ABBYY FLEXICAPTURE OCR / CA JUDICIAL COUNCIL) */}
+                       {selectedClient.fl120Data && (
+                         <FL120ResponseDossier
+                           client={selectedClient}
+                           fl120Data={selectedClient.fl120Data}
+                           onAddGeneratedDoc={onAddGeneratedDoc}
+                           onNavigateToTab={onNavigateToTab}
+                         />
+                       )}
                      </div>
                    );
                  })()}
@@ -1476,6 +1690,17 @@ END:VCARD`;
                    <div className="flex gap-2 shrink-0">
                      <button
                        type="button"
+                       id="btn-purge-all-client-files"
+                       onClick={handlePurgeAllClientFiles}
+                       className="px-3.5 py-2 bg-red-950/40 hover:bg-red-900/60 border border-red-500/40 text-red-300 rounded-xl text-xs font-bold font-mono transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                       title="Purge all simulated, cached, and placeholder client files"
+                     >
+                       <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                       <span>Purge Client Files</span>
+                     </button>
+
+                     <button
+                       type="button"
                        id="btn-sync-folder-refresh"
                        onClick={checkDesktopBridge}
                        className="p-2 bg-[#090d16] hover:bg-slate-900 border border-[#1e293b] rounded-lg text-slate-300 hover:text-white transition"
@@ -1483,7 +1708,7 @@ END:VCARD`;
                      >
                        <RefreshCw className="w-4 h-4 text-slate-400 hover:rotate-180 transition duration-500" />
                      </button>
- 
+
                      <button
                        type="button"
                        id="btn-gen-contact-card"
@@ -1531,6 +1756,38 @@ END:VCARD`;
                    </div>
  
                    {/* Directory list of Files */}
+                    {/* AI Agent Extraction Task Banner */}
+                    <div className="mb-4 p-3.5 bg-gradient-to-r from-amber-500/10 via-[#0a1220] to-teal-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-lg shrink-0">
+                          🤖
+                        </div>
+                        <div>
+                          <div className="text-xs font-mono font-bold text-amber-300 flex items-center gap-2">
+                            <span>AI Agent Document Ingestion & Placement Station</span>
+                            <span className="px-1.5 py-0.5 text-[8.5px] font-mono bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded">
+                              Active Agents: EVE • Elena • Sophia
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 font-sans">
+                            Delegate files directly to AI agents as a structured task to extract all facts and place them into {selectedClient.name}'s client record.
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        id="btn-assign-task-from-cabinet"
+                        onClick={() => {
+                          setStagedFileForTask(null);
+                          setShowAssignTaskModal(true);
+                        }}
+                        className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-mono text-xs font-black uppercase rounded-xl cursor-pointer transition-all flex items-center gap-1.5 shrink-0 shadow-sm"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Assign Task to Agent</span>
+                      </button>
+                    </div>
+
                     {/* Drag and Drop File Uploader area */}
                     <div
                       onDragOver={handleDragOver}
@@ -1615,6 +1872,20 @@ END:VCARD`;
                                  </td>
                                  <td className="px-5 py-3 text-right">
                                    <div className="flex items-center justify-end gap-1.5">
+                                     {/* AI Extraction Task Assignment */}
+                                     <button
+                                       type="button"
+                                       onClick={() => {
+                                         setStagedFileForTask({ name: file.name, content: file.content });
+                                         setShowAssignTaskModal(true);
+                                       }}
+                                       className="p-1 px-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 rounded text-[10px] font-mono font-bold flex items-center gap-1 cursor-pointer"
+                                       title="Assign this file to AI Agent to extract information and place directly into client file"
+                                     >
+                                       <Sparkles className="w-3 h-3 text-amber-400" />
+                                       <span>AI Extract</span>
+                                     </button>
+
                                      {/* Edit / View */}
                                      <button
                                        type="button"
@@ -2163,6 +2434,57 @@ END:VCARD`;
 
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Official California Judicial Council Form Modal */}
+      {selectedClient && (
+        <OfficialCaliforniaJudicialCouncilFormModal
+          isOpen={showOfficialFormModal}
+          onClose={() => setShowOfficialFormModal(false)}
+          client={selectedClient}
+          initialFormCode={officialFormCode}
+          onAddGeneratedDoc={onAddGeneratedDoc}
+        />
+      )}
+
+      {/* AI Agent Extraction Task Modal */}
+      <AssignExtractionTaskModal
+        isOpen={showAssignTaskModal}
+        onClose={() => setShowAssignTaskModal(false)}
+        clients={clients}
+        preselectedClientId={selectedClient?.id}
+        initialFile={stagedFileForTask}
+        onApplyExtraction={handleApplyExtractionTask}
+      />
+
+      {/* Agent Task Completion Floating Notice */}
+      <AnimatePresence>
+        {taskNotice && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-6 right-6 z-50 max-w-md p-4 bg-[#0e1626] border border-teal-500/40 rounded-2xl shadow-2xl flex items-start gap-3 backdrop-blur-md"
+          >
+            <div className="w-8 h-8 rounded-lg bg-teal-500/20 text-teal-400 flex items-center justify-center shrink-0 text-base font-bold">
+              ✓
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-mono font-bold text-teal-300">
+                AI Agent Task Executed ({taskNotice.agent})
+              </div>
+              <div className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                {taskNotice.message}
+              </div>
+            </div>
+            <button
+              onClick={() => setTaskNotice(null)}
+              className="text-slate-400 hover:text-white text-xs p-1 cursor-pointer"
+            >
+              ✕
+            </button>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   FileText,
@@ -44,14 +44,20 @@ import {
   Languages,
   History,
   Edit3,
-  Save
+  Save,
+  Globe,
+  BookmarkPlus
 } from 'lucide-react';
 import { Client, DocumentTemplate, GeneratedDocument, Matter, EvidenceFile } from '../types';
 import { ALL_DOCUMENT_TEMPLATES, ALL_COURT_FORM_SCHEMAS, CourtFormSchema } from '../data/legalFormsCatalog';
 import LegalFormsTemplateManager from './LegalFormsTemplateManager';
 import OmniUploadModal from './OmniUploadModal';
 import DocumentSplitPreview from './DocumentSplitPreview';
+import JudicialCouncilOnlineHarvesterModal from './JudicialCouncilOnlineHarvesterModal';
+import { OfficialCaliforniaJudicialCouncilFormModal } from './OfficialCaliforniaJudicialCouncilFormModal';
+import { triggerDirectCourtPdfDownload } from '../services/judicialFormHarvesterService';
 import { initAuth, googleSignIn, logout, getAccessToken } from '../lib/driveAuth';
+import { safeFetchJson, clientListDriveFiles, clientGetDriveFile, clientUploadDriveFile } from '../lib/driveClient';
 
 interface DocumentsTabProps {
   clients: Client[];
@@ -91,6 +97,13 @@ export default function DocumentsTab({
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'synthesis' | 'evidence_room' | 'judicial_mapper' | 'template_builder' | 'forms_manager' | 'drive_portal'>('forms_manager');
   const [draftingModel, setDraftingModel] = useState<string>('default');
   const [showTabOmniUpload, setShowTabOmniUpload] = useState<boolean>(false);
+
+  // Official California Judicial Council Form Modal
+  const [showOfficialFormModal, setShowOfficialFormModal] = useState<boolean>(false);
+  const [selectedOfficialFormCode, setSelectedOfficialFormCode] = useState<'FL-120' | 'FL-105' | 'FL-311' | 'FL-160'>('FL-120');
+  const [selectedOfficialClient, setSelectedOfficialClient] = useState<Client | null>(() => {
+    return clients?.find(c => c.name.includes('Christopher Guinto')) || clients?.[0] || null;
+  });
 
   // Google Drive Integration States
   const [googleUser, setGoogleUser] = useState<any>(null);
@@ -332,7 +345,7 @@ Law governance: Governed by the rules of California state, County of San Francis
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     loadLocalFiles();
     // Establish periodic interval polling to keep desktop documents list perfectly synchronized
     const interval = setInterval(() => {
@@ -342,7 +355,7 @@ Law governance: Governed by the rules of California state, County of San Francis
   }, []);
 
   // Initialize Google OAuth state on mount
-  React.useEffect(() => {
+  useEffect(() => {
     const unsubscribe = initAuth(
       (user, token) => {
         setGoogleUser(user);
@@ -360,7 +373,7 @@ Law governance: Governed by the rules of California state, County of San Francis
   }, []);
 
   // Establish 15s polling for Google Drive auto-sync when authenticated
-  React.useEffect(() => {
+  useEffect(() => {
     const token = googleToken || getAccessToken();
     if (!token) return;
     const interval = setInterval(() => {
@@ -375,21 +388,35 @@ Law governance: Governed by the rules of California state, County of San Francis
     setIsLoadingDriveFiles(true);
     setDriveError(null);
     try {
-      const res = await fetch('/api/drive/list', {
+      // 1. Try server API with safe JSON verification
+      const res = await safeFetchJson('/api/drive/list', {
         headers: {
           'Authorization': `Bearer ${activeToken}`
         }
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.success) {
-          setGoogleFiles(data.files || []);
+
+      if (res.ok && res.data && res.data.success) {
+        setGoogleFiles(res.data.files || []);
+        setDriveLastSynced(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        return;
+      }
+
+      // 2. Direct client Google Drive fallback for Vercel / PWA hosting
+      if ((res.isHtml || res.status === 404 || !res.ok) && activeToken && !activeToken.startsWith('ya29.Level23Consulting_Drive')) {
+        try {
+          const clientFiles = await clientListDriveFiles(activeToken, driveSearchQuery);
+          setGoogleFiles(clientFiles as any);
           setDriveLastSynced(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-        } else {
-          setDriveError(data.error || 'Failed to list Google Drive files');
+          return;
+        } catch (clientErr: any) {
+          console.warn('Direct client Drive list fallback failed:', clientErr);
         }
-      } else {
-        setDriveError(`Server error listing files: HTTP ${res.status}`);
+      }
+
+      if (res.data && !res.data.success) {
+        setDriveError(res.data.error || 'Failed to list Google Drive files');
+      } else if (res.status !== 0) {
+        setDriveError(`Server response status: HTTP ${res.status}`);
       }
     } catch (err: any) {
       setDriveError(`Network failure listing files: ${err.message}`);
@@ -400,7 +427,7 @@ Law governance: Governed by the rules of California state, County of San Francis
 
   const handleExportFormToDrive = async (title: string, content: string, format: 'docx' | 'pdf' | 'text' = 'docx') => {
     let token = googleToken || getAccessToken();
-    if (!token) {
+    if (!token || token.startsWith('ya29.Level23Consulting_Drive')) {
       try {
         const res = await googleSignIn();
         if (res) {
@@ -428,7 +455,8 @@ Law governance: Governed by the rules of California state, County of San Francis
         finalName += ext;
       }
 
-      const res = await fetch('/api/drive/save', {
+      // 1. Try server API with safe JSON verification
+      const res = await safeFetchJson('/api/drive/save', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -441,37 +469,60 @@ Law governance: Governed by the rules of California state, County of San Francis
         })
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.success) {
-          const webUrl = data.file?.webViewLink;
-          setDriveToast({
-            message: `Successfully uploaded "${finalName}" to Google Drive!`,
-            url: webUrl
+      if (res.ok && res.data && res.data.success) {
+        const webUrl = res.data.file?.webViewLink;
+        setDriveToast({
+          message: `Successfully uploaded "${finalName}" to Google Drive!`,
+          url: webUrl
+        });
+        fetchDriveFiles(token);
+        setActiveWorkspaceTab('drive_portal');
+        if (res.data.file?.id) {
+          setSelectedDriveFile({
+            fileId: res.data.file.id,
+            name: res.data.file.name || finalName,
+            mimeType: res.data.file.mimeType,
+            webViewLink: webUrl,
+            content: content
           });
-          fetchDriveFiles(token);
-          setActiveWorkspaceTab('drive_portal');
-          if (data.file?.id) {
-            setSelectedDriveFile({
-              fileId: data.file.id,
-              name: data.file.name || finalName,
-              mimeType: data.file.mimeType,
-              webViewLink: webUrl,
-              content: content
-            });
-            setDriveFileName(data.file.name || finalName);
-            setDriveFileContent(content);
-            setDriveSaveFormat(format);
-          }
-          setTimeout(() => setDriveToast(null), 8000);
-        } else {
-          alert(`Drive Export Failed: ${data.error || 'Unknown error'}`);
+          setDriveFileName(res.data.file.name || finalName);
+          setDriveFileContent(content);
+          setDriveSaveFormat(format);
         }
-      } else {
-        alert(`Server error exporting to Drive: HTTP ${res.status}`);
+        setTimeout(() => setDriveToast(null), 8000);
+        return;
       }
+
+      // 2. Direct client Google Drive upload fallback for Vercel / PWA environments
+      if ((res.isHtml || res.status === 404 || !res.ok) && token && !token.startsWith('ya29.Level23Consulting_Drive')) {
+        const uploaded = await clientUploadDriveFile(token, {
+          name: finalName,
+          content: content,
+          format: format
+        });
+        setDriveToast({
+          message: `Successfully uploaded "${finalName}" directly to Google Drive!`,
+          url: uploaded.webViewLink
+        });
+        fetchDriveFiles(token);
+        setActiveWorkspaceTab('drive_portal');
+        setSelectedDriveFile({
+          fileId: uploaded.id,
+          name: uploaded.name,
+          mimeType: uploaded.mimeType,
+          webViewLink: uploaded.webViewLink,
+          content: content
+        });
+        setDriveFileName(uploaded.name);
+        setDriveFileContent(content);
+        setDriveSaveFormat(format);
+        setTimeout(() => setDriveToast(null), 8000);
+        return;
+      }
+
+      alert(`Drive Export Failed: ${res.data?.error || 'Could not upload to Google Drive'}`);
     } catch (err: any) {
-      alert(`Network error exporting to Drive: ${err.message}`);
+      alert(`Google Drive Export failed: ${err.message}`);
     } finally {
       setIsSavingToDrive(false);
     }
@@ -479,37 +530,61 @@ Law governance: Governed by the rules of California state, County of San Francis
 
   const fetchDriveFileContent = async (fileId: string) => {
     const token = googleToken || getAccessToken();
-    if (!token) {
+    if (!token || token.startsWith('ya29.Level23Consulting_Drive')) {
       alert("Please sign in to Google first.");
       return;
     }
     setIsLoadingDriveFiles(true);
     setDriveError(null);
     try {
-      const res = await fetch(`/api/drive/get?fileId=${encodeURIComponent(fileId)}`, {
+      // 1. Try server API with safe JSON verification
+      const res = await safeFetchJson(`/api/drive/get?fileId=${encodeURIComponent(fileId)}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.success) {
-          setSelectedDriveFile(data);
-          setDriveFileContent(data.content || '');
-          setDriveFileName(data.name || 'document');
-          // Guess save format from mimeType
-          if (data.mimeType?.includes('word') || data.name?.endsWith('.docx')) {
-            setDriveSaveFormat('docx');
-          } else if (data.mimeType?.includes('pdf') || data.name?.endsWith('.pdf')) {
-            setDriveSaveFormat('pdf');
-          } else {
-            setDriveSaveFormat('text');
-          }
+
+      if (res.ok && res.data && res.data.success) {
+        const data = res.data;
+        setSelectedDriveFile(data);
+        setDriveFileContent(data.content || '');
+        setDriveFileName(data.name || 'document');
+        if (data.mimeType?.includes('word') || data.name?.endsWith('.docx')) {
+          setDriveSaveFormat('docx');
+        } else if (data.mimeType?.includes('pdf') || data.name?.endsWith('.pdf')) {
+          setDriveSaveFormat('pdf');
         } else {
-          setDriveError(data.error || 'Failed to download file content.');
+          setDriveSaveFormat('text');
         }
+        return;
+      }
+
+      // 2. Direct client Google Drive fetch fallback for Vercel / PWA hosting
+      if ((res.isHtml || res.status === 404 || !res.ok) && token) {
+        const clientFile = await clientGetDriveFile(token, fileId);
+        setSelectedDriveFile({
+          fileId: clientFile.id,
+          name: clientFile.name,
+          mimeType: clientFile.mimeType,
+          webViewLink: clientFile.webViewLink,
+          content: clientFile.content
+        });
+        setDriveFileContent(clientFile.content || '');
+        setDriveFileName(clientFile.name || 'document');
+        if (clientFile.mimeType?.includes('word') || clientFile.name?.endsWith('.docx')) {
+          setDriveSaveFormat('docx');
+        } else if (clientFile.mimeType?.includes('pdf') || clientFile.name?.endsWith('.pdf')) {
+          setDriveSaveFormat('pdf');
+        } else {
+          setDriveSaveFormat('text');
+        }
+        return;
+      }
+
+      if (res.data && !res.data.success) {
+        setDriveError(res.data.error || 'Failed to download file content.');
       } else {
-        setDriveError(`Server error downloading file: HTTP ${res.status}`);
+        setDriveError(`Server response status: HTTP ${res.status}`);
       }
     } catch (err: any) {
       setDriveError(`Network failure downloading file: ${err.message}`);
@@ -520,7 +595,7 @@ Law governance: Governed by the rules of California state, County of San Francis
 
   const saveFileToDrive = async () => {
     const token = googleToken || getAccessToken();
-    if (!token) {
+    if (!token || token.startsWith('ya29.Level23Consulting_Drive')) {
       alert("Please sign in to Google first.");
       return;
     }
@@ -541,7 +616,8 @@ Law governance: Governed by the rules of California state, County of San Francis
         finalName = finalName.replace(/\.[^/.]+$/, "") + '.txt';
       }
 
-      const res = await fetch('/api/drive/save', {
+      // 1. Try server API with safe JSON verification
+      const res = await safeFetchJson('/api/drive/save', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -555,25 +631,40 @@ Law governance: Governed by the rules of California state, County of San Francis
         })
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.success) {
-          alert(`Successfully saved "${finalName}" to Google Drive!`);
-          fetchDriveFiles(token);
-          if (!selectedDriveFile?.fileId && data.file?.id) {
-            setSelectedDriveFile({
-              fileId: data.file.id,
-              name: data.file.name,
-              mimeType: data.file.mimeType,
-              content: driveFileContent
-            });
-          }
-        } else {
-          alert(`Failed to save: ${data.error || 'Unknown error'}`);
+      if (res.ok && res.data && res.data.success) {
+        alert(`Successfully saved "${finalName}" to Google Drive!`);
+        fetchDriveFiles(token);
+        if (!selectedDriveFile?.fileId && res.data.file?.id) {
+          setSelectedDriveFile({
+            fileId: res.data.file.id,
+            name: res.data.file.name,
+            mimeType: res.data.file.mimeType,
+            content: driveFileContent
+          });
         }
-      } else {
-        alert(`Server error saving: HTTP ${res.status}`);
+        return;
       }
+
+      // 2. Direct client Google Drive fallback for Vercel / PWA hosting
+      if ((res.isHtml || res.status === 404 || !res.ok) && token) {
+        const uploaded = await clientUploadDriveFile(token, {
+          name: finalName,
+          content: driveFileContent,
+          format: driveSaveFormat
+        });
+        alert(`Successfully saved "${finalName}" directly to Google Drive!`);
+        fetchDriveFiles(token);
+        setSelectedDriveFile({
+          fileId: uploaded.id,
+          name: uploaded.name,
+          mimeType: uploaded.mimeType,
+          webViewLink: uploaded.webViewLink,
+          content: driveFileContent
+        });
+        return;
+      }
+
+      alert(`Failed to save: ${res.data?.error || 'Unknown error'}`);
     } catch (err: any) {
       alert(`Network error saving to Drive: ${err.message}`);
     } finally {
@@ -678,12 +769,91 @@ Law governance: Governed by the rules of California state, County of San Francis
   );
 
   // Default Judicial Court Form Schemas with Coordinate/Token field maps
-  const [courtForms, setCourtForms] = useState<CourtFormSchema[]>(ALL_COURT_FORM_SCHEMAS);
+  const [courtForms, setCourtForms] = useState<CourtFormSchema[]>(() => {
+    const saved = localStorage.getItem('level23_court_forms_v1');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const existingCodes = new Set(parsed.map((p: any) => p.formNumber || p.id));
+          const missingDefaults = ALL_COURT_FORM_SCHEMAS.filter(d => !existingCodes.has(d.formNumber) && !existingCodes.has(d.id));
+          return [...parsed, ...missingDefaults];
+        }
+      } catch (e) {}
+    }
+    return ALL_COURT_FORM_SCHEMAS;
+  });
 
   const [selectedCourtForm, setSelectedCourtForm] = useState<CourtFormSchema>(courtForms[0]);
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldToken, setNewFieldToken] = useState('');
   const [newFieldValue, setNewFieldValue] = useState('');
+
+  // Judicial Council Online Harvester modal & toast notification states
+  const [showOnlineHarvesterModal, setShowOnlineHarvesterModal] = useState<boolean>(false);
+  const [harvesterNotice, setHarvesterNotice] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+
+  // Sync templates & schemas dynamically when harvested from online
+  useEffect(() => {
+    const handleFormsUpdated = (e: any) => {
+      if (e.detail?.schema) {
+        setCourtForms(prev => {
+          const exists = prev.find(s => s.id === e.detail.schema.id || s.formNumber === e.detail.schema.formNumber);
+          if (exists) {
+            return prev.map(s => (s.id === e.detail.schema.id || s.formNumber === e.detail.schema.formNumber) ? e.detail.schema : s);
+          }
+          return [e.detail.schema, ...prev];
+        });
+      }
+    };
+    const handleTemplatesUpdated = (e: any) => {
+      if (e.detail?.template) {
+        setTemplates(prev => {
+          const exists = prev.find(t => t.id === e.detail.template.id);
+          if (exists) {
+            return prev.map(t => t.id === e.detail.template.id ? e.detail.template : t);
+          }
+          return [e.detail.template, ...prev];
+        });
+      }
+    };
+
+    window.addEventListener('l23_court_forms_updated', handleFormsUpdated);
+    window.addEventListener('l23_templates_updated', handleTemplatesUpdated);
+    return () => {
+      window.removeEventListener('l23_court_forms_updated', handleFormsUpdated);
+      window.removeEventListener('l23_templates_updated', handleTemplatesUpdated);
+    };
+  }, []);
+
+  const handleHarvesterTemplateImported = (template: DocumentTemplate) => {
+    setTemplates(prev => {
+      const exists = prev.find(t => t.id === template.id);
+      if (exists) return prev.map(t => t.id === template.id ? template : t);
+      return [template, ...prev];
+    });
+    setSelectedBuilderTemplate(template);
+    setHarvesterNotice({
+      type: 'success',
+      message: `Form "${template.name}" successfully harvested and added to templates catalog!`
+    });
+    setTimeout(() => setHarvesterNotice(null), 5000);
+  };
+
+  const handleHarvesterSchemaImported = (schema: CourtFormSchema) => {
+    setCourtForms(prev => {
+      const exists = prev.find(s => s.id === schema.id || s.formNumber === schema.formNumber);
+      if (exists) return prev.map(s => (s.id === schema.id || s.formNumber === schema.formNumber) ? schema : s);
+      return [schema, ...prev];
+    });
+    setSelectedCourtForm(schema);
+    setActiveWorkspaceTab('judicial_mapper');
+    setHarvesterNotice({
+      type: 'success',
+      message: `Form "${schema.formNumber} - ${schema.formTitle}" coordinate schema loaded into Judicial Court Mapper!`
+    });
+    setTimeout(() => setHarvesterNotice(null), 5000);
+  };
 
   // -----------------------------------------------------------------------------------
   // SCREEN 3: HIGH-INTELLIGENCE LEGAL TEMPLATE BUILDER & AI FIELDS MAPPER STATES
@@ -1698,22 +1868,79 @@ Respectfully submitted,
           </button>
         </div>
 
-        {/* Model Selector Dropdown for drafting / synthesis */}
-        <div className="flex items-center gap-2 px-3 py-1 bg-[#111926] border border-slate-700/60 rounded-none font-mono text-[11px] text-slate-300">
-          <span className="text-slate-400 font-extrabold uppercase text-[10px] tracking-wider">Drafting Co-Pilot:</span>
-          <select
-            value={draftingModel}
-            onChange={(e) => setDraftingModel(e.target.value)}
-            className="bg-[#070b13] border border-[#1e293b] rounded-none px-2 py-1 text-xs text-slate-200 focus:border-teal-400 outline-none transition-colors cursor-pointer"
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Quick Online Judicial Form Harvester Action */}
+          <button
+            type="button"
+            onClick={() => setShowOnlineHarvesterModal(true)}
+            className="px-3 py-1.5 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-[#090d16] font-mono text-[11px] font-black uppercase flex items-center gap-1.5 transition-all shadow-[2px_2px_0px_#000] cursor-pointer"
+            title="Search and grab Judicial Council forms from courts.ca.gov and map them for auto-population"
           >
-            <option value="default">Default AI Router</option>
-            <option value="openrouter-fusion">OpenRouter Fusion</option>
-            <option value="claude-3.7-sonnet">Claude 3.7 Sonnet</option>
-            <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option>
-          </select>
+            <Globe className="w-3.5 h-3.5" />
+            <span>Grab Court Form Online</span>
+          </button>
+
+          {/* Quick Open Official California Judicial Council Form Modal */}
+          <button
+            type="button"
+            onClick={() => {
+              const guinto = clients?.find(c => c.name.includes('Christopher Guinto')) || clients?.[0] || null;
+              setSelectedOfficialClient(guinto);
+              setSelectedOfficialFormCode('FL-120');
+              setShowOfficialFormModal(true);
+            }}
+            className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-mono text-[11px] font-black uppercase flex items-center gap-1.5 transition-all shadow-[2px_2px_0px_#000] cursor-pointer"
+            title="Open official California Judicial Council Form FL-120 populated with client data"
+          >
+            <FileCheck className="w-3.5 h-3.5 text-slate-950" />
+            <span>Official Form FL-120</span>
+          </button>
+
+          {/* Model Selector Dropdown for drafting / synthesis */}
+          <div className="flex items-center gap-2 px-3 py-1 bg-[#111926] border border-slate-700/60 rounded-none font-mono text-[11px] text-slate-300">
+            <span className="text-slate-400 font-extrabold uppercase text-[10px] tracking-wider">Drafting Co-Pilot:</span>
+            <select
+              value={draftingModel}
+              onChange={(e) => setDraftingModel(e.target.value)}
+              className="bg-[#070b13] border border-[#1e293b] rounded-none px-2 py-1 text-xs text-slate-200 focus:border-teal-400 outline-none transition-colors cursor-pointer"
+            >
+              <option value="default">Default AI Router</option>
+              <option value="openrouter-fusion">OpenRouter Fusion</option>
+              <option value="claude-3.7-sonnet">Claude 3.7 Sonnet</option>
+              <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option>
+            </select>
+          </div>
         </div>
 
       </div>
+
+      {/* Harvester Status Notification Toast */}
+      {harvesterNotice && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          className={`p-3 border font-mono text-xs flex items-center justify-between shadow-lg select-none ${
+            harvesterNotice.type === 'success'
+              ? 'bg-teal-950/80 border-teal-500 text-teal-200'
+              : harvesterNotice.type === 'error'
+              ? 'bg-rose-950/80 border-rose-500 text-rose-200'
+              : 'bg-sky-950/80 border-sky-500 text-sky-200'
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0" />
+            <span>{harvesterNotice.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setHarvesterNotice(null)}
+            className="text-slate-400 hover:text-white cursor-pointer px-1.5 py-0.5 border border-slate-700 text-[10px]"
+          >
+            DISMISS
+          </button>
+        </motion.div>
+      )}
 
       {/* ----------------------------------------------------------------------------------- */}
       {/* REAL-TIME ON-PREMISES DESKTOP CONNECTOR & GOOGLE DRIVE SYNC PORTAL */}
@@ -2834,31 +3061,58 @@ Respectfully submitted,
                         </span>
                       </div>
 
-                      {/* Dropdown Court Form templates choice */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                        <div>
-                          <label className="block text-[8.5px] uppercase font-mono text-slate-500 font-bold mb-1 select-none">Select Form Schema</label>
-                          <select
-                            value={selectedCourtForm.id}
-                            onChange={(e) => {
-                              const found = courtForms.find(f => f.id === e.target.value);
-                              if (found) {
-                                setSelectedCourtForm(found);
-                                setCompiledCourtPDFSim(null);
-                              }
-                            }}
-                            className="w-full bg-[#090d16] border border-[#1e293b] px-3 py-1.5 text-xs text-white font-mono uppercase"
+                      {/* Dropdown Court Form templates choice & Online Harvester Action */}
+                      <div className="space-y-2 pt-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="block text-[8.5px] uppercase font-mono text-slate-400 font-bold select-none">
+                            Select Form Schema ({courtForms.length} Available)
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setShowOnlineHarvesterModal(true)}
+                            className="px-2.5 py-1 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-[#090d16] font-mono text-[9px] font-black uppercase flex items-center gap-1 cursor-pointer transition-all shadow-[1px_1px_0px_#000]"
+                            title="Grab any Judicial Council form from online and map it"
                           >
-                            {courtForms.map(f => (
-                              <option key={f.id} value={f.id}>Form {f.formNumber} - {f.formTitle.substring(0,25)}...</option>
-                            ))}
-                          </select>
+                            <Globe className="w-3 h-3" />
+                            <span>Grab Form Online</span>
+                          </button>
                         </div>
-                        <div>
-                          <span className="block text-[8.5px] uppercase font-mono text-slate-500 font-bold mb-1 select-none">Jurisdiction Jurisdiction</span>
-                          <span className="block text-xs font-mono text-slate-300 font-semibold bg-[#090d16] border border-[#1e293b] px-3 py-1.5 select-all">
-                            {selectedCourtForm.courtSystem}
-                          </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <select
+                              value={selectedCourtForm.id}
+                              onChange={(e) => {
+                                const found = courtForms.find(f => f.id === e.target.value);
+                                if (found) {
+                                  setSelectedCourtForm(found);
+                                  setCompiledCourtPDFSim(null);
+                                }
+                              }}
+                              className="w-full bg-[#090d16] border border-[#1e293b] px-3 py-1.5 text-xs text-white font-mono uppercase"
+                            >
+                              {courtForms.map(f => (
+                                <option key={f.id} value={f.id}>Form {f.formNumber} - {f.formTitle.substring(0,25)}...</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="flex-1 block text-xs font-mono text-slate-300 font-semibold bg-[#090d16] border border-[#1e293b] px-3 py-1.5 truncate select-all">
+                              {selectedCourtForm.courtSystem}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const code = selectedCourtForm.formNumber.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                                const url = `https://www.courts.ca.gov/documents/${code}.pdf`;
+                                triggerDirectCourtPdfDownload(url, `${selectedCourtForm.formNumber}_Blank_JudicialCouncil`);
+                              }}
+                              className="px-2.5 py-1.5 bg-[#090d16] border border-slate-700 hover:border-teal-400 text-teal-300 font-mono text-[10px] font-bold uppercase flex items-center gap-1 shrink-0 cursor-pointer transition-all"
+                              title="Download blank Judicial Council PDF for this form"
+                            >
+                              <Download className="w-3 h-3 text-teal-400" />
+                              <span>PDF</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
 
@@ -3000,9 +3254,20 @@ Respectfully submitted,
                     <Sliders className="w-4.5 h-4.5 text-teal-400" />
                     Attorney Template Library
                   </h3>
-                  <span className="text-[9px] font-mono uppercase bg-teal-500/10 border border-teal-500/20 text-teal-400 px-1.5 py-0.5 rounded leading-none">
-                    Multi-Area Dir
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowOnlineHarvesterModal(true)}
+                      className="px-2 py-0.5 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/40 text-teal-300 font-mono text-[9px] font-bold uppercase flex items-center gap-1 cursor-pointer transition-all"
+                      title="Grab Judicial Council Form Online & Convert to Pleading Template"
+                    >
+                      <Globe className="w-3 h-3 text-teal-400" />
+                      <span>Grab Online</span>
+                    </button>
+                    <span className="text-[9px] font-mono uppercase bg-teal-500/10 border border-teal-500/20 text-teal-400 px-1.5 py-0.5 rounded leading-none">
+                      Multi-Area Dir
+                    </span>
+                  </div>
                 </div>
 
                 {/* Templates categorized by Matter list */}
@@ -3488,6 +3753,7 @@ Respectfully submitted,
               matters={matters}
               onAddGeneratedDoc={onAddGeneratedDoc}
               onExportToDrive={handleExportFormToDrive}
+              onOpenHarvesterModal={() => setShowOnlineHarvesterModal(true)}
             />
           </motion.div>
         )}
@@ -4105,6 +4371,30 @@ Respectfully submitted,
           onAddGeneratedDoc(doc);
         }}
       />
+
+      {/* Judicial Council Online Harvester & Auto-Population Mapping Modal */}
+      <JudicialCouncilOnlineHarvesterModal
+        isOpen={showOnlineHarvesterModal}
+        onClose={() => setShowOnlineHarvesterModal(false)}
+        clients={clients}
+        onTemplateCreated={handleHarvesterTemplateImported}
+        onFormSelectedForMapping={handleHarvesterSchemaImported}
+        onNotify={(type, message) => {
+          setHarvesterNotice({ type, message });
+          setTimeout(() => setHarvesterNotice(null), 5000);
+        }}
+      />
+
+      {/* Official California Judicial Council Form Modal */}
+      {selectedOfficialClient && (
+        <OfficialCaliforniaJudicialCouncilFormModal
+          isOpen={showOfficialFormModal}
+          onClose={() => setShowOfficialFormModal(false)}
+          client={selectedOfficialClient}
+          initialFormCode={selectedOfficialFormCode}
+          onAddGeneratedDoc={onAddGeneratedDoc}
+        />
+      )}
 
     </div>
   );

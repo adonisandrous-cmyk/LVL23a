@@ -101,9 +101,33 @@ export const AgentAnimatedPortrait: React.FC<AgentAnimatedPortraitProps> = ({
           fillColor: 'bg-indigo-400',
           ringColor: 'border-indigo-500/30',
           accentGradient: 'from-indigo-600/20 to-purple-950/20',
-          badgeText: 'RECEPTIONIST & TASK ROUTER',
+          badgeText: 'OFFICE MANAGER & ROUTER',
           icon: Bot,
-          logoText: 'EVE OLLAMA CO-PILOT'
+          logoText: 'EVE OPERATIONS'
+        };
+      case 'ap-5': // SENTINEL (Code Quality & Architecture Auditor)
+        return {
+          glowColor: 'shadow-cyan-500/20 border-cyan-500/40',
+          textColor: 'text-cyan-400',
+          bgColor: 'bg-cyan-950/20',
+          fillColor: 'bg-cyan-400',
+          ringColor: 'border-cyan-500/30',
+          accentGradient: 'from-cyan-600/20 to-blue-950/20',
+          badgeText: 'CODE QUALITY & SYSTEM AUDITOR',
+          icon: ShieldCheck,
+          logoText: 'SENTINEL AUDITOR'
+        };
+      case 'ap-6': // VERITAS (Feature Effectiveness & Verification Engine)
+        return {
+          glowColor: 'shadow-emerald-500/20 border-emerald-500/40',
+          textColor: 'text-emerald-400',
+          bgColor: 'bg-emerald-950/20',
+          fillColor: 'bg-emerald-400',
+          ringColor: 'border-emerald-500/30',
+          accentGradient: 'from-emerald-600/20 to-teal-950/20',
+          badgeText: 'FEATURE EFFECTIVENESS & BENCHMARK',
+          icon: Award,
+          logoText: 'VERITAS BENCHMARK'
         };
       default:
         return {

@@ -178,6 +178,9 @@ export default function ZenEntranceView({
   const [mediaPermissionsGranted, setMediaPermissionsGranted] = useState<boolean>(false);
   const [showAudioTroubleshooter, setShowAudioTroubleshooter] = useState<boolean>(false);
   const [micVolume, setMicVolume] = useState<number>(0);
+  const [micSensitivity, setMicSensitivity] = useState<number>(3.5); // 2.5x (Normal), 3.5x (High Boost default), 5.0x (Max Boost)
+  const [pauseThresholdMs, setPauseThresholdMs] = useState<number>(4500); // 4500ms default generous pause threshold
+  const [pauseCountdown, setPauseCountdown] = useState<number | null>(null);
   const [micPermissionDenied, setMicPermissionDenied] = useState<boolean>(false);
   const [micErrorMessage, setMicErrorMessage] = useState<string | null>(null);
   const [isTranscribingAudio, setIsTranscribingAudio] = useState<boolean>(false);
@@ -200,6 +203,7 @@ export default function ZenEntranceView({
   const isListeningRef = useRef<boolean>(false);
   const restartTimerRef = useRef<any>(null);
   const pauseTimerRef = useRef<any>(null);
+  const pauseCountdownIntervalRef = useRef<any>(null);
   const spokenAccumulatorRef = useRef<string>('');
   const currentAudioTokenRef = useRef<number>(0);
   const isSpeakingVoiceRef = useRef<boolean>(false);
@@ -208,8 +212,12 @@ export default function ZenEntranceView({
   const isAutoSubmittingRef = useRef<boolean>(false);
   const autoRespondOnPauseRef = useRef<boolean>(true);
   const inputPromptRef = useRef<string>('');
+  const interimSpeechRef = useRef<string>('');
+  const micSensitivityRef = useRef<number>(3.5);
+  const pauseThresholdMsRef = useRef<number>(4500);
   const micStreamRef = useRef<MediaStream | null>(null);
   const micAnalyserRef = useRef<AnalyserNode | null>(null);
+  const micGainNodeRef = useRef<GainNode | null>(null);
   const micAnimFrameRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -229,6 +237,21 @@ export default function ZenEntranceView({
   useEffect(() => {
     inputPromptRef.current = inputPrompt;
   }, [inputPrompt]);
+
+  useEffect(() => {
+    interimSpeechRef.current = interimSpeech;
+  }, [interimSpeech]);
+
+  useEffect(() => {
+    micSensitivityRef.current = micSensitivity;
+    if (micGainNodeRef.current) {
+      micGainNodeRef.current.gain.value = micSensitivity;
+    }
+  }, [micSensitivity]);
+
+  useEffect(() => {
+    pauseThresholdMsRef.current = pauseThresholdMs;
+  }, [pauseThresholdMs]);
 
   // Seed existing messages on initial mount so old/cached messages are NEVER spoken aloud at onset
   useEffect(() => {
@@ -467,6 +490,7 @@ export default function ZenEntranceView({
 
   // Cleanup microphone stream and audio analyzer hardware
   const stopMicHardware = () => {
+    cancelPauseTimer();
     if (micAnimFrameRef.current) {
       cancelAnimationFrame(micAnimFrameRef.current);
       micAnimFrameRef.current = null;
@@ -479,6 +503,7 @@ export default function ZenEntranceView({
       micStreamRef.current = null;
     }
     micAnalyserRef.current = null;
+    micGainNodeRef.current = null;
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try { mediaRecorderRef.current.stop(); } catch {}
     }
@@ -528,7 +553,7 @@ export default function ZenEntranceView({
     }
   };
 
-  // Acquire hardware microphone stream and attach live volume analyzer
+  // Acquire hardware microphone stream and attach live volume analyzer with raised gain
   const startMicHardwareStream = async (): Promise<MediaStream | null> => {
     setMicPermissionDenied(false);
     setMicErrorMessage(null);
@@ -544,14 +569,15 @@ export default function ZenEntranceView({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true
+          autoGainControl: true,
+          channelCount: 1
         }
       });
 
       micStreamRef.current = stream;
       setMediaPermissionsGranted(true);
 
-      // Setup audio analyzer for live volume feedback
+      // Setup audio analyzer with hardware gain amplification
       try {
         const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioCtx) {
@@ -560,22 +586,37 @@ export default function ZenEntranceView({
             audioCtx.resume().catch(() => {});
           }
           const source = audioCtx.createMediaStreamSource(stream);
+
+          // Dedicated Gain Node to amplify mic input levels
+          const gainNode = audioCtx.createGain();
+          gainNode.gain.value = micSensitivityRef.current; // 2.5 default
+          micGainNodeRef.current = gainNode;
+
           const analyser = audioCtx.createAnalyser();
-          analyser.fftSize = 64;
-          analyser.smoothingTimeConstant = 0.35;
-          source.connect(analyser);
+          analyser.fftSize = 128; // 64 frequency bins
+          analyser.smoothingTimeConstant = 0.25;
+          source.connect(gainNode);
+          gainNode.connect(analyser);
           micAnalyserRef.current = analyser;
 
           const dataArray = new Uint8Array(analyser.frequencyBinCount);
           const updateVolume = () => {
             if (micAnalyserRef.current && isListeningRef.current) {
               micAnalyserRef.current.getByteFrequencyData(dataArray);
+              // Focus analysis on human voice spectrum (approx 85Hz - 3500Hz, bins 1 to 26)
+              const voiceBins = Math.min(dataArray.length, 26);
               let sum = 0;
-              for (let i = 0; i < dataArray.length; i++) {
-                sum += dataArray[i];
+              let peak = 0;
+              for (let i = 1; i < voiceBins; i++) {
+                const val = dataArray[i];
+                sum += val;
+                if (val > peak) peak = val;
               }
-              const avg = sum / dataArray.length;
-              const normalized = Math.min(100, Math.round((avg / 128) * 100));
+              const avg = voiceBins > 1 ? sum / (voiceBins - 1) : 0;
+              // Responsive vocal composite curve
+              const composite = avg * 0.65 + peak * 0.35;
+              // Raised normalization curve so conversational voice reaches 60-90% clearly
+              const normalized = Math.min(100, Math.round((composite / 36) * 100));
               setMicVolume(normalized);
               micAnimFrameRef.current = requestAnimationFrame(updateVolume);
             } else {
@@ -626,8 +667,55 @@ export default function ZenEntranceView({
     }
   };
 
-  // Helper to trigger automatic query submission when user pauses speech
+  // Helper to clear pause countdown and timers
+  const cancelPauseTimer = () => {
+    if (pauseTimerRef.current) {
+      clearTimeout(pauseTimerRef.current);
+      pauseTimerRef.current = null;
+    }
+    if (pauseCountdownIntervalRef.current) {
+      clearInterval(pauseCountdownIntervalRef.current);
+      pauseCountdownIntervalRef.current = null;
+    }
+    setIsPauseDetected(false);
+    setPauseCountdown(null);
+  };
+
+  // Helper to schedule a generous pause submission with live countdown
+  const resetAndStartPauseTimer = () => {
+    cancelPauseTimer();
+    if (!autoRespondOnPauseRef.current) return;
+    if (isSubmitting || isAutoSubmittingRef.current) return;
+
+    const candidateSpeech = (spokenAccumulatorRef.current + ' ' + interimSpeechRef.current).trim() || inputPromptRef.current.trim();
+    if (candidateSpeech.length < 3) return;
+
+    const totalMs = pauseThresholdMsRef.current;
+    let remainingMs = totalMs;
+    setIsPauseDetected(true);
+    setPauseCountdown(Number((remainingMs / 1000).toFixed(1)));
+
+    pauseCountdownIntervalRef.current = setInterval(() => {
+      remainingMs -= 200;
+      if (remainingMs <= 0) {
+        if (pauseCountdownIntervalRef.current) {
+          clearInterval(pauseCountdownIntervalRef.current);
+          pauseCountdownIntervalRef.current = null;
+        }
+        setPauseCountdown(null);
+      } else {
+        setPauseCountdown(Math.max(0.2, Number((remainingMs / 1000).toFixed(1))));
+      }
+    }, 200);
+
+    pauseTimerRef.current = setTimeout(() => {
+      triggerAutoSendOnPause();
+    }, totalMs);
+  };
+
+  // Helper to trigger automatic query submission when user finishes statement
   const triggerAutoSendOnPause = () => {
+    cancelPauseTimer();
     if (isSubmitting || isAutoSubmittingRef.current) return;
     const accumulated = spokenAccumulatorRef.current.trim();
     const currentInput = inputPromptRef.current.trim();
@@ -639,8 +727,7 @@ export default function ZenEntranceView({
     }
 
     isAutoSubmittingRef.current = true;
-    setIsPauseDetected(true);
-    if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+    setIsPauseDetected(false);
 
     // Stop mic recognition so the agent's upcoming audio response is not captured
     if (recognitionRef.current) {
@@ -657,14 +744,13 @@ export default function ZenEntranceView({
     });
   };
 
-  // Continuous Web Speech API dictation with pause detection, visualizer & auto-restart
+  // Continuous Web Speech API dictation with generous pause detection, visualizer & auto-restart
   const toggleSpeechRecognition = async () => {
     if (isListening) {
       isListeningRef.current = false;
       setIsListening(false);
       setInterimSpeech('');
-      setIsPauseDetected(false);
-      if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+      cancelPauseTimer();
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch {}
       }
@@ -692,7 +778,7 @@ export default function ZenEntranceView({
 
     isListeningRef.current = true;
     setIsListening(true);
-    setIsPauseDetected(false);
+    cancelPauseTimer();
     spokenAccumulatorRef.current = inputPromptRef.current.trim();
 
     // Check if browser SpeechRecognition is available
@@ -711,6 +797,9 @@ export default function ZenEntranceView({
         };
 
         recognition.onresult = (event: any) => {
+          // As soon as new speech is heard, cancel the pause timer so the user is never cut off mid-statement!
+          cancelPauseTimer();
+
           let currentInterim = '';
           let newFinal = '';
           for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -732,23 +821,19 @@ export default function ZenEntranceView({
 
           const candidateSpeech = (spokenAccumulatorRef.current + ' ' + currentInterim).trim();
 
-          // Pause Detection: automatically respond after the user pauses speaking
+          // Generous Pause Detection: allows full sentences, commas, and natural breathing (default 3.5s)
           if (autoRespondOnPauseRef.current && candidateSpeech.length >= 3 && !isSubmitting && !isAutoSubmittingRef.current) {
-            setIsPauseDetected(true);
-            if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
-            pauseTimerRef.current = setTimeout(() => {
-              triggerAutoSendOnPause();
-            }, 1350);
+            resetAndStartPauseTimer();
           }
         };
 
         recognition.onerror = (err: any) => {
           if (err.error === 'no-speech') {
-            const candidateSpeech = (spokenAccumulatorRef.current + ' ' + interimSpeech).trim() || inputPromptRef.current.trim();
-            if (autoRespondOnPauseRef.current && candidateSpeech.length >= 3 && !isSubmitting && !isAutoSubmittingRef.current) {
-              if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
-              triggerAutoSendOnPause();
-              return;
+            // Normal brief silence between words/clauses.
+            // DO NOT auto-submit here! Web Speech API triggers 'no-speech' prematurely after ~1s.
+            // Let the user's deliberate pause delay timer manage submission, or allow them to continue speaking.
+            if (isListeningRef.current && !isAutoSubmittingRef.current) {
+              safeRestartRecognition(100);
             }
             return;
           }
@@ -765,7 +850,7 @@ export default function ZenEntranceView({
             isListeningRef.current = false;
             setIsListening(false);
             setInterimSpeech('');
-            setIsPauseDetected(false);
+            cancelPauseTimer();
             stopMicHardware();
             return;
           }
@@ -776,18 +861,15 @@ export default function ZenEntranceView({
         };
 
         recognition.onend = () => {
-          const candidateSpeech = (spokenAccumulatorRef.current + ' ' + interimSpeech).trim() || inputPromptRef.current.trim();
-          if (autoRespondOnPauseRef.current && candidateSpeech.length >= 3 && !isSubmitting && !isAutoSubmittingRef.current) {
-            if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
-            triggerAutoSendOnPause();
-            return;
-          }
+          // In Web Speech API, onend triggers frequently between phrases.
+          // DO NOT auto-submit here, as that cuts off mid-statement!
+          // Seamlessly restart if the user is still in listening mode.
           if (isListeningRef.current && !isSpeakingVoiceRef.current && !isAutoSubmittingRef.current) {
-            safeRestartRecognition(120);
+            safeRestartRecognition(80);
           } else if (!isListeningRef.current) {
             setIsListening(false);
             setInterimSpeech('');
-            setIsPauseDetected(false);
+            cancelPauseTimer();
           }
         };
 
@@ -1329,18 +1411,36 @@ export default function ZenEntranceView({
                   {isSpeakingVoice ? (
                     <span className="font-bold">{selectedAgent} is speaking...</span>
                   ) : isPauseDetected ? (
-                    <span className="font-bold text-amber-300">
-                      Pause detected. Transmitting request to {selectedAgent}...
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-amber-300">
+                        Pause detected ({pauseCountdown !== null ? `${pauseCountdown}s remaining` : 'processing'}). Take your time to complete your statement...
+                      </span>
+                      <button
+                        type="button"
+                        onClick={cancelPauseTimer}
+                        className="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-200 rounded text-[10px] font-bold cursor-pointer"
+                        title="Reset pause timer and keep talking"
+                      >
+                        + Keep Talking
+                      </button>
+                      <button
+                        type="button"
+                        onClick={triggerAutoSendOnPause}
+                        className="px-2 py-0.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded text-[10px] font-bold cursor-pointer"
+                        title="Submit statement now without waiting"
+                      >
+                        Send Now
+                      </button>
+                    </div>
                   ) : interimSpeech ? (
                     <span>
                       <strong className="text-teal-200 uppercase text-[10px]">Hearing: </strong>
                       <em className="text-white">"{interimSpeech}"</em>
-                      <span className="ml-2 text-teal-400/80 text-[10px]">(Pause speaking to submit)</span>
+                      <span className="ml-2 text-teal-400/80 text-[10px]">({(pauseThresholdMs / 1000).toFixed(1)}s pause allowed)</span>
                     </span>
                   ) : (
                     <span className="text-teal-200">
-                      Listening active • Speak naturally, {selectedAgent} will respond automatically after you pause.
+                      Listening active • Speak full statements freely. Phoenix allows a generous {(pauseThresholdMs / 1000).toFixed(1)}s pause before submitting.
                     </span>
                   )}
                 </div>
@@ -1539,22 +1639,84 @@ export default function ZenEntranceView({
                 : 'border-slate-700 focus-within:border-amber-500/80'
             }`}
           >
-            {/* Live Mic Volume Level Meter */}
+            {/* Live Mic Volume Level Meter & Sensitivity / Pause Threshold Toolbar */}
             {isListening && (
-              <div className="absolute -top-6 left-3 right-3 flex items-center justify-between text-[10px] font-mono text-teal-400 bg-slate-950/90 px-2.5 py-1 rounded-t-lg border border-b-0 border-teal-500/40 backdrop-blur-md">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-teal-400 animate-ping inline-block" />
-                  <span>Microphone Active</span>
-                </div>
+              <div className="absolute -top-9 left-2 right-2 flex flex-wrap items-center justify-between gap-1 text-[10px] font-mono text-teal-300 bg-slate-950/95 px-3 py-1.5 rounded-t-xl border border-b-0 border-teal-500/50 backdrop-blur-md shadow-xl z-10">
+                {/* Left: Hardware Mic Status & Sensitivity Gain Controls */}
                 <div className="flex items-center gap-2">
-                  <span className="text-slate-400 text-[9px]">Input Level:</span>
-                  <div className="w-20 sm:w-28 h-2 bg-slate-800 rounded-full overflow-hidden p-0.5">
-                    <div
-                      className="h-full bg-gradient-to-r from-teal-500 to-amber-400 rounded-full transition-all duration-75"
-                      style={{ width: `${Math.max(8, Math.min(100, micVolume))}%` }}
-                    />
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-teal-400 animate-ping inline-block" />
+                    <span className="font-bold text-teal-200">MIC ACTIVE</span>
                   </div>
-                  <span className="text-[9px] w-6 text-right font-mono">{micVolume}%</span>
+                  <span className="text-slate-600 hidden sm:inline">•</span>
+                  <div className="flex items-center gap-1 bg-slate-900/90 rounded-md p-0.5 border border-slate-800">
+                    <span className="text-slate-400 text-[9px] px-1 font-semibold">Gain:</span>
+                    {[
+                      { label: '2.5x', val: 2.5, title: 'Standard Gain' },
+                      { label: '3.5x Boost', val: 3.5, title: 'High Sensitivity (Default)' },
+                      { label: '5.0x Max', val: 5.0, title: 'Maximum Hardware Amplification' }
+                    ].map((g) => (
+                      <button
+                        key={g.val}
+                        type="button"
+                        onClick={() => setMicSensitivity(g.val)}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all cursor-pointer ${
+                          micSensitivity === g.val
+                            ? 'bg-teal-500 text-slate-950 shadow-sm font-extrabold'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        }`}
+                        title={g.title}
+                      >
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Center / Right: Pause Threshold & Live Level Meter */}
+                <div className="flex items-center gap-2.5">
+                  {/* Pause Delay Selector */}
+                  <div className="hidden sm:flex items-center gap-1 bg-slate-900/90 rounded-md p-0.5 border border-slate-800">
+                    <span className="text-slate-400 text-[9px] px-1 font-semibold">Pause Wait:</span>
+                    {[
+                      { label: '3.5s', ms: 3500, desc: 'Quick 3.5s pause' },
+                      { label: '4.5s Default', ms: 4500, desc: 'Generous 4.5s pause for natural conversational breathing' },
+                      { label: '6.0s', ms: 6000, desc: 'Deliberate 6.0s pause for structured complex legal thoughts' },
+                      { label: '8.0s', ms: 8000, desc: 'Extended 8.0s pause for long statements' }
+                    ].map((p) => (
+                      <button
+                        key={p.ms}
+                        type="button"
+                        onClick={() => setPauseThresholdMs(p.ms)}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all cursor-pointer ${
+                          pauseThresholdMs === p.ms
+                            ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        }`}
+                        title={p.desc}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Level Meter Bar */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-400 text-[9px]">Level:</span>
+                    <div className="w-16 sm:w-24 h-2 bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-700/60">
+                      <div
+                        className={`h-full rounded-full transition-all duration-75 ${
+                          micVolume > 75
+                            ? 'bg-gradient-to-r from-teal-400 via-amber-400 to-rose-400'
+                            : micVolume > 30
+                            ? 'bg-gradient-to-r from-teal-400 to-amber-300'
+                            : 'bg-teal-400'
+                        }`}
+                        style={{ width: `${Math.max(6, Math.min(100, micVolume))}%` }}
+                      />
+                    </div>
+                    <span className="text-[9px] w-6 text-right font-mono font-bold text-teal-300">{micVolume}%</span>
+                  </div>
                 </div>
               </div>
             )}
