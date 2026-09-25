@@ -1102,13 +1102,58 @@ Law governance: Governed by the rules of California state, County of San Francis
     setTemplates(updated);
     localStorage.setItem('level23_templates_v2', JSON.stringify(updated));
 
+    // Dispatch global event for template synchronization across components
+    window.dispatchEvent(new CustomEvent('l23_templates_updated', {
+      detail: { template: newTemp }
+    }));
+
     // Reset inputs
     setCustomTemplateName('');
     setCustomTemplateDescription('');
     setCustomTemplateBody('');
     setCustomTemplateQuestions([]);
     
-    alert(`Success! Successfully stored custom motion template under Matter Type: ${customTemplateCategory}.`);
+    alert(`Success! Successfully stored custom motion template "${newTemp.name}" under Matter Type: ${customTemplateCategory}.`);
+  };
+
+  // Delete all one-off custom templates and guarantee official court templates library
+  const handleDeleteAllOneOffTemplates = () => {
+    const customCount = templates.filter(t => t.isCustom).length;
+    const confirmed = window.confirm(
+      customCount > 0
+        ? `Delete all ${customCount} one-off custom template(s)? The library will retain official Judicial Council court forms.`
+        : "Purge one-off custom items and restore official Judicial Council court forms?"
+    );
+    if (!confirmed) return;
+
+    // Filter out all custom or one-off items
+    const cleaned = ALL_DOCUMENT_TEMPLATES.filter(t => !t.isCustom);
+    setTemplates(cleaned);
+    localStorage.setItem('level23_templates_v2', JSON.stringify(cleaned));
+
+    // If currently selected builder template was custom, reset selection
+    if (selectedBuilderTemplate?.isCustom || !cleaned.some(t => t.id === selectedBuilderTemplate?.id)) {
+      setSelectedBuilderTemplate(cleaned[0] || null);
+    }
+
+    // Notify other components like LegalFormsTemplateManager
+    window.dispatchEvent(new CustomEvent('l23_templates_cleared', {
+      detail: { cleanedTemplates: cleaned }
+    }));
+
+    alert(`Form library cleaned! Only official Judicial Council court templates are active.`);
+  };
+
+  // Insert dynamic placeholder into template body
+  const handleInsertPlaceholderIntoBody = (placeholderKey: string) => {
+    const token = `{{${placeholderKey}}}`;
+    setCustomTemplateBody(prev => {
+      if (!prev) return token;
+      return prev.endsWith(' ') || prev.endsWith('\n') ? `${prev}${token}` : `${prev} ${token}`;
+    });
+    if (!customTemplateQuestions.includes(placeholderKey)) {
+      setCustomTemplateQuestions(prev => [...prev, placeholderKey]);
+    }
   };
 
   // Add question to template schema builder
@@ -1814,6 +1859,7 @@ Respectfully submitted,
 
           <button
             type="button"
+            id="template-builder-tab-btn"
             onClick={() => {
               setActiveWorkspaceTab('template_builder');
               setViewingDoc(null);
@@ -1825,12 +1871,12 @@ Respectfully submitted,
             }}
             className={`px-4 py-2 text-xs font-mono font-extrabold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
               activeWorkspaceTab === 'template_builder'
-                ? 'bg-teal-500 text-[#090d16] border border-teal-400 font-bold animate-[pulse_3s_infinite]'
+                ? 'bg-teal-500 text-[#090d16] border border-teal-400 font-bold shadow-[0_0_12px_rgba(20,184,166,0.35)]'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-[#0f1725] border border-transparent'
             }`}
           >
             <Sliders className="w-4.5 h-4.5 text-teal-400" />
-            <span>Pleading Template Creator & AI Mapper</span>
+            <span>Template Builder</span>
           </button>
 
           <button
@@ -3250,11 +3296,29 @@ Respectfully submitted,
               {/* Template Blueprint Manager card */}
               <div id="template-blueprint-manager-card" className="bg-[#0e1626] rounded-none border-2 border-[#1e293b] p-5 space-y-4 shadow-[2px_2px_0px_rgba(0,0,0,0.5)]">
                 <div className="flex items-center justify-between pb-2 border-b border-[#1e293b]/70 select-none">
-                  <h3 className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                    <Sliders className="w-4.5 h-4.5 text-teal-400" />
-                    Attorney Template Library
-                  </h3>
                   <div className="flex items-center gap-2">
+                    <Sliders className="w-4.5 h-4.5 text-teal-400" />
+                    <h3 className="text-xs font-mono font-bold text-white uppercase tracking-wider">
+                      Attorney Template Library
+                    </h3>
+                    {templates.some(t => t.isCustom) && (
+                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                        {templates.filter(t => t.isCustom).length} custom
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {/* Button to delete all one-off custom templates */}
+                    <button
+                      type="button"
+                      id="delete-all-one-off-templates-btn"
+                      onClick={handleDeleteAllOneOffTemplates}
+                      className="px-2 py-0.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/40 text-rose-400 font-mono text-[9px] font-bold uppercase flex items-center gap-1 cursor-pointer transition-all"
+                      title="Purge all one-off templates and keep official Judicial Council court forms"
+                    >
+                      <Trash className="w-3 h-3 text-rose-400" />
+                      <span>Delete All One-Offs</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => setShowOnlineHarvesterModal(true)}
@@ -3372,8 +3436,14 @@ Respectfully submitted,
                         type="text"
                         value={newQuestionPlaceholder}
                         onChange={(e) => setNewQuestionPlaceholder(e.target.value)}
-                        placeholder="e.g. Date of Marriage, Credit liabilities sum..."
+                        placeholder="e.g. CLIENT_NAME, COURT_DATE, CASE_NUMBER..."
                         className="flex-1 bg-slate-900 border border-[#1e293b] px-3 py-1 text-xs text-white placeholder-slate-700"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddTemplateQuestion();
+                          }
+                        }}
                       />
                       <button
                         type="button"
@@ -3384,6 +3454,34 @@ Respectfully submitted,
                       </button>
                     </div>
 
+                    {/* Preset dynamic placeholders shortcuts */}
+                    <div className="space-y-1 pt-1 border-t border-slate-800/60">
+                      <span className="text-[8px] font-mono text-slate-500 uppercase font-bold block">
+                        Quick Placeholder Shortcuts (Click to Insert):
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {[
+                          'CLIENT_NAME',
+                          'COURT_DATE',
+                          'CASE_NUMBER',
+                          'HEARING_TIME',
+                          'JUDGE_NAME',
+                          'COUNTY_NAME',
+                          'OPPOSING_PARTY'
+                        ].map((ph) => (
+                          <button
+                            key={ph}
+                            type="button"
+                            onClick={() => handleInsertPlaceholderIntoBody(ph)}
+                            className="px-1.5 py-0.5 bg-teal-500/10 hover:bg-teal-500/25 border border-teal-500/30 text-[9px] font-mono text-teal-300 font-bold cursor-pointer transition-all hover:border-teal-400"
+                            title={`Insert {{${ph}}} into template draft`}
+                          >
+                            + {`{{${ph}}}`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     {customTemplateQuestions.length > 0 ? (
                       <div className="flex flex-wrap gap-1.5 pt-1.5 max-h-[85px] overflow-y-auto">
                         {customTemplateQuestions.map((q, qidx) => (
@@ -3391,11 +3489,18 @@ Respectfully submitted,
                             key={qidx}
                             className="flex items-center gap-1 px-2 py-0.5 bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300"
                           >
-                            <span>{"{{"}{q}{"}}"}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleInsertPlaceholderIntoBody(q)}
+                              className="hover:text-teal-300 cursor-pointer font-bold"
+                              title="Click to insert token into template draft body"
+                            >
+                              {"{{"}{q}{"}}"}
+                            </button>
                             <button
                               type="button"
                               onClick={() => setCustomTemplateQuestions(prev => prev.filter(item => item !== q))}
-                              className="text-rose-400 hover:text-rose-300 font-extrabold cursor-pointer"
+                              className="text-rose-400 hover:text-rose-300 font-extrabold cursor-pointer ml-1"
                             >
                               ×
                             </button>
@@ -3403,7 +3508,7 @@ Respectfully submitted,
                         ))}
                       </div>
                     ) : (
-                      <p className="text-[9px] font-mono text-slate-600">No custom alignment variables generated yet. Add variables to enable auto-alignment.</p>
+                      <p className="text-[9px] font-mono text-slate-600">No custom alignment variables generated yet. Add variables or click shortcuts to insert into draft.</p>
                     )}
                   </div>
 

@@ -1,0 +1,122 @@
+{
+  "form_id": "FL-300",
+  "jurisdiction": "California Judicial Council",
+  "title": "Request for Order",
+  "revision": "Rev. January 1, 2020",
+  "description": "Universal declarative mapping dictionary linking Master Standardized JSON schema to California Judicial Council FL-300 AcroForm targets.",
+  "fields": {
+    "FL-300[0].Page1[0].AttyInfo[0].AttyName_ft[0]": "attorney.name",
+    "FL-300[0].Page1[0].AttyInfo[0].BarNo_ft[0]": "attorney.bar_number",
+    "FL-300[0].Page1[0].AttyInfo[0].AttyFirm_ft[0]": "attorney.firm_name",
+    "FL-300[0].Page1[0].AttyInfo[0].AttyStreet_ft[0]": "attorney.street",
+    "FL-300[0].Page1[0].AttyInfo[0].AttyCity_ft[0]": "attorney.city",
+    "FL-300[0].Page1[0].AttyInfo[0].AttyState_ft[0]": "attorney.state",
+    "FL-300[0].Page1[0].AttyInfo[0].AttyZip_ft[0]": "attorney.zip",
+    "FL-300[0].Page1[0].AttyInfo[0].Phone_ft[0]": "attorney.phone",
+    "FL-300[0].Page1[0].AttyInfo[0].Fax_ft[0]": "attorney.fax",
+    "FL-300[0].Page1[0].AttyInfo[0].Email_ft[0]": "attorney.email",
+    "FL-300[0].Page1[0].AttyInfo[0].AttyFor_ft[0]": "attorney.representing",
+
+    "FL-300[0].Page1[0].CourtInfo[0].CrtCounty_ft[0]": {
+      "type": "format_string",
+      "source": "case.county",
+      "case": "upper"
+    },
+    "FL-300[0].Page1[0].CourtInfo[0].Street_ft[0]": "case.court_street",
+    "FL-300[0].Page1[0].CourtInfo[0].MailingAdd_ft[0]": "case.court_mailing",
+    "FL-300[0].Page1[0].CourtInfo[0].CityZip_ft[0]": "case.court_city_zip",
+    "FL-300[0].Page1[0].CourtInfo[0].Branch_ft[0]": "case.branch_name",
+
+    "FL-300[0].Page1[0].TitlePartyName[0].Petitioner_1_ft[0]": "case.title_petitioner",
+    "FL-300[0].Page1[0].TitlePartyName[0].Respondent_ft[0]": "case.title_respondent",
+    "FL-300[0].Page1[0].CaseNumber[0].CaseNumber_ft[0]": "case.number",
+
+    "FL-300[0].Page1[0].FormTitle[0].ChildCustody_cb[0]": {
+      "type": "checkbox",
+      "source": "request_for_order.orders_requested.child_custody"
+    },
+    "FL-300[0].Page1[0].FormTitle[0].ChildCustody_cb[1]": {
+      "type": "checkbox",
+      "source": "request_for_order.orders_requested.child_visitation"
+    },
+    "FL-300[0].Page1[0].FormTitle[0].childsupport_cb[0]": {
+      "type": "checkbox",
+      "source": "request_for_order.orders_requested.child_support"
+    },
+    "FL-300[0].Page1[0].FormTitle[0].spousalpartnersupport_cb[0]": {
+      "type": "checkbox",
+      "source": "request_for_order.orders_requested.spousal_support"
+    },
+    "FL-300[0].Page1[0].FormTitle[0].Prptycontrol_cb[0]": {
+      "type": "checkbox",
+      "source": "request_for_order.orders_requested.property_control"
+    },
+
+    "FL-300[0].Page1[0].List1[0].Li1[0].Petitioner_cb1[0]": {
+      "type": "checkbox",
+      "source": "request_for_order.requested_by",
+      "equals": "Petitioner"
+    },
+    "FL-300[0].Page1[0].List1[0].Li1[0].Petitioner_cb2[0]": {
+      "type": "checkbox",
+      "source": "request_for_order.requested_by",
+      "equals": "Respondent"
+    },
+    "FL-300[0].Page1[0].List1[0].Li1[0].NameOfParty_ft[0]": "opposing_party.full_name",
+
+    "FL-300[0].Page1[0].List2[0].Li1[0].DateofHearing_dt[0]": "request_for_order.hearing.date",
+    "FL-300[0].Page1[0].List2[0].Li1[0].TimeofHearing_tf[0]": "request_for_order.hearing.time",
+    "FL-300[0].Page1[0].List2[0].Li1[0].DepartmentNo_tf[0]": "request_for_order.hearing.dept",
+    "FL-300[0].Page1[0].List2[0].Li1[0].room[0]": "request_for_order.hearing.dept",
+
+    "FL-300[0].Page2[0].CaseNumber[0].CaseNumber_ft[0]": "case.number",
+    "FL-300[0].Page2[0].List2[0].CheckBoxCC[0]": {
+      "type": "checkbox",
+      "source": "request_for_order.orders_requested.child_custody"
+    },
+    "FL-300[0].Page2[0].List2[0].CheckBoxvisit[0]": {
+      "type": "checkbox",
+      "source": "request_for_order.orders_requested.child_visitation"
+    },
+    "FL-300[0].Page2[0].List2[0].Li1[0].Child1Name_ft[0]": "children.0.full_name",
+    "FL-300[0].Page2[0].List2[0].Li1[0].Child1BirthDate_dt[0]": "children.0.birthdate",
+    "FL-300[0].Page2[0].List2[0].Li1[0].Child1LegalCustody_ft[0]": {
+      "type": "constant",
+      "value": "Joint"
+    },
+    "FL-300[0].Page2[0].List2[0].Li1[0].Child1PhysicalCustody_ft[0]": {
+      "type": "constant",
+      "value": "Joint (2-2-3)"
+    },
+    "FL-300[0].Page2[0].List2[0].Li1[0].Child2Name_ft[0]": "children.1.full_name",
+    "FL-300[0].Page2[0].List2[0].Li1[0].Child2BirthDate_dt[0]": "children.1.birthdate",
+    "FL-300[0].Page2[0].List2[0].Li1[0].Child2LegalCustody_ft[0]": {
+      "type": "constant",
+      "value": "Joint"
+    },
+    "FL-300[0].Page2[0].List2[0].Li1[0].Child2PhysicalCustody_ft[0]": {
+      "type": "constant",
+      "value": "Joint (2-2-3)"
+    },
+
+    "FL-300[0].Page3[0].CaseNumber[0].CaseNumber_ft[0]": "case.number",
+    "FL-300[0].Page3[0].Parties[0].Petitioner_1_ft[0]": "case.title_petitioner",
+    "FL-300[0].Page3[0].Parties[0].Respondent_ft[0]": "case.title_respondent",
+
+    "FL-300[0].Page4[0].CaseNumber[0].CaseNumber_ft[0]": "case.number",
+    "FL-300[0].Page4[0].Parties[0].Petitioner_1_ft[0]": "case.title_petitioner",
+    "FL-300[0].Page4[0].Parties[0].Respondent_ft[0]": "case.title_respondent",
+    "FL-300[0].Page4[0].List5[0].CheckBox61[0]": {
+      "type": "checkbox",
+      "source": "request_for_order.orders_requested.property_control"
+    },
+    "FL-300[0].Page4[0].List5[0].Li1[0].ListPropertyforExclusiveUseandControl_ft[0]": "request_for_order.property_details",
+    "FL-300[0].Page4[0].List6[0].Attorneysfeesandcosts_cb[0]": {
+      "type": "checkbox",
+      "source": "request_for_order.orders_requested.attorney_fees"
+    },
+    "FL-300[0].Page4[0].List9[0].Li1[0].ReasonForChange_ft[0]": "request_for_order.facts_in_support",
+    "FL-300[0].Page4[0].signsub[0].SigDate[0]": "request_for_order.hearing.date",
+    "FL-300[0].Page4[0].signsub[0].TypePrintName_ft[0]": "attorney.name"
+  }
+}

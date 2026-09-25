@@ -1,6 +1,6 @@
 {
   "name": "Level 23 Legal",
-  "description": "An AI-powered Legal Practice Management System with client and matter tracking, intelligent case analytics, automated document drafting, and smart legal assistants.",
+  "description": "An AI-powered Legal Practice Management System with client and matter tracking, intelligent case analytics, automated document drafting, and the Phoenix 23 Universal Document Population Pipeline.",
   "requestFramePermissions": [
     "microphone",
     "camera"

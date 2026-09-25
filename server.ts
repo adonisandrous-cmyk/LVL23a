@@ -12,6 +12,7 @@ import { Readable } from "stream";
 import { createRequire } from "module";
 import { DocumentProcessorServiceClient } from "@google-cloud/documentai";
 import twilio from "twilio";
+import { phoenixRouter } from "./src/api/phoenixRouter";
 
 // Safe hybrid loader for pdf-parse supporting both tsx (ESM) and bundled server.cjs (CommonJS)
 const nodeRequire = typeof require !== "undefined"
@@ -86,6 +87,9 @@ app.use((req, res, next) => {
   res.setHeader("X-XSS-Protection", "1; mode=block");
   next();
 });
+
+// Level 23 / Phoenix 23 Document Intelligence 8-Agent Pipeline Router
+app.use("/api/phoenix", phoenixRouter);
 
 // Initialize GoogleGenAI client (lazy load to prevent crashing if GEMINI_API_KEY is missing initially)
 let aiClient: GoogleGenAI | null = null;
@@ -287,6 +291,132 @@ export function evaluateComplexity(prompt: string): { score: number; reason: str
 // ----------------------------------------------------------------------
 // BACKEND API ENDPOINTS
 // ----------------------------------------------------------------------
+
+// ----------------------------------------------------------------------
+// PHOENIX 23 UNIVERSAL DOCUMENT POPULATION PIPELINE (LEAP / DOCKETWISE ARCHITECTURE)
+// Inputs: 1. Standardized Data Payload (JSON), 2. Mapping Dictionary (JSON)
+// Output: Populated PDF (via universal engine without single-form hardcoding)
+// ----------------------------------------------------------------------
+
+// Get Master Data Payload & Mapping status
+app.get("/api/pipeline/config/:formId", (req: Request, res: Response) => {
+  const formId = req.params.formId || "FL-300";
+  const rootDir = process.cwd();
+  const mappingPath = path.join(rootDir, "pipeline", "mappings", `${formId}.mapping.json`);
+  const dataPath = path.join(rootDir, "pipeline", "master_data_payload.json");
+  const templatePath = path.join(rootDir, "pipeline", "templates", `${formId}.pdf`);
+
+  let mapping = null;
+  let payload = null;
+  const templateExists = fs.existsSync(templatePath);
+
+  if (fs.existsSync(mappingPath)) {
+    try {
+      mapping = JSON.parse(fs.readFileSync(mappingPath, "utf8"));
+    } catch (e) {
+      mapping = null;
+    }
+  }
+
+  if (fs.existsSync(dataPath)) {
+    try {
+      payload = JSON.parse(fs.readFileSync(dataPath, "utf8"));
+    } catch (e) {
+      payload = null;
+    }
+  }
+
+  res.json({
+    formId,
+    templateExists,
+    hasMapping: !!mapping,
+    mapping,
+    hasPayload: !!payload,
+    payload,
+    engine: "Universal Python Decoupled Engine (pipeline/universal_engine.py)"
+  });
+});
+
+// Execute Universal Population
+app.post("/api/pipeline/populate", async (req: Request, res: Response) => {
+  try {
+    const { formId = "FL-300", dataPayload, mappingDict } = req.body;
+    const rootDir = process.cwd();
+    const engineScript = path.join(rootDir, "pipeline", "universal_engine.py");
+    const templatePath = path.join(rootDir, "pipeline", "templates", `${formId}.pdf`);
+    const defaultMappingPath = path.join(rootDir, "pipeline", "mappings", `${formId}.mapping.json`);
+    const defaultDataPath = path.join(rootDir, "pipeline", "master_data_payload.json");
+
+    if (!fs.existsSync(templatePath)) {
+      return res.status(404).json({ error: `Template PDF not found for ${formId}` });
+    }
+
+    const timestamp = Date.now();
+    let dataFilePath = defaultDataPath;
+    if (dataPayload && typeof dataPayload === "object") {
+      const tempPayloadPath = path.join(rootDir, "pipeline", "output", `payload-${timestamp}.json`);
+      fs.writeFileSync(tempPayloadPath, JSON.stringify(dataPayload, null, 2));
+      dataFilePath = tempPayloadPath;
+    }
+
+    let mappingFilePath = defaultMappingPath;
+    if (mappingDict && typeof mappingDict === "object") {
+      const tempMapPath = path.join(rootDir, "pipeline", "output", `mapping-${timestamp}.json`);
+      fs.writeFileSync(tempMapPath, JSON.stringify(mappingDict, null, 2));
+      mappingFilePath = tempMapPath;
+    }
+
+    const outputFileName = `${formId}-Populated-${timestamp}.pdf`;
+    const outputPath = path.join(rootDir, "pipeline", "output", outputFileName);
+
+    // Call universal Python engine strictly via command line with 4 arguments
+    const { exec } = nodeRequire("child_process");
+    const cmd = `python3 "${engineScript}" "${templatePath}" "${dataFilePath}" "${mappingFilePath}" "${outputPath}"`;
+
+    exec(cmd, (error: any, stdout: string, stderr: string) => {
+      if (error) {
+        console.error("Universal engine execution error:", stderr || error.message);
+        return res.status(500).json({
+          error: "Universal engine execution failed",
+          details: stderr || error.message
+        });
+      }
+
+      try {
+        const result = JSON.parse(stdout.trim());
+        return res.json({
+          ...result,
+          downloadUrl: `/api/pipeline/download/${outputFileName}`
+        });
+      } catch (parseErr) {
+        return res.json({
+          status: "success",
+          template: `${formId}.pdf`,
+          outputFile: outputFileName,
+          downloadUrl: `/api/pipeline/download/${outputFileName}`,
+          rawOutput: stdout
+        });
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || String(err) });
+  }
+});
+
+// Download Populated Court PDF
+app.get("/api/pipeline/download/:filename", (req: Request, res: Response) => {
+  const filename = path.basename(req.params.filename);
+  const filePath = path.join(process.cwd(), "pipeline", "output", filename);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: "Generated PDF not found or expired" });
+  }
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+  const stream = fs.createReadStream(filePath);
+  stream.pipe(res);
+});
 
 // 1. Health Diagnostic Endpoint
 app.get("/api/health", (req: Request, res: Response) => {
@@ -3858,6 +3988,17 @@ app.post("/api/voice/transcribe", async (req: Request, res: Response) => {
     const cleanText = rawText === "SILENCE" || rawText.toLowerCase().includes("no speech") ? "" : rawText;
     return res.json({ success: true, text: cleanText });
   } catch (error: any) {
+    const isQuota = String(error?.message || error).includes("RESOURCE_EXHAUSTED") || String(error?.message || error).includes("429");
+    if (isQuota) {
+      console.info("ℹ️ Speech transcription reached Gemini quota limit. Notifying client for browser Web Speech fallback.");
+      return res.json({
+        success: false,
+        text: "",
+        fallback: true,
+        quotaExhausted: true,
+        message: "Gemini voice transcription quota reached. Web Speech recognition active."
+      });
+    }
     console.warn("Speech transcription error:", error?.message || error);
     return res.status(500).json({ error: "Failed to transcribe audio.", details: error?.message });
   }
@@ -6233,7 +6374,12 @@ Return a STRICT JSON object matching this schema:
       result: parsedData
     });
   } catch (err: any) {
-    console.error("❌ Scan Folder Clients Error, generating single consolidated client fallback:", err);
+    const isQuota = String(err?.message || err).includes("RESOURCE_EXHAUSTED") || String(err?.message || err).includes("429");
+    if (isQuota) {
+      console.warn("ℹ️ Gemini quota reached in Drive folder scan. Seamlessly engaging consolidated client dossier fallback engine.");
+    } else {
+      console.error("❌ Scan Folder Clients Error, generating single consolidated client fallback:", err);
+    }
     let candidateName = folderName
       .replace(/^Google Drive Folder\s*\([^)]+\)/i, "")
       .replace(/[-_]/g, " ")
@@ -6394,7 +6540,12 @@ Return a STRICT JSON object matching this schema:
       result: parsedData
     });
   } catch (err: any) {
-    console.error("❌ Batch Upload Process Error, using structured single-client fallback:", err);
+    const isQuota = String(err?.message || err).includes("RESOURCE_EXHAUSTED") || String(err?.message || err).includes("429");
+    if (isQuota) {
+      console.warn("ℹ️ Gemini quota reached in batch upload. Seamlessly engaging structured single-client fallback engine.");
+    } else {
+      console.error("❌ Batch Upload Process Error, using structured single-client fallback:", err);
+    }
     // Find candidate client name from files
     let candidateName = clientNameOverride || "";
     if (!candidateName) {

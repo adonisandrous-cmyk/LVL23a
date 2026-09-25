@@ -27,7 +27,8 @@ import {
   CheckCircle2,
   X,
   Key,
-  Layers
+  Layers,
+  Workflow
 } from 'lucide-react';
 import {
   subscribeDriveSync,
@@ -104,6 +105,8 @@ export default function Sidebar({
 
   const sidebarItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'phoenix_pipeline', label: '8-Agent Pipeline', icon: Workflow, badge: 'Phoenix 23' },
+    { id: 'pipeline', label: 'Doc Pipeline', icon: FileText, badge: 'LEAP Engine' },
     { id: 'modules', label: 'Phoenix Modules', icon: Layers, badge: 'Standalone' },
     { id: 'workspace', label: 'Workspace Hub', icon: Sparkles, badge: 'Google' },
     { id: 'clients', label: 'Clients', icon: Users },

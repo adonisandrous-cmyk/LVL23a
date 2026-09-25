@@ -46,12 +46,16 @@ import {
   CheckCircle2,
   AlertCircle,
   FileSpreadsheet,
-  Globe
+  Globe,
+  Trash2,
+  FileDown
 } from 'lucide-react';
 import { Client, DocumentTemplate, GeneratedDocument, Matter } from '../types';
 import { ALL_DOCUMENT_TEMPLATES } from '../data/legalFormsCatalog';
 import { getAccessToken } from '../lib/driveAuth';
 import { OfficialCaliforniaJudicialCouncilFormModal } from './OfficialCaliforniaJudicialCouncilFormModal';
+import { buildCourtPdfUrl, triggerDirectCourtPdfDownload } from '../services/judicialFormHarvesterService';
+import { generateCourtFormXFDF, generateCourtFormFDF, downloadXfdfFile, downloadFdfFile } from '../services/xfdfService';
 
 interface LegalFormsTemplateManagerProps {
   clients: Client[];
@@ -85,7 +89,7 @@ export default function LegalFormsTemplateManager({
   const [previewZoom, setPreviewZoom] = useState<number>(100);
   const [previewPage, setPreviewPage] = useState<number>(1);
   const [showSampleData, setShowSampleData] = useState<boolean>(true);
-  const [expandedTab, setExpandedTab] = useState<'preview' | 'specifications' | 'raw_code'>('preview');
+  const [expandedTab, setExpandedTab] = useState<'preview' | 'specifications' | 'raw_code' | 'fields'>('preview');
   const [copiedPreview, setCopiedPreview] = useState<boolean>(false);
 
   // Official California Judicial Council Form Modal
@@ -294,20 +298,43 @@ export default function LegalFormsTemplateManager({
   };
 
   // Dynamic & Managed Template catalog (synchronizes defaults with harvested and local templates)
+  // Ensures ALL templates in the library are authentic official court forms (CA Judicial Council, NV, FED)
   const [allTemplates, setAllTemplates] = useState<DocumentTemplate[]>(() => {
     const saved = localStorage.getItem('level23_templates_v2');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const existingIds = new Set(parsed.map((p: any) => p.id));
+          // Purge all one-off/custom templates so only actual court forms exist
+          const courtFormsOnly = parsed.filter((p: any) => !p.isCustom && !p.id?.startsWith('custom-') && !p.id?.startsWith('temp-'));
+          const existingIds = new Set(courtFormsOnly.map((p: any) => p.id));
           const missingDefaults = ALL_DOCUMENT_TEMPLATES.filter(d => !existingIds.has(d.id));
-          return [...parsed, ...missingDefaults];
+          return [...courtFormsOnly, ...missingDefaults];
         }
       } catch (e) {}
     }
     return ALL_DOCUMENT_TEMPLATES;
   });
+
+  // Action: Purge all one-off or custom templates, keeping exclusively authentic court forms
+  const handlePurgeOneOffTemplates = () => {
+    try {
+      const saved = localStorage.getItem('level23_templates_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const courtOnly = parsed.filter((t: any) => !t.isCustom && !t.id?.startsWith('custom-') && !t.id?.startsWith('temp-'));
+          localStorage.setItem('level23_templates_v2', JSON.stringify(courtOnly));
+          window.dispatchEvent(new CustomEvent('l23_templates_cleared', {
+            detail: { cleanedTemplates: courtOnly }
+          }));
+        }
+      }
+    } catch (e) {}
+    setAllTemplates(ALL_DOCUMENT_TEMPLATES);
+    setSubmissionNotice('All one-off templates deleted. Form library now exclusively holds prepped Judicial Council and official court forms.');
+    setTimeout(() => setSubmissionNotice(null), 5000);
+  };
 
   // Listen for newly harvested or saved templates
   React.useEffect(() => {
@@ -323,7 +350,18 @@ export default function LegalFormsTemplateManager({
       }
     };
     window.addEventListener('l23_templates_updated', handleTemplateUpdated);
-    return () => window.removeEventListener('l23_templates_updated', handleTemplateUpdated);
+    const handleTemplatesCleared = (e: any) => {
+      if (e.detail?.cleanedTemplates) {
+        setAllTemplates(e.detail.cleanedTemplates);
+      } else {
+        setAllTemplates(ALL_DOCUMENT_TEMPLATES);
+      }
+    };
+    window.addEventListener('l23_templates_cleared', handleTemplatesCleared);
+    return () => {
+      window.removeEventListener('l23_templates_updated', handleTemplateUpdated);
+      window.removeEventListener('l23_templates_cleared', handleTemplatesCleared);
+    };
   }, []);
 
   // Extract unique categories from template list
@@ -560,6 +598,25 @@ export default function LegalFormsTemplateManager({
     document.body.removeChild(element);
   };
 
+  // Action: Export XFDF for official PDF population
+  const handleExportXfdf = () => {
+    if (!activeFormModal) return;
+    const targetPdf = `${activeFormModal.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`;
+    const xfdfContent = generateCourtFormXFDF(formFieldValues, targetPdf);
+    downloadXfdfFile(xfdfContent, `${activeFormModal.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_data.xfdf`);
+    setSubmissionNotice(`Exported official Adobe XFDF data for ${activeFormModal.name}! Ready to import into PDF reader or pdftk.`);
+    setTimeout(() => setSubmissionNotice(null), 4000);
+  };
+
+  // Action: Export FDF
+  const handleExportFdf = () => {
+    if (!activeFormModal) return;
+    const fdfContent = generateCourtFormFDF(formFieldValues);
+    downloadFdfFile(fdfContent, `${activeFormModal.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_data.fdf`);
+    setSubmissionNotice(`Exported official Adobe FDF form data for ${activeFormModal.name}!`);
+    setTimeout(() => setSubmissionNotice(null), 4000);
+  };
+
   // Action: Save as Generated Document in app state
   const handleSaveDocToWorkspace = () => {
     if (!activeFormModal || !onAddGeneratedDoc) return;
@@ -741,18 +798,31 @@ export default function LegalFormsTemplateManager({
             </button>
           </div>
 
-          {/* Online Judicial Council Harvester Button */}
+          {/* Download & Prep Judicial Council Form Button */}
           {onOpenHarvesterModal && (
             <button
               type="button"
+              id="btn-download-judicial-council-form"
               onClick={onOpenHarvesterModal}
               className="px-3 py-1.5 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-[#090d16] font-mono text-[10.5px] font-black uppercase cursor-pointer flex items-center gap-1.5 transition-all shadow-[2px_2px_0px_#000] shrink-0"
-              title="Grab Judicial Council Form Online & Map for Auto-Population"
+              title="Download official Judicial Council form from courts.ca.gov, prep tokens, and save to library"
             >
-              <Globe className="w-3.5 h-3.5" />
-              <span>Grab Form Online</span>
+              <FileDown className="w-3.5 h-3.5 text-[#090d16]" />
+              <span>Download Judicial Council Form</span>
             </button>
           )}
+
+          {/* Delete All One-Off Templates */}
+          <button
+            type="button"
+            id="btn-purge-one-off-templates"
+            onClick={handlePurgeOneOffTemplates}
+            className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:border-rose-400 font-mono text-[10px] font-bold uppercase cursor-pointer flex items-center gap-1.5 transition-all shrink-0"
+            title="Delete all one-off or custom templates and restore library to official prepped court forms"
+          >
+            <Trash2 className="w-3 h-3 text-rose-400" />
+            <span>Delete One-Off Templates</span>
+          </button>
 
           {/* Quick Open Official California Judicial Council Form Modal */}
           <button
@@ -767,7 +837,7 @@ export default function LegalFormsTemplateManager({
             title="Open official California Judicial Council Form FL-120 populated with client data"
           >
             <FileCheck className="w-3.5 h-3.5 text-slate-950" />
-            <span>Official Form FL-120</span>
+            <span>Official FL-120 Form</span>
           </button>
 
           {/* View Mode Toggle */}
@@ -984,7 +1054,20 @@ export default function LegalFormsTemplateManager({
                 </div>
 
                 {/* Actions Footer */}
-                <div className="pt-3 border-t border-[#1e293b] flex items-center gap-2">
+                <div className="pt-3 border-t border-[#1e293b] flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const pdfUrl = buildCourtPdfUrl(template.id);
+                      triggerDirectCourtPdfDownload(pdfUrl, `${template.id.toUpperCase()}-official-court-form.pdf`);
+                    }}
+                    className="px-2 py-2 bg-[#070c16] border border-sky-500/40 hover:border-sky-400 text-sky-400 hover:text-sky-300 font-mono text-[10px] font-bold uppercase cursor-pointer flex items-center gap-1 transition-all"
+                    title={`Download official blank fillable PDF (${template.id.toUpperCase()}) directly from courts.ca.gov`}
+                  >
+                    <FileDown className="w-3.5 h-3.5" />
+                    <span>PDF</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -992,22 +1075,23 @@ export default function LegalFormsTemplateManager({
                       setPreviewZoom(100);
                       setPreviewPage(1);
                       setShowSampleData(true);
-                      setExpandedTab('preview');
+                      setExpandedTab('fields');
                     }}
-                    className="px-2.5 py-2 bg-[#070c16] border border-amber-500/40 hover:border-amber-400 text-amber-400 hover:text-amber-300 font-mono text-[10.5px] font-bold uppercase cursor-pointer flex items-center gap-1 transition-all"
-                    title="Expand Live Document Preview"
+                    className="px-2.5 py-2 bg-[#070c16] border border-amber-500/40 hover:border-amber-400 text-amber-400 hover:text-amber-300 font-mono text-[10px] font-bold uppercase cursor-pointer flex items-center gap-1 transition-all"
+                    title="Prep court form tokens and field bindings"
                   >
                     <Maximize2 className="w-3.5 h-3.5" />
-                    <span>Expand</span>
+                    <span>Prep</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleOpenFillModal(template)}
-                    className="flex-1 py-2 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-[#090d16] font-mono text-[11px] font-black uppercase rounded-none cursor-pointer flex items-center justify-center gap-1.5 transition-all shadow-[2px_2px_0px_#000]"
+                    className="flex-1 py-2 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-[#090d16] font-mono text-[10.5px] font-black uppercase rounded-none cursor-pointer flex items-center justify-center gap-1.5 transition-all shadow-[2px_2px_0px_#000]"
+                    title="Populate court form with client data"
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    <span>Fill & Generate</span>
+                    <span>Populate</span>
                   </button>
 
                   <button
@@ -1017,15 +1101,6 @@ export default function LegalFormsTemplateManager({
                     title="Quick Preview Template Code"
                   >
                     <Eye className="w-3.5 h-3.5" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleDownloadText(template.name, template.templateBody)}
-                    className="p-2 bg-[#070b13] border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white cursor-pointer transition-all"
-                    title="Download Raw Template (.txt)"
-                  >
-                    <Download className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
@@ -1069,22 +1144,37 @@ export default function LegalFormsTemplateManager({
                   <button
                     type="button"
                     onClick={() => {
+                      const pdfUrl = buildCourtPdfUrl(template.id);
+                      triggerDirectCourtPdfDownload(pdfUrl, `${template.id.toUpperCase()}-official-court-form.pdf`);
+                    }}
+                    className="px-2.5 py-1.5 bg-[#070c16] border border-sky-500/40 hover:border-sky-400 text-sky-400 hover:text-sky-300 text-[10px] font-mono font-bold uppercase cursor-pointer flex items-center gap-1 transition-all"
+                    title={`Download official blank fillable PDF (${template.id.toUpperCase()})`}
+                  >
+                    <FileDown className="w-3 h-3" />
+                    <span>PDF</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
                       setExpandedFormModal(template);
                       setPreviewZoom(100);
                       setPreviewPage(1);
                       setShowSampleData(true);
-                      setExpandedTab('preview');
+                      setExpandedTab('fields');
                     }}
                     className="px-2.5 py-1.5 bg-[#070b13] border border-amber-500/40 hover:border-amber-400 text-amber-400 text-[10px] font-mono font-bold uppercase cursor-pointer flex items-center gap-1 transition-all"
+                    title="Prep court form tokens and field bindings"
                   >
                     <Maximize2 className="w-3 h-3 text-amber-400" />
-                    <span>Expand Preview</span>
+                    <span>Prep</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setPreviewOnlyModal(template)}
                     className="px-2.5 py-1.5 bg-[#070b13] border border-slate-700 hover:border-slate-500 text-slate-300 text-[10px] font-mono font-bold uppercase cursor-pointer flex items-center gap-1"
+                    title="Quick preview"
                   >
                     <Eye className="w-3 h-3 text-slate-400" />
                     <span>View</span>
@@ -1094,9 +1184,10 @@ export default function LegalFormsTemplateManager({
                     type="button"
                     onClick={() => handleOpenFillModal(template)}
                     className="px-3.5 py-1.5 bg-teal-500 hover:bg-teal-400 text-[#090d16] font-mono text-[10.5px] font-extrabold uppercase cursor-pointer flex items-center gap-1 transition-all shadow-[1.5px_1.5px_0px_#000]"
+                    title="Populate with client data"
                   >
                     <Zap className="w-3 h-3" />
-                    <span>Fill & Generate</span>
+                    <span>Populate</span>
                   </button>
                 </div>
               </div>
@@ -1424,6 +1515,26 @@ export default function LegalFormsTemplateManager({
                       >
                         <Download className="w-3 h-3" />
                         <span>Download .txt</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleExportXfdf}
+                        className="px-3 py-1.5 bg-amber-500/10 border border-amber-500/40 hover:bg-amber-500/20 text-amber-300 text-[10px] font-mono font-extrabold uppercase cursor-pointer flex items-center gap-1.5 transition-all"
+                        title="Export Adobe XFDF (XML Forms Data Format) to automatically populate official PDF"
+                      >
+                        <FileCode className="w-3 h-3 text-amber-400" />
+                        <span>Export .XFDF</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleExportFdf}
+                        className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 hover:border-slate-500 text-slate-300 text-[10px] font-mono font-extrabold uppercase cursor-pointer flex items-center gap-1.5 transition-all"
+                        title="Export standard Adobe FDF form data"
+                      >
+                        <FileDown className="w-3 h-3 text-slate-400" />
+                        <span>.FDF</span>
                       </button>
                     </div>
 

@@ -48,7 +48,11 @@ import ZenEntranceView from './components/ZenEntranceView';
 import GoogleAppHostingModal from './components/GoogleAppHostingModal';
 import { PhoenixModularStudio } from './components/PhoenixModularStudio';
 import { OfficialCaliforniaJudicialCouncilFormModal } from './components/OfficialCaliforniaJudicialCouncilFormModal';
-import { Scale, BookOpen, Database, CloudOff, CloudLightning, Lock, Unlock, UploadCloud, Languages, Globe } from 'lucide-react';
+import { UniversalPipelineStudio } from './components/UniversalPipelineStudio';
+import { PhoenixEightAgentStudio } from './components/PhoenixEightAgentStudio';
+import { EightAgentsDialogueModal } from './components/EightAgentsDialogueModal';
+import { ExecutivePipelineHandOffModal } from './components/ExecutivePipelineHandOffModal';
+import { Scale, BookOpen, Database, CloudOff, CloudLightning, Lock, Unlock, UploadCloud, Languages, Globe, ShieldCheck } from 'lucide-react';
 import { startPeriodicDriveSync } from './services/driveSyncService';
 
 import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, query, orderBy, limit, startAfter } from 'firebase/firestore';
@@ -56,6 +60,9 @@ import { db, ensureAuthenticated, handleFirestoreError, OperationType, sanitizeF
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [showEightAgentsDialogueModal, setShowEightAgentsDialogueModal] = useState<boolean>(false);
+  const [eightAgentsDialogueInitialId, setEightAgentsDialogueInitialId] = useState<string>('agent_1_ingestion');
+  const [showExecutiveHandOffModal, setShowExecutiveHandOffModal] = useState<boolean>(false);
   const [isZenEntranceMode, setIsZenEntranceMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('practice_os_zen_mode');
@@ -1492,6 +1499,35 @@ Petitioner Signature: Jane Doe`,
                   <button
                     type="button"
                     onClick={() => {
+                      setEightAgentsDialogueInitialId('agent_1_ingestion');
+                      setShowEightAgentsDialogueModal(true);
+                      addLog('system', '8-Agent Interactive Dialogue pop-up launched from header tray.');
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500/20 via-yellow-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-yellow-500/30 border border-amber-500/50 hover:border-amber-400 text-amber-200 rounded-xl text-xs font-mono font-bold uppercase transition-all cursor-pointer shadow-[0_0_12px_rgba(245,158,11,0.2)]"
+                    title="Open interactive pop-up dialogue with each of the 8 Level 23 Document Automation Agents"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                    <span className="hidden md:inline">8 Agents Dialogue</span>
+                    <span className="bg-amber-500/20 text-amber-300 text-[9px] px-1 py-0.5 rounded border border-amber-500/30">POP-UP</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowExecutiveHandOffModal(true);
+                      addLog('system', 'Executive Pipeline Hand-Off launched: Phoenix & EVE issuing directives.');
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500/25 via-amber-400/20 to-yellow-500/20 hover:from-amber-500/35 hover:to-yellow-500/30 border border-amber-500/60 hover:border-amber-400 text-amber-200 rounded-xl text-xs font-mono font-bold uppercase transition-all cursor-pointer shadow-[0_0_12px_rgba(245,158,11,0.2)]"
+                    title="Phoenix & EVE hand documents to the 8-agent document pipeline and issue authoritative directives"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                    <span className="hidden md:inline">Hand to Pipeline</span>
+                    <span className="bg-amber-500/20 text-amber-300 text-[9px] px-1 py-0.5 rounded border border-amber-500/30">DIRECTIVES</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
                       handleSetZenMode(true);
                       addLog('system', 'Full-screen AI Co-Counsel Zen suite opened from header tray.');
                     }}
@@ -1609,6 +1645,14 @@ Petitioner Signature: Jane Doe`,
                         setActiveTab('documents');
                       }}
                     />
+                  )}
+
+                  {activeTab === 'phoenix_pipeline' && (
+                    <PhoenixEightAgentStudio key="phoenix_pipeline" />
+                  )}
+
+                  {activeTab === 'pipeline' && (
+                    <UniversalPipelineStudio key="pipeline" />
                   )}
 
                   {activeTab === 'modules' && (
@@ -2112,6 +2156,29 @@ Petitioner Signature: Jane Doe`,
         onAddGeneratedDoc={(doc) => {
           handleAddGeneratedDoc(doc);
           addLog('document', `Saved official California Judicial Council form ${doc.title} to client documents.`);
+        }}
+      />
+
+      {/* 8-Agent Interactive Dialogue Pop-up Modal */}
+      <EightAgentsDialogueModal
+        isOpen={showEightAgentsDialogueModal}
+        onClose={() => setShowEightAgentsDialogueModal(false)}
+        initialAgentId={eightAgentsDialogueInitialId}
+        onOpenExecutiveHandOff={(dispatcher) => {
+          setShowEightAgentsDialogueModal(false);
+          setShowExecutiveHandOffModal(true);
+          addLog('system', `Executive Hand-Off modal launched for ${dispatcher.toUpperCase()} from 8-Agent Dialogue.`);
+        }}
+      />
+
+      {/* Executive Pipeline Hand-Off Modal (Phoenix & EVE Directive Control) */}
+      <ExecutivePipelineHandOffModal
+        isOpen={showExecutiveHandOffModal}
+        onClose={() => setShowExecutiveHandOffModal(false)}
+        initialDispatcher="phoenix"
+        onDispatchComplete={(result) => {
+          addLog('system', `⚡ Executive Hand-Off completed by ${result.dispatcherName}${result.dispatcherTitle ? ` (${result.dispatcherTitle})` : ''} for "${result.documentName || 'Document'}". SHA-256: ${result.template.sourceSha256.slice(0, 16)}... QA Sentinel: 100% Valid.`);
+          setActiveTab('phoenix_pipeline');
         }}
       />
 

@@ -41,12 +41,17 @@ import {
   FolderOpen,
   AlertCircle,
   ExternalLink,
-  Loader2
+  Loader2,
+  Workflow,
+  MessageSquare
 } from 'lucide-react';
 import { LegalMessage, Client, Matter, GeneratedDocument } from '../types';
 import level23Logo from '../assets/images/level23_phoenix_logo_1786736100367.jpg';
 import { audioService } from '../services/audioPlaybackService';
 import { AudioTroubleshooterModal } from './AudioTroubleshooterModal';
+import { EightAgentsDialogueModal } from './EightAgentsDialogueModal';
+import { ExecutivePipelineHandOffModal } from './ExecutivePipelineHandOffModal';
+import { ExecutiveDispatchResult } from '../services/phoenixEngine/ExecutivePipelineBridge';
 
 export type ZenAgentKey = 'PHOENIX' | 'EVE' | 'ALURE' | 'SENTRY';
 
@@ -86,6 +91,7 @@ const ZEN_AGENTS: ZenAgentConfig[] = [
     dragBorder: 'border-amber-400 bg-amber-500/20 text-amber-200 ring-2 ring-amber-400',
     icon: Zap,
     quickPrompts: [
+      { label: '⚡ 8-Agent Pipeline Hand-Off', prompt: (f) => f ? `Phoenix, hand "${f}" to the 8-agent document pipeline under your litigation master directive. Enforce strict coordinate mapping, blank overlay, and zero reflow.` : `Phoenix, hand this pleading to the 8-agent document pipeline with strict coordinate mapping and QA validation.` },
       { label: 'Litigation Audit', prompt: (f) => f ? `Evaluate "${f}" for trial admissibility, litigation vulnerabilities, and evidentiary strength under CA & NV rules.` : `Analyze litigation strategy and trial readiness for active matters.` },
       { label: 'Draft Pleading', prompt: (f) => f ? `Draft an affirmative responsive pleading incorporating the factual assertions from "${f}".` : `Draft FL-100 Petition for Dissolution with community property assertions.` }
     ]
@@ -102,6 +108,7 @@ const ZEN_AGENTS: ZenAgentConfig[] = [
     dragBorder: 'border-teal-400 bg-teal-500/20 text-teal-200 ring-2 ring-teal-400',
     icon: Bot,
     quickPrompts: [
+      { label: '⚡ Intake Pipeline Hand-Off', prompt: (f) => f ? `EVE, hand "${f}" to the 8-agent document pipeline under your executive intake directive. Extract 16-point client facts and build reusable template.` : `EVE, hand this client intake dossier to the 8-agent pipeline to extract facts and create a reusable template.` },
       { label: 'Intake Audit', prompt: (f) => f ? `Audit "${f}" for client intake facts, parties, dates, and identify any missing mandatory disclosures.` : `Review pending client intakes and docketing deadlines.` },
       { label: 'Docket & Dates', prompt: (f) => f ? `Extract all critical court deadlines, response windows, and statutes of limitation from "${f}".` : `What are the critical docket deadlines across active cases?` }
     ]
@@ -197,6 +204,12 @@ export default function ZenEntranceView({
   const [driveSaveMessage, setDriveSaveMessage] = useState<string | null>(null);
   const [copiedText, setCopiedText] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 8-Agent Dialogue Pop-up & Executive Pipeline Modal states
+  const [showEightAgentsModal, setShowEightAgentsModal] = useState<boolean>(false);
+  const [dialogueModalAgentId, setDialogueModalAgentId] = useState<string>('agent_1_ingestion');
+  const [showExecutivePipelineModal, setShowExecutivePipelineModal] = useState<boolean>(false);
+  const [lastDispatchResult, setLastDispatchResult] = useState<ExecutiveDispatchResult | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -1036,6 +1049,37 @@ export default function ZenEntranceView({
               <FolderOpen className="w-3 h-3 text-emerald-400" />
               <span>Google Drive</span>
             </button>
+            <button
+              type="button"
+              onClick={() => onActivateWorkspace('phoenix_pipeline')}
+              className="px-2.5 py-1 bg-amber-950/50 hover:bg-amber-900/70 text-amber-300 hover:text-amber-200 rounded-lg border border-amber-500/50 cursor-pointer flex items-center gap-1 transition-colors"
+              title="Open Phoenix 23 Specialized 8-Agent Document Engine Studio"
+            >
+              <Workflow className="w-3 h-3 text-amber-400" />
+              <span>8-Agent Pipeline</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDialogueModalAgentId('agent_1_ingestion');
+                setShowEightAgentsModal(true);
+              }}
+              className="px-2.5 py-1 bg-gradient-to-r from-amber-500/20 to-yellow-500/10 hover:from-amber-500/30 hover:to-yellow-500/20 text-amber-300 hover:text-amber-200 rounded-lg border border-amber-500/50 cursor-pointer flex items-center gap-1.5 transition-colors shadow-sm"
+              title="Open interactive pop-up dialogue with each of the 8 specialized document automation agents"
+            >
+              <MessageSquare className="w-3 h-3 text-amber-400 animate-pulse" />
+              <span>8 Agents Dialogue</span>
+              <span className="text-[8.5px] px-1 py-0.2 bg-amber-500/20 rounded border border-amber-500/30 text-amber-300 font-bold uppercase">Pop-Up</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowExecutivePipelineModal(true)}
+              className="px-2.5 py-1 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-mono text-xs font-black uppercase rounded-lg cursor-pointer flex items-center gap-1.5 transition-all shadow-sm"
+              title="Hand documents to the 8-agent document pipeline and issue executive directives (Phoenix & EVE)"
+            >
+              <Zap className="w-3 h-3 text-slate-950" />
+              <span>⚡ Hand to Pipeline</span>
+            </button>
           </div>
         </div>
 
@@ -1562,6 +1606,18 @@ export default function ZenEntranceView({
                 </div>
               )}
 
+              {/* Prominent Direct Executive Pipeline Hand-Off Button for Phoenix and Eve */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowExecutivePipelineModal(true)}
+                  className="w-full py-2 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs font-mono uppercase rounded-xl transition cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
+                >
+                  <Zap className="w-3.5 h-3.5 text-slate-950" />
+                  <span>⚡ Hand &quot;{attachedFile.name}&quot; to 8-Agent Pipeline ({selectedAgent === 'EVE' ? 'EVE' : 'Phoenix'} Directives)</span>
+                </button>
+              </div>
+
               {/* Quick File Action Chips tailored for the active agent */}
               <div className="pt-1 border-t border-slate-800 flex flex-wrap items-center gap-1.5">
                 <span className="text-[10px] text-slate-400">Ask {ZEN_AGENTS.find(a => a.id === selectedAgent)?.name}:</span>
@@ -2008,6 +2064,28 @@ export default function ZenEntranceView({
           </div>
         </div>
       )}
+
+      {/* 8-Agent Interactive Dialogue Pop-up Modal */}
+      <EightAgentsDialogueModal
+        isOpen={showEightAgentsModal}
+        onClose={() => setShowEightAgentsModal(false)}
+        initialAgentId={dialogueModalAgentId}
+      />
+
+      {/* Executive Pipeline Hand-Off Modal for Phoenix & EVE */}
+      <ExecutivePipelineHandOffModal
+        isOpen={showExecutivePipelineModal}
+        onClose={() => setShowExecutivePipelineModal(false)}
+        initialDispatcher={selectedAgent === 'EVE' ? 'eve' : 'phoenix'}
+        initialDocumentName={attachedFile ? attachedFile.name : undefined}
+        initialFileContent={attachedFile ? attachedFile.content : undefined}
+        onDispatchComplete={(result) => {
+          setLastDispatchResult(result);
+          // Inform the chat thread of the verified dispatch
+          const summaryNote = `[8-AGENT PIPELINE DIRECTIVE DISPATCHED]\nDispatcher: ${result.dispatcherName}${result.dispatcherTitle ? ` (${result.dispatcherTitle})` : ''}\nDocument: "${result.documentName || 'Document'}"\nFingerprint: SHA-256 ${result.template.sourceSha256.slice(0, 16)}...\nQA Sentinel: 100% Certified Valid\n${result.executiveSummary}`;
+          onSendMessage(summaryNote, selectedAgent);
+        }}
+      />
 
     </div>
   );

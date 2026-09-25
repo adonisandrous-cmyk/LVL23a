@@ -56,11 +56,15 @@ import {
   Scale,
   FileCheck,
   Eye,
-  Layers
+  Layers,
+  MessageSquare
 } from 'lucide-react';
 import { LegalMessage, VoiceAgentProfile, AgentProgress, Client, Matter, AgentExtractionResult, GeneratedDocument } from '../types';
 import { AssignExtractionTaskModal } from './AssignExtractionTaskModal';
 import { OfficialCaliforniaJudicialCouncilFormModal } from './OfficialCaliforniaJudicialCouncilFormModal';
+import { ExecutivePipelineHandOffModal } from './ExecutivePipelineHandOffModal';
+import { EightAgentsDialogueModal } from './EightAgentsDialogueModal';
+import { ExecutiveDispatchResult } from '../services/phoenixEngine/ExecutivePipelineBridge';
 import { audioService } from '../services/audioPlaybackService';
 import { getAccessToken } from '../lib/driveAuth';
 
@@ -315,7 +319,7 @@ export default function AIStaffTab({
   const [eveEmailScenario, setEveEmailScenario] = useState('disclosures'); // 'disclosures' | 'co-counsel' | 'hearing'
 
   // EVE Evidence Specialist Suite States
-  const [eveSubTab, setEveSubTab] = useState<'factCheck' | 'batesMatrix' | 'inconsistencies' | 'router' | 'summary' | 'driveEditor'>('driveEditor');
+  const [eveSubTab, setEveSubTab] = useState<'factCheck' | 'batesMatrix' | 'inconsistencies' | 'router' | 'summary' | 'driveEditor' | 'pipelineBridge'>('driveEditor');
   const [factCheckInputText, setFactCheckInputText] = useState(`Petitioner claims Respondent failed to disclose $142,500 held in First Republic Savings account #4091 and underreported monthly business net income by $9,700/mo on the FL-150 Schedule.`);
   const [factCheckResult, setFactCheckResult] = useState<string | null>(null);
   const [isFactChecking, setIsFactChecking] = useState(false);
@@ -346,7 +350,32 @@ export default function AIStaffTab({
   const [isSavingToDrive, setIsSavingToDrive] = useState<boolean>(false);
   const [driveNotification, setDriveNotification] = useState<string | null>(null);
   const [staffDriveTab, setStaffDriveTab] = useState<'files' | 'editor'>('files');
-  const [staffWorkspaceMode, setStaffWorkspaceMode] = useState<'drive' | 'context'>('drive');
+  const [staffWorkspaceMode, setStaffWorkspaceMode] = useState<'drive' | 'context' | 'pipeline'>('drive');
+
+  // 8-Agent Dialogue Pop-up Modal State
+  const [showEightAgentsModal, setShowEightAgentsModal] = useState<boolean>(false);
+  const [dialogueModalAgentId, setDialogueModalAgentId] = useState<string>('agent_1_ingestion');
+
+  // Executive 8-Agent Pipeline Bridge State for Phoenix and Eve
+  const [showExecutivePipelineModal, setShowExecutivePipelineModal] = useState<boolean>(false);
+  const [executiveDispatcher, setExecutiveDispatcher] = useState<'phoenix' | 'eve'>('phoenix');
+  const [lastExecutiveDispatchResult, setLastExecutiveDispatchResult] = useState<ExecutiveDispatchResult | null>(null);
+
+  const handleOpenExecutivePipelineModal = (dispatcher: 'phoenix' | 'eve') => {
+    setExecutiveDispatcher(dispatcher);
+    setShowExecutivePipelineModal(true);
+  };
+
+  const handleExecutiveDispatchComplete = (result: ExecutiveDispatchResult) => {
+    setLastExecutiveDispatchResult(result);
+    onAddMessage({
+      id: `msg_exec_${Date.now()}`,
+      sender: 'assistant',
+      content: `${result.executiveSummary}\n\n**Executive Directive**: "${result.directiveTitle}"\n**Visual Master SHA-256**: \`${result.template.sourceSha256.slice(0, 24)}...\`\n**Field Coordinates Mapped**: ${result.template.fieldMappings.length}\n**QA Sentinel Certification**: ${result.qaReport.passed ? '✅ 100% Certified Valid (Zero Deviations)' : '⚠️ Halted'}\n**Deliverables Generated**: Deterministic PDF, Adobe XFDF, JSON Field Map.`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      agentName: result.dispatcherName
+    });
+  };
 
   // AI Agent Extraction Task Modal State
   const [showAssignTaskModal, setShowAssignTaskModal] = useState<boolean>(false);
@@ -3462,6 +3491,16 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
                   >
                     <span>⚡ Brief Phoenix</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setEveSubTab('pipelineBridge')}
+                    className={`px-2.5 py-1.5 rounded-lg transition shrink-0 flex items-center gap-1 font-extrabold ${
+                      eveSubTab === 'pipelineBridge' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.2)]' : 'text-amber-400/90 hover:text-amber-300'
+                    }`}
+                  >
+                    <ShieldCheck className="w-3 h-3 text-amber-400" />
+                    <span>⚡ 8-Agent Pipeline</span>
+                  </button>
                 </div>
 
                 {/* TAB 0: DRIVE SUITE & FILE EDITOR */}
@@ -3984,6 +4023,109 @@ EVE has completed document synchronization audit:
                   </div>
                 )}
 
+                {/* TAB 6: EVE 8-AGENT PIPELINE BRIDGE */}
+                {eveSubTab === 'pipelineBridge' && (
+                  <div className="bg-[#050810]/40 border border-amber-500/30 p-3.5 rounded-xl space-y-3 font-mono text-xs">
+                    <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-amber-400" />
+                        <span className="font-bold text-amber-300 uppercase tracking-wide text-[11px]">
+                          EVE Operations & 8-Agent Pipeline Bridge
+                        </span>
+                      </div>
+                      <span className="text-[9px] text-teal-300 bg-teal-950/80 px-2 py-0.5 rounded border border-teal-500/30">
+                        Operational Lead
+                      </span>
+                    </div>
+
+                    <p className="text-[10px] text-slate-300 leading-relaxed font-sans">
+                      Empowers <strong>EVE (Director of Operations & Executive Intake Lead)</strong> to intake raw client dossiers, calculate cryptographic SHA-256 byte fingerprints, issue authoritative operational instructions to all 8 agents, and strictly enforce <strong>Level 23 Master Rule 5 (Never Guess)</strong>.
+                    </p>
+
+                    {/* Eve Directive Preset Summary */}
+                    <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between text-[10px] font-bold text-amber-300">
+                        <span>Active Directive:</span>
+                        <span className="text-teal-400">Executive Intake Directive</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5 text-[9px] text-slate-400">
+                        <div className="p-1.5 bg-slate-900/80 rounded border border-slate-800">
+                          <strong className="text-white block">Rule 1 Invariant:</strong>
+                          Original byte-for-byte vaulted
+                        </div>
+                        <div className="p-1.5 bg-slate-900/80 rounded border border-slate-800">
+                          <strong className="text-white block">Rule 5 Zero-Guess:</strong>
+                          Missing facts marked for review
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Launch Executive Hand-Off Modal Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleOpenExecutivePipelineModal('eve')}
+                      className="w-full py-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black tracking-wide rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-2 uppercase shadow-lg shadow-amber-500/20"
+                    >
+                      <Zap className="w-4 h-4 text-slate-950" />
+                      <span>⚡ Hand Document to 8-Agent Pipeline & Issue Intake Directives</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDialogueModalAgentId('agent_3_extraction');
+                        setShowEightAgentsModal(true);
+                      }}
+                      className="w-full py-2 bg-slate-900 hover:bg-slate-850 border border-slate-700 hover:border-amber-400/50 text-slate-300 hover:text-amber-200 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 transition cursor-pointer"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+                      <span>💬 Open 8-Agent Dialogue Pop-Up</span>
+                    </button>
+
+                    {/* Quick Sample Document Hand-offs */}
+                    <div className="space-y-1.5 pt-1">
+                      <span className="text-[9.5px] uppercase text-slate-400 font-bold block">
+                        Quick Launch: Hand Verified Intake Document to Pipeline:
+                      </span>
+                      <div className="grid grid-cols-1 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenExecutivePipelineModal('eve')}
+                          className="p-2 bg-slate-900 hover:bg-slate-850 border border-slate-700 hover:border-amber-400/50 rounded-lg text-left text-[10px] text-slate-200 transition-all flex items-center justify-between cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <FileText className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                            <span className="truncate font-bold">Christopher Guinto — FL-120 Dissolution Dossier</span>
+                          </div>
+                          <span className="text-[8.5px] uppercase font-bold text-amber-400 bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-500/30 shrink-0">Dispatch</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Last Dispatch Result Display */}
+                    {lastExecutiveDispatchResult && lastExecutiveDispatchResult.dispatcher === 'eve' && (
+                      <div className="p-3 bg-emerald-950/20 border border-emerald-500/40 rounded-xl space-y-1.5 text-[10px] text-emerald-300">
+                        <div className="flex items-center justify-between font-bold">
+                          <span>✅ Pipeline Executed by EVE:</span>
+                          <span className="text-[9px] font-mono">SHA-256: {lastExecutiveDispatchResult.template.sourceSha256.slice(0, 14)}...</span>
+                        </div>
+                        <p className="text-slate-300 text-[9.5px] font-sans leading-normal">
+                          {lastExecutiveDispatchResult.executiveSummary}
+                        </p>
+                        <div className="flex items-center gap-2 pt-1 text-[9px] font-mono">
+                          <span className="px-1.5 py-0.5 bg-slate-900 rounded border border-emerald-500/30">
+                            QA Sentinel: 100% Certified Valid
+                          </span>
+                          <span className="px-1.5 py-0.5 bg-slate-900 rounded border border-teal-500/30">
+                            {lastExecutiveDispatchResult.template.fieldMappings.length} Fields Mapped
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                )}
+
               </div>
             ) : (
               /* Non-EVE Profiles (Phoenix, Sentry, Allure): Unified Workspace with Drive Suite + Document Context */
@@ -4016,6 +4158,18 @@ EVE has completed document synchronization audit:
                       <UploadCloud className="w-3 h-3 text-teal-400" />
                       <span>Intake Reference {uploadedFile ? `(1 Active)` : ''}</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setStaffWorkspaceMode('pipeline')}
+                      className={`px-2.5 py-1 rounded transition flex items-center gap-1.5 cursor-pointer ${
+                        staffWorkspaceMode === 'pipeline'
+                          ? 'bg-amber-950 text-amber-300 border border-amber-500/40 shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <ShieldCheck className="w-3 h-3 text-amber-400" />
+                      <span>8-Agent Pipeline Directives</span>
+                    </button>
                   </div>
 
                   {uploadedFile && staffWorkspaceMode === 'context' && (
@@ -4038,7 +4192,139 @@ EVE has completed document synchronization audit:
                   )}
                 </div>
 
-                {staffWorkspaceMode === 'drive' ? (
+                {staffWorkspaceMode === 'pipeline' ? (
+                  /* Phoenix & Senior Partner 8-Agent Pipeline Command Panel */
+                  <div className="flex-1 flex flex-col min-h-0 overflow-y-auto p-4 space-y-4 font-mono text-xs selection:bg-amber-500/30">
+                    <div className="bg-[#0c1221] border border-amber-500/40 p-3.5 rounded-xl flex items-center justify-between gap-3 shadow-lg shadow-amber-500/5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 bg-amber-500/20 rounded-lg text-amber-400 border border-amber-500/30">
+                          <ShieldCheck className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider font-mono">
+                            Phoenix Executive 8-Agent Pipeline Engine
+                          </h4>
+                          <p className="text-[10px] text-slate-400 font-sans">
+                            Authoritative Directives & Strict Millimeter Geometry Pleading Mapping
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-[9px] font-bold text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-500/30">
+                        Senior Partner
+                      </span>
+                    </div>
+
+                    {/* Master Directives Card */}
+                    <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2.5">
+                      <div className="flex items-center justify-between pb-1.5 border-b border-slate-800 text-[10.5px]">
+                        <span className="font-bold text-amber-300">Active Litigation Directive:</span>
+                        <span className="text-teal-400 text-[10px]">Exact Coordinate Pleading Mapping</span>
+                      </div>
+                      <p className="text-[10px] text-slate-300 leading-relaxed font-sans">
+                        &quot;Preserve underlying court pleading geometry byte-for-byte. Extract petitioner/respondent designations, relief requests, and case numbers. Do not guess on contested facts; flag all ambiguities for counsel review.&quot;
+                      </p>
+
+                      {/* 8-Agent Directive Checklist */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1 text-[9px]">
+                        <div className="p-1.5 bg-slate-900 rounded border border-slate-800 text-teal-300">
+                          <strong className="text-white block">1. Ingestion:</strong> Vault Byte Hash
+                        </div>
+                        <div className="p-1.5 bg-slate-900 rounded border border-slate-800 text-teal-300">
+                          <strong className="text-white block">2. Analysis:</strong> Bounding Boxes
+                        </div>
+                        <div className="p-1.5 bg-slate-900 rounded border border-slate-800 text-teal-300">
+                          <strong className="text-white block">3. Extraction:</strong> Rule 5 Zero-Guess
+                        </div>
+                        <div className="p-1.5 bg-slate-900 rounded border border-slate-800 text-teal-300">
+                          <strong className="text-white block">4. Database:</strong> Canonical Map
+                        </div>
+                        <div className="p-1.5 bg-slate-900 rounded border border-slate-800 text-teal-300">
+                          <strong className="text-white block">5. Template:</strong> Coordinate Overlays
+                        </div>
+                        <div className="p-1.5 bg-slate-900 rounded border border-slate-800 text-teal-300">
+                          <strong className="text-white block">6. Delivery:</strong> Court PDF / XFDF
+                        </div>
+                        <div className="p-1.5 bg-slate-900 rounded border border-slate-800 text-teal-300">
+                          <strong className="text-white block">7. Integration:</strong> Google Drive
+                        </div>
+                        <div className="p-1.5 bg-slate-900 rounded border border-slate-800 text-teal-300">
+                          <strong className="text-white block">8. QA Sentinel:</strong> 100% Certified
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Button: Hand Document to 8-Agent Pipeline */}
+                    <button
+                      type="button"
+                      onClick={() => handleOpenExecutivePipelineModal('phoenix')}
+                      className="w-full py-3 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black tracking-wider rounded-xl text-xs uppercase cursor-pointer transition shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
+                    >
+                      <Zap className="w-4 h-4 text-slate-950" />
+                      <span>⚡ Hand Document to 8-Agent Pipeline & Issue Litigation Directives</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDialogueModalAgentId('agent_1_ingestion');
+                        setShowEightAgentsModal(true);
+                      }}
+                      className="w-full py-2.5 bg-slate-900 hover:bg-slate-850 border border-slate-700 hover:border-amber-400/50 text-slate-300 hover:text-amber-200 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 transition cursor-pointer"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+                      <span>💬 Open 8-Agent Dialogue Pop-Up</span>
+                    </button>
+
+                    {/* If a reference document is already active in staff workspace */}
+                    {uploadedFile && (
+                      <div className="p-3 bg-slate-900/90 border border-teal-500/40 rounded-xl flex items-center justify-between text-[10px]">
+                        <div className="flex items-center gap-2 truncate">
+                          <FileText className="w-4 h-4 text-teal-400 shrink-0" />
+                          <div className="truncate">
+                            <span className="font-bold text-white block truncate">{uploadedFile.name}</span>
+                            <span className="text-slate-400 text-[9px]">{uploadedFile.size} &bull; Ready for Pipeline Handoff</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenExecutivePipelineModal('phoenix')}
+                          className="px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border border-teal-500/50 rounded-lg font-bold uppercase text-[9px] shrink-0 transition"
+                        >
+                          Hand Over This File
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Recent Dispatch Results */}
+                    {lastExecutiveDispatchResult && (
+                      <div className="p-3.5 bg-emerald-950/20 border border-emerald-500/40 rounded-xl space-y-2 text-[10px] text-emerald-300">
+                        <div className="flex items-center justify-between font-bold">
+                          <div className="flex items-center gap-1.5">
+                            <Check className="w-4 h-4 text-emerald-400" />
+                            <span>Pipeline Completed by {lastExecutiveDispatchResult.dispatcherName}:</span>
+                          </div>
+                          <span className="font-mono text-[9px] text-slate-400">
+                            SHA-256: {lastExecutiveDispatchResult.template.sourceSha256.slice(0, 16)}...
+                          </span>
+                        </div>
+                        <p className="text-slate-300 text-[9.5px] font-sans leading-relaxed">
+                          {lastExecutiveDispatchResult.executiveSummary}
+                        </p>
+                        <div className="pt-1 flex flex-wrap items-center gap-2 text-[9px] font-mono">
+                          <span className="px-2 py-0.5 bg-slate-900 rounded border border-emerald-500/30 text-emerald-300">
+                            QA Sentinel: 100% Passed (Zero Deviation)
+                          </span>
+                          <span className="px-2 py-0.5 bg-slate-900 rounded border border-teal-500/30 text-teal-300">
+                            {lastExecutiveDispatchResult.template.fieldMappings.length} Fields Mapped
+                          </span>
+                          <span className="px-2 py-0.5 bg-slate-900 rounded border border-amber-500/30 text-amber-300">
+                            Populated: {lastExecutiveDispatchResult.populatedOutput.populatedFieldCount}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : staffWorkspaceMode === 'drive' ? (
                   <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                     {renderGoogleDriveSuite()}
                   </div>
@@ -5933,6 +6219,16 @@ EVE has completed document synchronization audit:
           </div>
         )}
       </AnimatePresence>
+
+      {/* 8-Agent Interactive Dialogue Pop-up Modal */}
+      <EightAgentsDialogueModal
+        isOpen={showEightAgentsModal}
+        onClose={() => setShowEightAgentsModal(false)}
+        initialAgentId={dialogueModalAgentId}
+        onOpenExecutiveHandOff={(dispatcher) => {
+          handleOpenExecutivePipelineModal(dispatcher);
+        }}
+      />
 
     </div>
   );

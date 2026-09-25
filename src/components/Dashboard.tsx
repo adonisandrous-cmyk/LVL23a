@@ -336,6 +336,14 @@ export default function Dashboard({
 
           <div className="flex items-center gap-2.5 flex-wrap">
             <button
+              onClick={() => setActiveTab('phoenix_pipeline')}
+              className="rounded-none border-2 border-amber-500 bg-[#160f04] text-amber-300 font-mono text-xs font-bold uppercase py-2 px-4 shadow-[4px_4px_0px_#f59e0b] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_5px_0px_#f59e0b] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all cursor-pointer shrink-0 flex items-center gap-1.5"
+            >
+              <span>8-Agent Pipeline</span>
+              <span className="text-[9px] px-1 bg-amber-500/20 text-amber-200 border border-amber-500/40">PHOENIX 23</span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('workspace')}
               className={sharp3DButton}
             >

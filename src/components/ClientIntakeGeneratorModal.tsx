@@ -581,15 +581,7 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
       sampleValues['urgency_deadlines'] = 'Demand letter deadline set for August 15, 2026.';
     }
 
-    // Populate all input IDs
-    activeFormSchema.sections.forEach(sec => {
-      sec.fields.forEach(f => {
-        if (!sampleValues[f.id]) {
-          sampleValues[f.id] = `Sample response for ${f.label}`;
-        }
-      });
-    });
-
+    // Rule 5: Never guess or fabricate placeholder answers. Leave unmapped fields blank.
     setFieldValues(sampleValues);
     setIsAutoFilledSample(true);
   };
@@ -755,39 +747,41 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
 
     let fl120Payload: FL120IntakeData | undefined = undefined;
     if (isFl120) {
+      const hasChildren = fieldValues['has_minor_children'] ? !fieldValues['has_minor_children'].toLowerCase().includes('no') : false;
+      const parsedChildren = fieldValues['minor_children_details']
+        ? [{ name: fieldValues['minor_children_details'], birthdate: '', age: 0 }]
+        : [];
+
       fl120Payload = {
-        caseNumber: fieldValues['case_number'] || '26FL008921',
-        courtCounty: fieldValues['court_county'] || 'Orange County Superior Court',
-        branchName: 'Lamoreaux Justice Center',
-        petitionerName: fieldValues['petitioner_name'] || 'Jane Doe',
+        caseNumber: fieldValues['case_number'] || '',
+        courtCounty: fieldValues['court_county'] || '',
+        branchName: fieldValues['branch_name'] || '',
+        petitionerName: fieldValues['petitioner_name'] || '',
         respondentName: fieldValues['respondent_name'] || clientName,
-        proceedingType: 'Dissolution',
-        legalRelationship: 'Marriage',
-        residenceRequirementMet: fieldValues['residence_req_met']?.includes('Yes') ?? true,
-        dateOfMarriage: fieldValues['date_marriage'] || '2012-06-15',
-        dateOfSeparation: fieldValues['date_separation'] || '2026-04-10',
-        durationYears: 13,
-        durationMonths: 9,
-        hasMinorChildren: fieldValues['has_minor_children'] ? !fieldValues['has_minor_children'].includes('No') : true,
-        minorChildren: [
-          { name: 'Emma Doe', birthdate: '2015-05-12', age: 11 },
-          { name: 'Lucas Doe', birthdate: '2018-09-20', age: 7 }
-        ],
-        uccjeaFormRequired: true,
-        legalGrounds: 'Irreconcilable Differences',
-        custodyLegal: (fieldValues['custody_legal']?.includes('Sole') ? 'Respondent' : 'Joint') as any,
-        custodyPhysical: (fieldValues['custody_physical']?.includes('Sole') ? 'Respondent' : 'Joint') as any,
-        visitationRequested: fieldValues['visitation_requested'] || 'Reasonable visitation per FL-311 parenting attachment; alternating holidays and summer recess',
-        childSupportRequested: true,
-        spousalSupportRequested: 'Reserve',
-        separatePropertyConfirmed: true,
-        separatePropertyNotes: fieldValues['separate_property_notes'] || 'Confirm Respondent separate property per Fam. Code § 770 (pre-marital inheritance and 401k pre-2012)',
-        communityPropertyDivision: true,
-        communityPropertyNotes: fieldValues['community_property_notes'] || 'Divide community estate equally including marital residence (200 Coastal Way, Newport Beach) and joint investment portfolio',
-        attorneyFeesPayableBy: 'Petitioner',
+        proceedingType: (fieldValues['proceeding_type'] as any) || 'Dissolution',
+        legalRelationship: (fieldValues['legal_relationship'] as any) || 'Marriage',
+        residenceRequirementMet: fieldValues['residence_req_met']?.includes('Yes') ?? false,
+        dateOfMarriage: fieldValues['date_marriage'] || '',
+        dateOfSeparation: fieldValues['date_separation'] || '',
+        durationYears: 0,
+        durationMonths: 0,
+        hasMinorChildren: hasChildren,
+        minorChildren: parsedChildren,
+        uccjeaFormRequired: hasChildren,
+        legalGrounds: (fieldValues['legal_grounds'] as any) || 'Irreconcilable Differences',
+        custodyLegal: (fieldValues['custody_legal']?.includes('Sole') ? 'Respondent' : (fieldValues['custody_legal'] ? 'Joint' : undefined)) as any,
+        custodyPhysical: (fieldValues['custody_physical']?.includes('Sole') ? 'Respondent' : (fieldValues['custody_physical'] ? 'Joint' : undefined)) as any,
+        visitationRequested: fieldValues['visitation_requested'] || '',
+        childSupportRequested: hasChildren,
+        spousalSupportRequested: (fieldValues['spousal_support'] as any) || undefined,
+        separatePropertyConfirmed: Boolean(fieldValues['separate_property_notes']),
+        separatePropertyNotes: fieldValues['separate_property_notes'] || '',
+        communityPropertyDivision: Boolean(fieldValues['community_property_notes']),
+        communityPropertyNotes: fieldValues['community_property_notes'] || '',
+        attorneyFeesPayableBy: (fieldValues['attorney_fees'] as any) || undefined,
         formerNameRestored: fieldValues['former_name_restored'] || '',
         abbyyExtractionTimestamp: new Date().toISOString(),
-        abbyyBatchId: `ABBYY-FL120-${Date.now().toString().slice(-6)}`
+        abbyyBatchId: `PHOENIX-8AGENT-${Date.now().toString().slice(-6)}`
       };
       newClientObj.fl120Data = fl120Payload;
     }
@@ -802,7 +796,7 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
         title: isFl120 
           ? `FL-120 Dissolution Response — ${clientName} v. ${fieldValues['petitioner_name'] || 'Petitioner'}` 
           : fieldValues['matter_subject'] || fieldValues['matter_title'] || fieldValues['immigration_goal'] || `${selectedCategory} Legal Matter`,
-        caseNumber: isFl120 ? (fieldValues['case_number'] || '26FL008921') : `MAT-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        caseNumber: isFl120 ? (fieldValues['case_number'] || '') : `MAT-2026-${Math.floor(1000 + Math.random() * 9000)}`,
         clientId: newClientId,
         clientName: clientName,
         practiceArea: isFl120 ? 'Family Law' : selectedCategory === 'Immigration' ? 'Immigration' : selectedCategory === 'Family Law' ? 'Family Law' : 'General Practice',
@@ -810,12 +804,12 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
         billingRate: 350,
         billedHours: 1.5,
         description: isFl120
-          ? `Judicial Council FL-120 Response pleading and preliminary disclosures for ${clientName}. Case: ${fieldValues['case_number'] || '26FL008921'}.`
+          ? `Judicial Council FL-120 Response pleading and preliminary disclosures for ${clientName}. Case: ${fieldValues['case_number'] || '[Blank — Case Number Requested]'}.`
           : fieldValues['incident_summary'] || fieldValues['dispute_summary'] || fieldValues['spouse_family_info'] || 'New client intake initialized.',
         createdAt: new Date().toISOString(),
         tasks: [
-          { id: 't1', title: isFl120 ? 'Verify ABBYY FL-120 OCR extracted schedule' : 'Review completed AI Client Intake Dossier', completed: true, dueDate: 'Today' },
-          { id: 't2', title: isFl120 ? 'Serve Form FL-120 Response & FL-105 UCCJEA on Petitioner' : 'Prepare Judicial Council / Federal Court Forms', completed: false, dueDate: '3 Days' }
+          { id: 't1', title: isFl120 ? 'Verify FL-120 8-Agent Extracted Schedule' : 'Review completed AI Client Intake Dossier', completed: true, dueDate: 'Today' },
+          { id: 't2', title: isFl120 ? 'Serve Form FL-120 Response on Petitioner' : 'Prepare Judicial Council / Federal Court Forms', completed: false, dueDate: '3 Days' }
         ]
       };
       onAddMatter(newMatterObj);
@@ -836,58 +830,52 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
       // If FL-120, also generate the official ready-to-file Form FL-120 Response pleading
       if (isFl120 && fl120Payload) {
         const fl = fl120Payload;
-        const fl120Pleading = `SUPERIOR COURT OF CALIFORNIA, COUNTY OF ${fl.courtCounty || 'ORANGE'}
-BRANCH: ${fl.branchName || 'Lamoreaux Justice Center, 341 The City Dr S, Orange, CA 92868'}
+        const reqStr = (val?: string) => (val && val.trim() ? val : '[Blank — Further Information Requested]');
+        const fl120Pleading = `SUPERIOR COURT OF CALIFORNIA, COUNTY OF ${fl.courtCounty ? fl.courtCounty.toUpperCase() : '[Blank — Further Information Requested]'}
+BRANCH: ${fl.branchName || '[Blank — Further Information Requested]'}
 
-PETITIONER: ${fl.petitionerName || 'Jane Doe'}
-RESPONDENT: ${fl.respondentName || clientName}
+PETITIONER: ${reqStr(fl.petitionerName)}
+RESPONDENT: ${reqStr(fl.respondentName || clientName)}
 
 RESPONSE TO PETITION FOR DISSOLUTION OF MARRIAGE (FL-120)
-CASE NUMBER: ${fl.caseNumber || '26FL008921'}
+CASE NUMBER: ${reqStr(fl.caseNumber)}
 
 1. LEGAL RELATIONSHIP:
    [X] a. We are married.
 
 2. RESIDENCE REQUIREMENTS:
-   [X] a. Petitioner has been a resident of this state for at least 6 months and of this county for at least 3 months.
-   [X] b. Respondent has been a resident of this state for at least 6 months and of this county for at least 3 months.
+   [${fl.residenceRequirementMet ? 'X' : ' '}] a. Residence requirements met.
 
 3. STATISTICAL FACTS:
-   a. Date of marriage: ${fl.dateOfMarriage || '06/15/2012'}
-   b. Date of separation: ${fl.dateOfSeparation || '04/10/2026'}
-   c. Duration: ${fl.durationYears || 13} years, ${fl.durationMonths || 9} months
+   a. Date of marriage: ${reqStr(fl.dateOfMarriage)}
+   b. Date of separation: ${reqStr(fl.dateOfSeparation)}
+   c. Duration: ${fl.durationYears || fl.durationMonths ? `${fl.durationYears} years, ${fl.durationMonths} months` : '[Blank — Further Information Requested]'}
 
 4. MINOR CHILDREN:
-   [X] a. There are minor children of the marriage:
-       - Emma Doe, DOB: 05/12/2015, Age 11
-       - Lucas Doe, DOB: 09/20/2018, Age 7
-   [X] b. UCCJEA Declaration (Form FL-105) is attached.
+   ${fl.hasMinorChildren ? `[X] Minor children declared: ${fl.minorChildren.map(c => c.name).join('; ') || '[Blank — Details Requested]'}\n   [X] UCCJEA Declaration (Form FL-105) Required` : '[ ] No minor children declared'}
 
 5. LEGAL GROUNDS (Family Code § 2310):
-   [X] a. Irreconcilable differences.
+   [X] a. ${fl.legalGrounds || 'Irreconcilable differences'}
 
 6. CUSTODY AND VISITATION:
-   a. Legal custody to: [X] Joint (Petitioner and Respondent)
-   b. Physical custody to: [X] Joint (Petitioner and Respondent)
-   c. Child visitation: [X] As requested in Form FL-311 (Parenting Plan Attachment).
-      Terms: ${fl.visitationRequested}
+   a. Legal custody to: ${reqStr(fl.custodyLegal)}
+   b. Physical custody to: ${reqStr(fl.custodyPhysical)}
+   c. Child visitation: ${reqStr(fl.visitationRequested)}
 
 7. CHILD SUPPORT:
-   [X] The court may make orders for support of the children and issue earnings assignment.
+   [${fl.hasMinorChildren ? 'X' : ' '}] The court may make orders for support of the children and issue earnings assignment.
 
 8. SPOUSAL SUPPORT:
-   [X] Reserve for future determination the issue of support payable to Respondent.
+   ${fl.spousalSupportRequested ? `[X] ${fl.spousalSupportRequested}` : '[Blank — Further Information Requested]'}
 
 9. SEPARATE PROPERTY:
-   [X] Confirm separate property per Family Code § 770:
-       ${fl.separatePropertyNotes}
+   ${fl.separatePropertyNotes ? `[X] Confirm separate property per Family Code § 770:\n       ${fl.separatePropertyNotes}` : '[Blank — None Declared / Further Information Requested]'}
 
 10. COMMUNITY AND QUASI-COMMUNITY ASSETS AND DEBTS:
-    [X] Determine rights to community and quasi-community assets:
-        ${fl.communityPropertyNotes}
+    ${fl.communityPropertyNotes ? `[X] Determine rights to community and quasi-community assets:\n        ${fl.communityPropertyNotes}` : '[Blank — None Declared / Further Information Requested]'}
 
 11. OTHER ORDERS:
-    [X] Attorney fees and costs: Petitioner to contribute pursuant to Family Code § 2030 / 2032.
+    ${fl.attorneyFeesPayableBy ? `[X] Attorney fees and costs: ${fl.attorneyFeesPayableBy}` : '[Blank — Further Information Requested]'}
     ${fl.formerNameRestored ? `[X] Restore former legal name: ${fl.formerNameRestored}` : ''}
 
 I declare under penalty of perjury under the laws of the State of California that the foregoing is true and correct.
@@ -1056,34 +1044,37 @@ Attorney for Respondent: Alex, Esq. (State Bar No. 232323)`;
                 const selectedName = e.target.value;
                 const client = clients?.find(c => c.name === selectedName);
                 if (client) {
-                  if (client.name.includes('Jane Doe')) {
-                    handleSelectCategory('Family Law');
-                    setFieldValues({
-                      client_name: 'Jane Doe',
-                      dob: '11/14/1985',
-                      address: '100 Main Street, Suite 200, Santa Ana, CA 92701',
-                      email: 'jane.doe@example.com',
-                      phone: '+1 (555) 019-2831',
-                      respondent_name: 'John Doe',
-                      respondent_dob: '04/22/1983',
-                      respondent_address: '200 Coastal Way, Newport Beach, CA 92660',
-                      jurisdictional_basis: 'California Family Code Section 300 (6 Mo CA / 3 Mo Orange County verified)',
-                      county_filing: 'Superior Court of California, County of Orange',
-                      marriage_date: '06/15/2012',
-                      separation_date: '04/10/2026',
-                      children: 'Minor children declared in confidential disclosure',
-                      custody_preference: 'Joint Legal Custody & Primary Physical Custody to Jane Doe',
-                      matter_summary: 'FL-100 Dissolution of Marriage Petition under CA Fam Code § 300'
-                    });
-                    setIsAutoFilledSample(true);
-                  } else {
-                    setFieldValues(prev => ({
-                      ...prev,
-                      client_name: client.name,
-                      email: client.email,
-                      phone: client.phone
-                    }));
+                  // Strictly extract verified data from client object without fabricating placeholders
+                  const newVals: Record<string, string> = {
+                    client_name: client.name || '',
+                    email: client.email || '',
+                    phone: client.phone || '',
+                    phone_number: client.phone || ''
+                  };
+
+                  if (client.practiceArea) {
+                    if (client.practiceArea.includes('Immigration')) handleSelectCategory('Immigration');
+                    else if (client.practiceArea.includes('Family') || client.practiceArea.includes('FL-120')) handleSelectCategory('FL-120 Response');
+                    else handleSelectCategory('General');
                   }
+
+                  if (client.fl120Data) {
+                    const fl = client.fl120Data;
+                    if (fl.caseNumber) newVals['case_number'] = fl.caseNumber;
+                    if (fl.courtCounty) newVals['court_county'] = fl.courtCounty;
+                    if (fl.petitionerName) newVals['petitioner_name'] = fl.petitionerName;
+                    if (fl.respondentName) newVals['respondent_name'] = fl.respondentName;
+                    if (fl.dateOfMarriage) newVals['date_marriage'] = fl.dateOfMarriage;
+                    if (fl.dateOfSeparation) newVals['date_separation'] = fl.dateOfSeparation;
+                    if (fl.custodyLegal) newVals['custody_legal'] = fl.custodyLegal;
+                    if (fl.custodyPhysical) newVals['custody_physical'] = fl.custodyPhysical;
+                    if (fl.visitationRequested) newVals['visitation_requested'] = fl.visitationRequested;
+                    if (fl.communityPropertyNotes) newVals['community_property_notes'] = fl.communityPropertyNotes;
+                    if (fl.separatePropertyNotes) newVals['separate_property_notes'] = fl.separatePropertyNotes;
+                  }
+
+                  setFieldValues(newVals);
+                  setIsAutoFilledSample(false);
                 }
               }}
               className="bg-[#070b13] border border-amber-500/50 text-amber-200 font-mono font-bold px-3 py-1.5 rounded-lg text-xs outline-none focus:border-amber-400 cursor-pointer min-w-[220px]"

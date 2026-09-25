@@ -1,0 +1,104 @@
+{
+  "client": {
+    "id": "CL-8921",
+    "first_name": "Christopher",
+    "middle_name": "Edward",
+    "last_name": "Guinto",
+    "full_name": "Christopher Edward Guinto",
+    "role": "Respondent",
+    "phone": "(415) 890-2134",
+    "email": "c.guinto@nexuslegal.internal",
+    "address": {
+      "street": "742 Evergreen Terrace",
+      "city": "San Francisco",
+      "state": "CA",
+      "zip": "94107"
+    }
+  },
+  "opposing_party": {
+    "first_name": "Maria",
+    "middle_name": "Elena",
+    "last_name": "Guinto",
+    "full_name": "Maria Elena Guinto",
+    "role": "Petitioner",
+    "phone": "(415) 771-9920",
+    "email": "m.guinto@baylawcorp.com",
+    "address": {
+      "street": "1200 Market Street, Suite 400",
+      "city": "San Francisco",
+      "state": "CA",
+      "zip": "94102"
+    }
+  },
+  "attorney": {
+    "name": "Sarah Jenkins, Esq.",
+    "firm_name": "Nexus Family Law Group, LLP",
+    "bar_number": "284910",
+    "street": "500 Montgomery Street, Suite 800",
+    "city": "San Francisco",
+    "state": "CA",
+    "zip": "94111",
+    "phone": "(415) 555-0199",
+    "fax": "(415) 555-0198",
+    "email": "sjenkins@nexuslaw.com",
+    "representing": "Respondent (Christopher Guinto)"
+  },
+  "case": {
+    "number": "FDI-24-789012",
+    "county": "San Francisco",
+    "court_name": "Superior Court of California, County of San Francisco",
+    "branch_name": "Civic Center Courthouse",
+    "court_street": "400 McAllister Street, Room 103",
+    "court_mailing": "400 McAllister Street, Room 103",
+    "court_city_zip": "San Francisco, CA 94102",
+    "title_petitioner": "MARIA ELENA GUINTO",
+    "title_respondent": "CHRISTOPHER EDWARD GUINTO"
+  },
+  "proceeding": {
+    "type": "Dissolution of Marriage",
+    "date_of_marriage": "06/14/2014",
+    "date_of_separation": "08/20/2024",
+    "filing_party": "Petitioner",
+    "responsive_party": "Respondent"
+  },
+  "request_for_order": {
+    "requested_by": "Petitioner",
+    "hearing": {
+      "date": "10/15/2026",
+      "time": "09:00 AM",
+      "dept": "Room 404",
+      "address": "400 McAllister Street, San Francisco, CA 94102"
+    },
+    "orders_requested": {
+      "child_custody": true,
+      "child_visitation": true,
+      "child_support": true,
+      "spousal_support": false,
+      "property_control": true,
+      "attorney_fees": true,
+      "other": false
+    },
+    "temporary_emergency_orders_requested": false,
+    "facts_in_support": "Petitioner requests modification of physical custody to a shared 2-2-3 schedule pursuant to Family Code Section 3040. Both parties are actively engaged and reside within 3 miles of the minor children's school.",
+    "custody_details": "Joint legal and joint physical custody of the minor children pursuant to the attached FL-311 parenting schedule.",
+    "property_details": "Exclusive temporary possession and use of the 2022 Audi e-tron vehicle pending final property division."
+  },
+  "children": [
+    {
+      "first_name": "Lucas",
+      "last_name": "Guinto",
+      "full_name": "Lucas Guinto",
+      "birthdate": "04/12/2017",
+      "age": 9,
+      "gender": "Male"
+    },
+    {
+      "first_name": "Chloe",
+      "last_name": "Guinto",
+      "full_name": "Chloe Guinto",
+      "birthdate": "09/28/2019",
+      "age": 6,
+      "gender": "Female"
+    }
+  ]
+}
