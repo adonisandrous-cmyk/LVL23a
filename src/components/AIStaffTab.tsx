@@ -63,7 +63,6 @@ import { LegalMessage, VoiceAgentProfile, AgentProgress, Client, Matter, AgentEx
 import { AssignExtractionTaskModal } from './AssignExtractionTaskModal';
 import { OfficialCaliforniaJudicialCouncilFormModal } from './OfficialCaliforniaJudicialCouncilFormModal';
 import { ExecutivePipelineHandOffModal } from './ExecutivePipelineHandOffModal';
-import { EightAgentsDialogueModal } from './EightAgentsDialogueModal';
 import { ExecutiveDispatchResult } from '../services/phoenixEngine/ExecutivePipelineBridge';
 import { audioService } from '../services/audioPlaybackService';
 import { getAccessToken } from '../lib/driveAuth';
@@ -352,9 +351,6 @@ export default function AIStaffTab({
   const [staffDriveTab, setStaffDriveTab] = useState<'files' | 'editor'>('files');
   const [staffWorkspaceMode, setStaffWorkspaceMode] = useState<'drive' | 'context' | 'pipeline'>('drive');
 
-  // 8-Agent Dialogue Pop-up Modal State
-  const [showEightAgentsModal, setShowEightAgentsModal] = useState<boolean>(false);
-  const [dialogueModalAgentId, setDialogueModalAgentId] = useState<string>('agent_1_ingestion');
 
   // Executive 8-Agent Pipeline Bridge State for Phoenix and Eve
   const [showExecutivePipelineModal, setShowExecutivePipelineModal] = useState<boolean>(false);
@@ -4070,17 +4066,6 @@ EVE has completed document synchronization audit:
                       <span>⚡ Hand Document to 8-Agent Pipeline & Issue Intake Directives</span>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDialogueModalAgentId('agent_3_extraction');
-                        setShowEightAgentsModal(true);
-                      }}
-                      className="w-full py-2 bg-slate-900 hover:bg-slate-850 border border-slate-700 hover:border-amber-400/50 text-slate-300 hover:text-amber-200 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 transition cursor-pointer"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-                      <span>💬 Open 8-Agent Dialogue Pop-Up</span>
-                    </button>
 
                     {/* Quick Sample Document Hand-offs */}
                     <div className="space-y-1.5 pt-1">
@@ -4263,17 +4248,6 @@ EVE has completed document synchronization audit:
                       <span>⚡ Hand Document to 8-Agent Pipeline & Issue Litigation Directives</span>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDialogueModalAgentId('agent_1_ingestion');
-                        setShowEightAgentsModal(true);
-                      }}
-                      className="w-full py-2.5 bg-slate-900 hover:bg-slate-850 border border-slate-700 hover:border-amber-400/50 text-slate-300 hover:text-amber-200 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 transition cursor-pointer"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-                      <span>💬 Open 8-Agent Dialogue Pop-Up</span>
-                    </button>
 
                     {/* If a reference document is already active in staff workspace */}
                     {uploadedFile && (
@@ -6220,15 +6194,6 @@ EVE has completed document synchronization audit:
         )}
       </AnimatePresence>
 
-      {/* 8-Agent Interactive Dialogue Pop-up Modal */}
-      <EightAgentsDialogueModal
-        isOpen={showEightAgentsModal}
-        onClose={() => setShowEightAgentsModal(false)}
-        initialAgentId={dialogueModalAgentId}
-        onOpenExecutiveHandOff={(dispatcher) => {
-          handleOpenExecutivePipelineModal(dispatcher);
-        }}
-      />
 
     </div>
   );

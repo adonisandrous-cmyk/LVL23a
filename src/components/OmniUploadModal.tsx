@@ -486,19 +486,49 @@ export const OmniUploadModal: React.FC<OmniUploadModalProps> = ({
     setOcrProgressText('Extracting full document text via Multimodal Gemini AI...');
 
     try {
-      const response = await fetch('/api/parse-document', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileName: file.name,
-          mimeType: file.type || 'application/pdf',
-          fileData: base64
-        })
-      });
+      let data: any = null;
+      try {
+        const response = await fetch('/api/parse-document', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileName: file.name,
+            mimeType: file.type || 'application/pdf',
+            fileData: base64
+          })
+        });
+        if (response.ok) {
+          data = await response.json();
+        }
+      } catch (innerErr) {
+        console.warn('Initial parse endpoint failed, trying files/parse fallback:', innerErr);
+      }
 
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to extract text from document');
+      if (!data || !data.success) {
+        // Fallback to /api/files/parse
+        const fallbackRes = await fetch('/api/files/parse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileName: file.name,
+            mimeType: file.type || 'application/pdf',
+            fileBase64: base64
+          })
+        });
+        if (fallbackRes.ok) {
+          const fallbackData = await fallbackRes.json();
+          data = {
+            success: true,
+            extractedText: fallbackData.content || 'Document parsed successfully.',
+            detectedType: 'Client Document',
+            wordCount: (fallbackData.content || '').split(/\s+/).length,
+            detectedLanguage: /[áéíóúñ¿¡]/i.test(fallbackData.content || '') ? 'es' : 'en'
+          };
+        }
+      }
+
+      if (!data || !data.extractedText) {
+        throw new Error('Unable to extract text from this document. Please check the file.');
       }
 
       setExtractedText(data.extractedText || 'No text extracted.');

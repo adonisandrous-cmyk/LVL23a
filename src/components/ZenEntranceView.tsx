@@ -49,7 +49,6 @@ import { LegalMessage, Client, Matter, GeneratedDocument } from '../types';
 import level23Logo from '../assets/images/level23_phoenix_logo_1786736100367.jpg';
 import { audioService } from '../services/audioPlaybackService';
 import { AudioTroubleshooterModal } from './AudioTroubleshooterModal';
-import { EightAgentsDialogueModal } from './EightAgentsDialogueModal';
 import { ExecutivePipelineHandOffModal } from './ExecutivePipelineHandOffModal';
 import { ExecutiveDispatchResult } from '../services/phoenixEngine/ExecutivePipelineBridge';
 
@@ -205,9 +204,7 @@ export default function ZenEntranceView({
   const [copiedText, setCopiedText] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 8-Agent Dialogue Pop-up & Executive Pipeline Modal states
-  const [showEightAgentsModal, setShowEightAgentsModal] = useState<boolean>(false);
-  const [dialogueModalAgentId, setDialogueModalAgentId] = useState<string>('agent_1_ingestion');
+  // Executive Pipeline Modal state
   const [showExecutivePipelineModal, setShowExecutivePipelineModal] = useState<boolean>(false);
   const [lastDispatchResult, setLastDispatchResult] = useState<ExecutiveDispatchResult | null>(null);
   
@@ -1058,19 +1055,7 @@ export default function ZenEntranceView({
               <Workflow className="w-3 h-3 text-amber-400" />
               <span>8-Agent Pipeline</span>
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setDialogueModalAgentId('agent_1_ingestion');
-                setShowEightAgentsModal(true);
-              }}
-              className="px-2.5 py-1 bg-gradient-to-r from-amber-500/20 to-yellow-500/10 hover:from-amber-500/30 hover:to-yellow-500/20 text-amber-300 hover:text-amber-200 rounded-lg border border-amber-500/50 cursor-pointer flex items-center gap-1.5 transition-colors shadow-sm"
-              title="Open interactive pop-up dialogue with each of the 8 specialized document automation agents"
-            >
-              <MessageSquare className="w-3 h-3 text-amber-400 animate-pulse" />
-              <span>8 Agents Dialogue</span>
-              <span className="text-[8.5px] px-1 py-0.2 bg-amber-500/20 rounded border border-amber-500/30 text-amber-300 font-bold uppercase">Pop-Up</span>
-            </button>
+
             <button
               type="button"
               onClick={() => setShowExecutivePipelineModal(true)}
@@ -2065,12 +2050,6 @@ export default function ZenEntranceView({
         </div>
       )}
 
-      {/* 8-Agent Interactive Dialogue Pop-up Modal */}
-      <EightAgentsDialogueModal
-        isOpen={showEightAgentsModal}
-        onClose={() => setShowEightAgentsModal(false)}
-        initialAgentId={dialogueModalAgentId}
-      />
 
       {/* Executive Pipeline Hand-Off Modal for Phoenix & EVE */}
       <ExecutivePipelineHandOffModal

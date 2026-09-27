@@ -50,7 +50,6 @@ import { PhoenixModularStudio } from './components/PhoenixModularStudio';
 import { OfficialCaliforniaJudicialCouncilFormModal } from './components/OfficialCaliforniaJudicialCouncilFormModal';
 import { UniversalPipelineStudio } from './components/UniversalPipelineStudio';
 import { PhoenixEightAgentStudio } from './components/PhoenixEightAgentStudio';
-import { EightAgentsDialogueModal } from './components/EightAgentsDialogueModal';
 import { ExecutivePipelineHandOffModal } from './components/ExecutivePipelineHandOffModal';
 import { Scale, BookOpen, Database, CloudOff, CloudLightning, Lock, Unlock, UploadCloud, Languages, Globe, ShieldCheck } from 'lucide-react';
 import { startPeriodicDriveSync } from './services/driveSyncService';
@@ -60,8 +59,6 @@ import { db, ensureAuthenticated, handleFirestoreError, OperationType, sanitizeF
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
-  const [showEightAgentsDialogueModal, setShowEightAgentsDialogueModal] = useState<boolean>(false);
-  const [eightAgentsDialogueInitialId, setEightAgentsDialogueInitialId] = useState<string>('agent_1_ingestion');
   const [showExecutiveHandOffModal, setShowExecutiveHandOffModal] = useState<boolean>(false);
   const [isZenEntranceMode, setIsZenEntranceMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -1496,20 +1493,6 @@ Petitioner Signature: Jane Doe`,
                     }}
                   />
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEightAgentsDialogueInitialId('agent_1_ingestion');
-                      setShowEightAgentsDialogueModal(true);
-                      addLog('system', '8-Agent Interactive Dialogue pop-up launched from header tray.');
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500/20 via-yellow-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-yellow-500/30 border border-amber-500/50 hover:border-amber-400 text-amber-200 rounded-xl text-xs font-mono font-bold uppercase transition-all cursor-pointer shadow-[0_0_12px_rgba(245,158,11,0.2)]"
-                    title="Open interactive pop-up dialogue with each of the 8 Level 23 Document Automation Agents"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-                    <span className="hidden md:inline">8 Agents Dialogue</span>
-                    <span className="bg-amber-500/20 text-amber-300 text-[9px] px-1 py-0.5 rounded border border-amber-500/30">POP-UP</span>
-                  </button>
 
                   <button
                     type="button"
@@ -1652,7 +1635,16 @@ Petitioner Signature: Jane Doe`,
                   )}
 
                   {activeTab === 'pipeline' && (
-                    <UniversalPipelineStudio key="pipeline" />
+                    <UniversalPipelineStudio
+                      key="pipeline"
+                      clients={clients}
+                      selectedClientId={selectedOfficialClient?.id}
+                      onSelectClient={(id) => {
+                        const found = clients.find((c) => c.id === id);
+                        if (found) setSelectedOfficialClient(found);
+                      }}
+                      onAddGeneratedDoc={handleAddGeneratedDoc}
+                    />
                   )}
 
                   {activeTab === 'modules' && (
@@ -2159,17 +2151,6 @@ Petitioner Signature: Jane Doe`,
         }}
       />
 
-      {/* 8-Agent Interactive Dialogue Pop-up Modal */}
-      <EightAgentsDialogueModal
-        isOpen={showEightAgentsDialogueModal}
-        onClose={() => setShowEightAgentsDialogueModal(false)}
-        initialAgentId={eightAgentsDialogueInitialId}
-        onOpenExecutiveHandOff={(dispatcher) => {
-          setShowEightAgentsDialogueModal(false);
-          setShowExecutiveHandOffModal(true);
-          addLog('system', `Executive Hand-Off modal launched for ${dispatcher.toUpperCase()} from 8-Agent Dialogue.`);
-        }}
-      />
 
       {/* Executive Pipeline Hand-Off Modal (Phoenix & EVE Directive Control) */}
       <ExecutivePipelineHandOffModal
