@@ -77,7 +77,7 @@ Street Address: {{Court Address}}
 NOTICE TO RESPONDENT: {{Respondent Name}}
 You are being sued by PETITIONER: {{Petitioner Name}}
 
-You have 30 CALENDAR DAYS after this Summons and Petition are served on you to file a Response (Form FL-120).
+You have 30 CALENDAR DAYS after this Summons and Petition are served on you to file a Response.
 
 STANDARD FAMILY LAW RESTRAINING ORDERS:
 Starting immediately, you and your spouse are restrained from removing minor children from California, transferring or concealing property, or altering insurance policies.
@@ -625,7 +625,7 @@ I declare under penalty of perjury under the laws of the State of California tha
 
 1. SERVER NAME: {{Server Name}}
 2. SERVED ON: {{Served Party Name}} ON {{Service Address and Date}}
-3. DOCUMENTS SERVED: FL-100 Petition, FL-110 Summons, FL-105 UCCJEA, and Blank Response FL-120.`
+3. DOCUMENTS SERVED: FL-100 Petition, FL-110 Summons, FL-105 UCCJEA, and Blank Response Form.`
   },
   {
     id: 'ca-fl-335',
@@ -1404,7 +1404,7 @@ export const ALL_RESEARCH_COURT_FORMS: ResearchCourtForm[] = [
     pdfUrl: "https://www.courts.ca.gov/documents/fl311.pdf",
     description: "Attachment detailing specific weekly parenting and drop-off schedules.",
     guidelines: [
-      "Attach to FL-100, FL-120, or FL-300 to define explicit visitation terms."
+      "Attach to FL-100 or FL-300 to define explicit visitation terms."
     ]
   },
   {

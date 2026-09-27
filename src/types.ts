@@ -33,8 +33,8 @@ export interface FL120IntakeData {
   communityPropertyNotes?: string;
   attorneyFeesPayableBy?: 'Petitioner' | 'Respondent' | 'None';
   formerNameRestored?: string;
-  abbyyExtractionTimestamp?: string;
-  abbyyBatchId?: string;
+  extractionTimestamp?: string;
+  batchId?: string;
 }
 
 export interface Client {

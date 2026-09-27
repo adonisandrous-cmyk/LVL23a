@@ -40,8 +40,8 @@ export const INITIAL_CLIENTS_ROSTER: Client[] = [
       communityPropertyNotes: 'Equal division of community estate pursuant to Fam. Code § 2550: Marital residence equity, joint checking and savings accounts, retirement benefits accrued during coverture subject to QDRO',
       attorneyFeesPayableBy: 'None',
       formerNameRestored: '',
-      abbyyExtractionTimestamp: '2026-08-15T09:30:00Z',
-      abbyyBatchId: 'ABBYY-FL120-GUINTO-VERIFIED'
+      extractionTimestamp: '2026-08-15T09:30:00Z',
+      batchId: 'VERIFIED-DOSSIER-GUINTO'
     },
     intakeNotes: `========================================================================
 CLIENT INTAKE MEMORANDUM & CASE FILE: CHRISTOPHER GUINTO
@@ -56,7 +56,7 @@ CLIENT INTAKE MEMORANDUM & CASE FILE: CHRISTOPHER GUINTO
 - Phone: +1 (714) 555-0199
 - Practice Area: Family Law (Dissolution of Marriage)
 
-2. STATUTORY DISSOLUTION PROFILE (FL-120 ET SEQ.)
+2. STATUTORY DISSOLUTION PROFILE
 - Marriage Date: September 18, 2015
 - Separation Date: April 10, 2026 (Duration: 10 yrs, 7 mos)
 - Minor Children:
@@ -75,7 +75,7 @@ CLIENT INTAKE MEMORANDUM & CASE FILE: CHRISTOPHER GUINTO
 export const INITIAL_MATTERS_ROSTER: Matter[] = [
   {
     id: 'm-guinto-1',
-    title: 'Dissolution Response (FL-120 et seq.) — Christopher Guinto',
+    title: 'Dissolution Response — Christopher Guinto',
     caseNumber: '26FL008921',
     clientId: 'c-guinto',
     clientName: 'Christopher Guinto',
@@ -83,12 +83,12 @@ export const INITIAL_MATTERS_ROSTER: Matter[] = [
     status: 'active',
     billingRate: 350,
     billedHours: 3.5,
-    description: 'Judicial Council statutory response forms packet (FL-120, FL-105 UCCJEA, FL-311, FL-140, FL-160) for Christopher Guinto.',
+    description: 'Judicial Council statutory response forms packet (FL-105 UCCJEA, FL-311, FL-140, FL-160) for Christopher Guinto.',
     createdAt: '2026-08-15T10:00:00Z',
     tasks: [
-      { id: 't-g-1', title: 'File FL-120 Response and FL-105 UCCJEA Declaration at Lamoreaux Justice Center', completed: false, dueDate: '2026-09-01' },
+      { id: 't-g-1', title: 'File Dissolution Response and FL-105 UCCJEA Declaration at Lamoreaux Justice Center', completed: false, dueDate: '2026-09-01' },
       { id: 't-g-2', title: 'Serve Preliminary Declaration of Disclosure (FL-140/FL-150) on Petitioner', completed: false, dueDate: '2026-09-15' }
     ],
-    riskAssessment: 'Statutory 30-day response deadline following petition service; timely FL-120 filing required to avoid default.'
+    riskAssessment: 'Statutory 30-day response deadline following petition service; timely response filing required to avoid default.'
   }
 ];

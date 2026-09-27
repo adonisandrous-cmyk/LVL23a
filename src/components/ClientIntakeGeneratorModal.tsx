@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Sparkles,
   X,
@@ -28,7 +28,11 @@ import {
   User,
   HardDrive,
   Languages,
-  FileCheck
+  FileCheck,
+  Upload,
+  UploadCloud,
+  Paperclip,
+  Trash2
 } from 'lucide-react';
 import { Client, Matter, GeneratedDocument, FL120IntakeData } from '../types';
 import { getAccessToken } from '../lib/driveAuth';
@@ -60,53 +64,55 @@ export interface IntakeSectionSchema {
 
 export interface IntakeFormSchema {
   formTitle: string;
-  category: 'Immigration' | 'Family Law' | 'General' | 'Custom' | string;
+  category: 'Civil Litigation' | 'Family Law' | 'Bankruptcy' | 'Immigration' | string;
   description: string;
   aiPromptMessage?: string;
   sections: IntakeSectionSchema[];
 }
 
+export type IntakeCategory = 'Civil Litigation' | 'Family Law' | 'Bankruptcy' | 'Immigration';
+
 // Default Fallback Schemas for instant 100% reliable load
 const DEFAULT_SCHEMAS: Record<string, IntakeFormSchema> = {
-  'Immigration': {
-    formTitle: 'AI Immigration Legal Intake & USCIS Dossier Form',
-    category: 'Immigration',
-    description: 'Tailored intake questionnaire for visa petitions, asylum, naturalization, and adjustment of status.',
-    aiPromptMessage: 'Form generated with required federal immigration fields.',
+  'Civil Litigation': {
+    formTitle: 'Civil Litigation Case Assessment & Intake Form',
+    category: 'Civil Litigation',
+    description: 'Intake questionnaire for civil disputes, breach of contract, tort claims, and court litigation representation.',
+    aiPromptMessage: 'Form generated with standard civil litigation and dispute assessment fields.',
     sections: [
       {
-        sectionTitle: '1. Personal & Identity Records',
+        sectionTitle: '1. Client Contact & Identity Information',
         fields: [
-          { id: 'full_name', label: 'Full Legal Name (as on Passport)', type: 'text', required: true, placeholder: 'e.g., Maria Santos Rodriguez' },
-          { id: 'dob', label: 'Date of Birth', type: 'date', required: true },
-          { id: 'country_birth', label: 'Country of Birth & Citizenship', type: 'text', required: true, placeholder: 'e.g., Mexico / Spain' },
-          { id: 'a_number', label: 'USCIS Alien Registration Number (A-Number)', type: 'text', required: false, placeholder: 'A# 000-000-000 (if assigned)' },
-          { id: 'passport_num', label: 'Passport Number & Expiration', type: 'text', required: true, placeholder: 'Passport # and Exp Date' }
+          { id: 'client_name', label: 'Full Legal Name', type: 'text', required: true, placeholder: 'e.g., Alexander Wright' },
+          { id: 'email', label: 'Email Address', type: 'text', required: true, placeholder: 'client@example.com' },
+          { id: 'phone', label: 'Phone Number', type: 'text', required: true, placeholder: '(555) 234-5678' },
+          { id: 'address', label: 'Mailing Address', type: 'text', required: true, placeholder: 'Street, City, State, ZIP' },
+          { id: 'preferred_contact', label: 'Preferred Contact Method', type: 'select', required: true, options: ['Email', 'Phone Call', 'SMS Text', 'Client Portal'] }
         ]
       },
       {
-        sectionTitle: '2. USCIS Immigration History & Entry',
+        sectionTitle: '2. Incident & Matter Information',
         fields: [
-          { id: 'entry_date', label: 'Most Recent Date of Entry into U.S.', type: 'date', required: true },
-          { id: 'entry_visa', label: 'Visa Class at Entry (e.g. B1/B2, H-1B, F-1, EWI)', type: 'text', required: true, placeholder: 'e.g., B2 Tourist / EWI' },
-          { id: 'i94_exp', label: 'I-94 Record Expiration Date', type: 'date', required: false },
-          { id: 'prior_petitions', label: 'Prior USCIS Petitions or Removal Proceedings', type: 'textarea', required: false, placeholder: 'Detail any prior I-130, I-485, or court appearances...' }
+          { id: 'matter_title', label: 'Matter Title / Dispute Subject', type: 'text', required: true, placeholder: 'e.g., Breach of Commercial Contract' },
+          { id: 'incident_date', label: 'Date of Incident or Agreement', type: 'date', required: true },
+          { id: 'dispute_summary', label: 'Detailed Fact Summary & Legal Issue', type: 'textarea', required: true, placeholder: 'Describe what happened, parties involved, timeline...' },
+          { id: 'opposing_parties', label: 'Opposing Parties / Adverse Entities', type: 'text', required: true, placeholder: 'Name of company or individuals involved' }
         ]
       },
       {
-        sectionTitle: '3. Relief Requested & Family Beneficiaries',
+        sectionTitle: '3. Claims, Damages & Key Deadlines',
         fields: [
-          { id: 'immigration_goal', label: 'Primary Immigration Goal', type: 'select', required: true, options: ['Adjustment of Status (Green Card)', 'Family Petition (I-130)', 'Asylum & Withholding', 'Naturalization (N-400)', 'Work Authorization (I-765)', 'U-Visa / VAWA Relief'] },
-          { id: 'spouse_family_info', label: 'Spouse & Minor Children Details', type: 'textarea', required: false, placeholder: 'Names, DOBs, and immigration status of spouse and children...' }
+          { id: 'damages_amount', label: 'Estimated Monetary Amount in Dispute', type: 'text', required: false, placeholder: 'e.g., $45,000.00' },
+          { id: 'urgency_deadlines', label: 'Upcoming Court Dates or Statutory Deadlines', type: 'text', required: true, placeholder: 'e.g., Statute of limitations / Hearing date' }
         ]
       }
     ]
   },
   'Family Law': {
-    formTitle: 'AI Family Law & Dissolution Intake Questionnaire',
+    formTitle: 'Family Law & Dissolution Intake Questionnaire',
     category: 'Family Law',
-    description: 'Tailored legal intake form covering marriage, separation, minor child custody, and community asset disclosures.',
-    aiPromptMessage: 'Form generated with required California / State Family Code disclosure fields.',
+    description: 'Intake form covering marriage, separation, minor child custody, and community property disclosures.',
+    aiPromptMessage: 'Form generated with standard family law disclosure fields.',
     sections: [
       {
         sectionTitle: '1. Client Contact & Case Identity',
@@ -140,114 +146,81 @@ const DEFAULT_SCHEMAS: Record<string, IntakeFormSchema> = {
       }
     ]
   },
-  'FL-120 Response': {
-    formTitle: 'CA Judicial Council Form FL-120: Response Intake & ABBYY Auto-Extract',
-    category: 'Family Law',
-    description: 'Statutory 11-section intake schema adhering to California Family Code and Judicial Council Form FL-120 requirements.',
-    aiPromptMessage: 'Form calibrated to California Judicial Council Form FL-120 with OCR field mapping.',
+  'Bankruptcy': {
+    formTitle: 'Bankruptcy Intake Questionnaire (Chapter 7 / 13)',
+    category: 'Bankruptcy',
+    description: 'Intake questionnaire covering debtor identity, income, assets, secured/unsecured creditors, and debt discharge objectives.',
+    aiPromptMessage: 'Form generated with required bankruptcy debtor and creditor disclosure fields.',
     sections: [
       {
-        sectionTitle: '1. Caption & Court Jurisdiction',
+        sectionTitle: '1. Debtor Identification & Household',
         fields: [
-          { id: 'petitioner_name', label: 'Petitioner Full Legal Name', type: 'text', required: true, placeholder: 'e.g. Jane Doe' },
-          { id: 'respondent_name', label: 'Respondent Full Legal Name', type: 'text', required: true, placeholder: 'e.g. John Doe' },
-          { id: 'case_number', label: 'Court Case Number', type: 'text', required: true, placeholder: 'e.g. 26FL008921' },
-          { id: 'court_county', label: 'Superior Court of California, County of', type: 'text', required: true, placeholder: 'e.g. Orange County - Lamoreaux Justice Center' }
+          { id: 'full_name', label: 'Full Legal Name', type: 'text', required: true, placeholder: 'Debtor Full Legal Name' },
+          { id: 'ssn_last4', label: 'Social Security Number (Last 4 Digits)', type: 'text', required: true, placeholder: 'XXX-XX-1234' },
+          { id: 'phone', label: 'Phone Number', type: 'text', required: true, placeholder: '(555) 000-0000' },
+          { id: 'email', label: 'Email Address', type: 'text', required: true, placeholder: 'debtor@example.com' },
+          { id: 'residential_address', label: 'Current Residential Address', type: 'text', required: true, placeholder: 'Street, City, State, ZIP' },
+          { id: 'marital_status', label: 'Marital Status', type: 'select', required: true, options: ['Single', 'Married (Filing Jointly)', 'Married (Filing Individually)', 'Separated', 'Divorced'] }
         ]
       },
       {
-        sectionTitle: '2. Legal Relationship & Statistical Facts (Items 1-3)',
+        sectionTitle: '2. Bankruptcy Goals & Prior Filings',
         fields: [
-          { id: 'proceeding_type', label: 'Proceeding Type (Item 1)', type: 'select', required: true, options: ['Dissolution of Marriage', 'Legal Separation', 'Nullity of Marriage'] },
-          { id: 'residence_req_met', label: 'CA Residence Met? (6 mo CA / 3 mo County)', type: 'select', required: true, options: ['Yes - Both CA & County Met', 'No - Insufficient Duration', 'Exempt Under Family Code'] },
-          { id: 'date_marriage', label: 'Date of Marriage (Item 3a)', type: 'date', required: true },
-          { id: 'date_separation', label: 'Date of Separation (Item 3b)', type: 'date', required: true },
-          { id: 'marital_duration', label: 'Marital Duration (Years & Months)', type: 'text', required: true, placeholder: 'e.g. 13 Years, 9 Months' }
+          { id: 'bankruptcy_chapter', label: 'Target Chapter Relief', type: 'select', required: true, options: ['Chapter 7 (Liquidation)', 'Chapter 13 (Wage Earner Plan)', 'Undecided / Attorney Consultation'] },
+          { id: 'prior_filings', label: 'Prior Bankruptcy Filings in Last 8 Years', type: 'text', required: true, placeholder: 'None or detail prior case numbers & discharge dates' },
+          { id: 'pending_garnishments', label: 'Pending Lawsuits, Wage Garnishments, or Foreclosure', type: 'textarea', required: false, placeholder: 'List any active garnishments, collection lawsuits, or sheriff sales...' }
         ]
       },
       {
-        sectionTitle: '3. Minor Children & Custody Prayers (Items 4-6)',
+        sectionTitle: '3. Household Income, Debts & Property',
         fields: [
-          { id: 'has_minor_children', label: 'Minor Children of This Marriage?', type: 'select', required: true, options: ['Yes - Minor Children Declared', 'No Minor Children'] },
-          { id: 'minor_children_details', label: 'Minor Children (Names, DOBs, Ages)', type: 'textarea', required: false, placeholder: 'Emma Doe (DOB: 05/12/2015, Age: 11); Lucas Doe (DOB: 09/20/2018, Age: 7)' },
-          { id: 'custody_legal', label: 'Legal Custody Request (Item 6a)', type: 'select', required: true, options: ['Joint Legal Custody', 'Sole Legal Custody to Respondent', 'Sole Legal Custody to Petitioner'] },
-          { id: 'custody_physical', label: 'Physical Custody Request (Item 6a)', type: 'select', required: true, options: ['Joint Physical Custody', 'Primary Physical to Respondent', 'Primary Physical to Petitioner'] },
-          { id: 'visitation_requested', label: 'Parenting Time / Visitation Schedule (Item 6b)', type: 'text', required: false, placeholder: 'Reasonable visitation per FL-311 parenting attachment; alternating holidays' }
-        ]
-      },
-      {
-        sectionTitle: '4. Support & Property Claims (Items 7-11)',
-        fields: [
-          { id: 'spousal_support', label: 'Spousal Support Request (Item 8)', type: 'select', required: true, options: ['Payable to Respondent', 'Payable to Petitioner', 'Reserve Jurisdiction', 'Terminate Jurisdiction'] },
-          { id: 'separate_property_notes', label: 'Separate Property Confirmation (Item 9b)', type: 'textarea', required: false, placeholder: 'Confirm Respondent separate property per Fam. Code § 770 (pre-marital inheritance and 401k pre-2012)' },
-          { id: 'community_property_notes', label: 'Community Property Division (Item 10b)', type: 'textarea', required: false, placeholder: 'Divide community estate equally including marital residence (200 Coastal Way, Newport Beach) and joint investment portfolio' },
-          { id: 'attorney_fees', label: 'Attorney Fees & Costs (Item 11)', type: 'select', required: true, options: ['Petitioner to contribute per Fam. Code § 2030', 'Respondent to bear own costs', 'Mutual waiver'] },
-          { id: 'former_name_restored', label: 'Restore Former Legal Name (Item 11b)', type: 'text', required: false, placeholder: 'e.g. Leave blank or enter prior legal surname' }
+          { id: 'monthly_household_income', label: 'Gross Monthly Household Income', type: 'text', required: true, placeholder: 'e.g., $4,850.00' },
+          { id: 'unsecured_debt_estimate', label: 'Estimated Unsecured Debt (Credit Cards, Medical, Personal Loans)', type: 'text', required: true, placeholder: 'e.g., $32,000.00' },
+          { id: 'secured_debt_estimate', label: 'Estimated Secured Debt (Mortgage, Vehicle Loans)', type: 'text', required: false, placeholder: 'e.g., Mortgage $240,000; Auto $18,000' },
+          { id: 'real_estate_and_vehicles', label: 'Real Estate & Vehicles Owned', type: 'textarea', required: true, placeholder: 'Primary residence address/value, vehicle year/make/model...' }
         ]
       }
     ]
   },
-  'General': {
-    formTitle: 'AI General Practice & Civil Dispute Legal Intake Form',
-    category: 'General',
-    description: 'Tailored general intake questionnaire for civil litigation, contracts, torts, and general legal representation.',
-    aiPromptMessage: 'Form generated with standard civil litigation and dispute assessment fields.',
+  'Immigration': {
+    formTitle: 'Immigration Legal Intake & USCIS Dossier Form',
+    category: 'Immigration',
+    description: 'Intake questionnaire for visa petitions, asylum, naturalization, and adjustment of status.',
+    aiPromptMessage: 'Form generated with required federal immigration fields.',
     sections: [
       {
-        sectionTitle: '1. Client Contact & Identity Information',
+        sectionTitle: '1. Personal & Identity Records',
         fields: [
-          { id: 'client_name', label: 'Full Legal Name', type: 'text', required: true, placeholder: 'e.g., Alexander Wright' },
-          { id: 'email', label: 'Email Address', type: 'text', required: true, placeholder: 'client@example.com' },
-          { id: 'phone', label: 'Phone Number', type: 'text', required: true, placeholder: '(555) 234-5678' },
-          { id: 'address', label: 'Mailing Address', type: 'text', required: true, placeholder: 'Street, City, State, ZIP' },
-          { id: 'preferred_contact', label: 'Preferred Contact Method', type: 'select', required: true, options: ['Email', 'Phone Call', 'SMS Text', 'Client Portal'] }
+          { id: 'full_name', label: 'Full Legal Name (as on Passport)', type: 'text', required: true, placeholder: 'e.g., Maria Santos Rodriguez' },
+          { id: 'dob', label: 'Date of Birth', type: 'date', required: true },
+          { id: 'country_birth', label: 'Country of Birth & Citizenship', type: 'text', required: true, placeholder: 'e.g., Mexico / Spain' },
+          { id: 'a_number', label: 'USCIS Alien Registration Number (A-Number)', type: 'text', required: false, placeholder: 'A# 000-000-000 (if assigned)' },
+          { id: 'passport_num', label: 'Passport Number & Expiration', type: 'text', required: true, placeholder: 'Passport # and Exp Date' }
         ]
       },
       {
-        sectionTitle: '2. Incident & Matter Information Request',
+        sectionTitle: '2. USCIS Immigration History & Entry',
         fields: [
-          { id: 'matter_title', label: 'Matter Title / Subject', type: 'text', required: true, placeholder: 'e.g., Breach of Contract / Vehicle Accident Dispute' },
-          { id: 'incident_date', label: 'Date of Incident or Agreement', type: 'date', required: true },
-          { id: 'dispute_summary', label: 'Detailed Fact Summary & Legal Issue', type: 'textarea', required: true, placeholder: 'Describe what happened, parties involved, and timeline...' },
-          { id: 'opposing_parties', label: 'Opposing Parties / Adverse Entities', type: 'text', required: true, placeholder: 'Name of company or individuals involved' }
+          { id: 'entry_date', label: 'Most Recent Date of Entry into U.S.', type: 'date', required: true },
+          { id: 'entry_visa', label: 'Visa Class at Entry (e.g. B1/B2, H-1B, F-1, EWI)', type: 'text', required: true, placeholder: 'e.g., B2 Tourist / EWI' },
+          { id: 'i94_exp', label: 'I-94 Record Expiration Date', type: 'date', required: false },
+          { id: 'prior_petitions', label: 'Prior USCIS Petitions or Removal Proceedings', type: 'textarea', required: false, placeholder: 'Detail any prior I-130, I-485, or court appearances...' }
         ]
       },
       {
-        sectionTitle: '3. Claims, Damages & Key Deadlines',
+        sectionTitle: '3. Relief Requested & Family Beneficiaries',
         fields: [
-          { id: 'damages_amount', label: 'Estimated Monetary Amount in Dispute', type: 'text', required: false, placeholder: 'e.g., $45,000.00' },
-          { id: 'urgency_deadlines', label: 'Urgency & Upcoming Statutory Deadlines', type: 'text', required: true, placeholder: 'e.g., Court hearing on Aug 15 / Statute expires soon' }
-        ]
-      }
-    ]
-  },
-  'Custom': {
-    formTitle: 'AI Custom Legal Intake Form',
-    category: 'Custom',
-    description: 'Custom legal intake form defaulting to basic contact information and general matter information requests, augmented with user-requested fields.',
-    aiPromptMessage: 'Are there any additional specific fields, questions, or documentation requests you would like added to this custom intake form?',
-    sections: [
-      {
-        sectionTitle: '1. Basic Client Contact Information',
-        fields: [
-          { id: 'client_name', label: 'Full Legal Name', type: 'text', required: true, placeholder: 'Client Full Name' },
-          { id: 'phone_number', label: 'Phone Number', type: 'text', required: true, placeholder: '(555) 000-0000' },
-          { id: 'email_address', label: 'Email Address', type: 'text', required: true, placeholder: 'client@domain.com' },
-          { id: 'residential_address', label: 'Mailing / Residential Address', type: 'text', required: true, placeholder: 'Street Address, City, State, ZIP' },
-          { id: 'preferred_contact', label: 'Preferred Contact Method', type: 'select', required: true, options: ['Email', 'Phone Call', 'SMS Text', 'In-Person Consultation'] }
-        ]
-      },
-      {
-        sectionTitle: '2. General Matter Information Request',
-        fields: [
-          { id: 'matter_subject', label: 'Matter Title / Subject Area', type: 'text', required: true, placeholder: 'Brief title describing the legal matter' },
-          { id: 'incident_summary', label: 'Detailed Summary of Legal Issue or Request', type: 'textarea', required: true, placeholder: 'Describe the facts, objectives, and background details...' },
-          { id: 'urgency_level', label: 'Urgency Level & Key Deadlines', type: 'select', required: true, options: ['Standard (Normal Intake)', 'Urgent (Hearing/Deadline within 7 Days)', 'Emergency Filing Required'] }
+          { id: 'immigration_goal', label: 'Primary Immigration Goal', type: 'select', required: true, options: ['Adjustment of Status (Green Card)', 'Family Petition (I-130)', 'Asylum & Withholding', 'Naturalization (N-400)', 'Work Authorization (I-765)', 'U-Visa / VAWA Relief'] },
+          { id: 'spouse_family_info', label: 'Spouse & Minor Children Details', type: 'textarea', required: false, placeholder: 'Names, DOBs, and immigration status of spouse and children...' }
         ]
       }
     ]
   }
 };
+
+// Aliases for backward compatibility
+DEFAULT_SCHEMAS['General'] = DEFAULT_SCHEMAS['Civil Litigation'];
+DEFAULT_SCHEMAS['Custom'] = DEFAULT_SCHEMAS['Bankruptcy'];
 
 export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProps> = ({
   isOpen,
@@ -258,13 +231,21 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
   clients,
   onNavigateToTab
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState<'Immigration' | 'Family Law' | 'FL-120 Response' | 'General' | 'Custom'>('FL-120 Response');
-  const [activeFormSchema, setActiveFormSchema] = useState<IntakeFormSchema>(DEFAULT_SCHEMAS['FL-120 Response']);
-  const [englishSchemaCache, setEnglishSchemaCache] = useState<IntakeFormSchema>(DEFAULT_SCHEMAS['FL-120 Response']);
+  const [selectedCategory, setSelectedCategory] = useState<IntakeCategory>('Civil Litigation');
+  const [activeFormSchema, setActiveFormSchema] = useState<IntakeFormSchema>(DEFAULT_SCHEMAS['Civil Litigation']);
+  const [englishSchemaCache, setEnglishSchemaCache] = useState<IntakeFormSchema>(DEFAULT_SCHEMAS['Civil Litigation']);
   const [spanishSchemaCache, setSpanishSchemaCache] = useState<IntakeFormSchema | null>(null);
   const [currentLanguage, setCurrentLanguage] = useState<'en' | 'es'>('en');
   const [isTranslatingForm, setIsTranslatingForm] = useState<boolean>(false);
   const [isGeneratingSchema, setIsGeneratingSchema] = useState<boolean>(false);
+
+  // Selected client state
+  const [selectedClientName, setSelectedClientName] = useState<string>('');
+
+  // Uploaded documents state
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; size: string; type: string; content?: string }>>([]);
+  const [isParsingUpload, setIsParsingUpload] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Custom User Request Prompt
   const [customUserRequestText, setCustomUserRequestText] = useState<string>('');
@@ -356,7 +337,7 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
   };
 
   // Handle Category Selection Change
-  const handleSelectCategory = async (cat: 'Immigration' | 'Family Law' | 'FL-120 Response' | 'General' | 'Custom') => {
+  const handleSelectCategory = async (cat: IntakeCategory) => {
     setSelectedCategory(cat);
     setNotification(null);
     setFieldValues({});
@@ -365,7 +346,7 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
     setSpanishSchemaCache(null);
 
     // If local schema exists, load immediately
-    const baseSchema = DEFAULT_SCHEMAS[cat] || DEFAULT_SCHEMAS['Custom'];
+    const baseSchema = DEFAULT_SCHEMAS[cat] || DEFAULT_SCHEMAS['Civil Litigation'];
     setActiveFormSchema(baseSchema);
     setEnglishSchemaCache(baseSchema);
 
@@ -387,6 +368,100 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
     } finally {
       setIsGeneratingSchema(false);
     }
+  };
+
+  // Handle Document Upload (.pdf, .docx, .doc, .txt, .png, etc.) to gather data for client
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setIsParsingUpload(true);
+    setNotification(null);
+
+    const newUploaded = [...uploadedFiles];
+    let accumulatedText = '';
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const sizeStr = file.size > 1024 * 1024
+        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+        : `${Math.max(1, Math.round(file.size / 1024))} KB`;
+
+      try {
+        let extractedText = '';
+        const lowerName = file.name.toLowerCase();
+
+        if (lowerName.endsWith('.txt') || lowerName.endsWith('.md') || lowerName.endsWith('.json')) {
+          extractedText = await file.text();
+        } else {
+          // Convert to Base64 and request server parser
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const res = reader.result as string;
+              const base64Part = res.includes(',') ? res.split(',')[1] : res;
+              resolve(base64Part);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+
+          const parseRes = await fetch('/api/files/parse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fileBase64: base64,
+              mimeType: file.type || 'application/pdf',
+              fileName: file.name
+            })
+          });
+
+          const parseData = await parseRes.json();
+          if (parseData.success && parseData.text) {
+            extractedText = parseData.text;
+          }
+        }
+
+        newUploaded.push({
+          name: file.name,
+          size: sizeStr,
+          type: file.type || 'application/octet-stream',
+          content: extractedText
+        });
+
+        if (extractedText && extractedText.trim()) {
+          accumulatedText += `\n--- SOURCE DOCUMENT: ${file.name} ---\n${extractedText}\n`;
+        }
+      } catch (err: any) {
+        console.warn('Error reading uploaded file:', file.name, err);
+        newUploaded.push({
+          name: file.name,
+          size: sizeStr,
+          type: file.type || 'application/octet-stream'
+        });
+      }
+    }
+
+    setUploadedFiles(newUploaded);
+    setIsParsingUpload(false);
+
+    if (accumulatedText.trim()) {
+      setRawExtractionText(accumulatedText);
+      await handleExtractFromGmailOrDrive(accumulatedText);
+      setNotification({
+        type: 'success',
+        title: 'Document Uploaded & Data Extracted!',
+        message: `Successfully processed ${files.length} document(s). Extracted client facts from "${files[0].name}" into intake fields.`
+      });
+    } else {
+      setNotification({
+        type: 'success',
+        title: 'Documents Uploaded',
+        message: `Attached ${files.length} document(s) to client intake dossier.`
+      });
+    }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   // Extract Returned Spanish Intake and Auto-Translate to English Client Record
@@ -542,28 +617,20 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
       sampleValues['custody_preference'] = 'Joint Legal, Primary Physical to Petitioner with Visitation';
       sampleValues['real_estate_assets'] = 'Community home in Orange County (Market value $850k, Mortgage balance $420k); Chase Joint Savings ($45k).';
       sampleValues['spousal_support_req'] = 'Temporary & Permanent Spousal Support Requested';
-    } else if (selectedCategory === 'FL-120 Response') {
-      sampleValues['respondent_name'] = 'John Doe';
-      sampleValues['client_name'] = 'John Doe';
-      sampleValues['petitioner_name'] = 'Jane Doe';
-      sampleValues['opposing_party'] = 'Jane Doe';
-      sampleValues['case_number'] = '26FL008921';
-      sampleValues['court_county'] = 'Orange County Superior Court - Lamoreaux Justice Center';
-      sampleValues['proceeding_type'] = 'Dissolution of Marriage';
-      sampleValues['residence_req_met'] = 'Yes - Both CA & County Met';
-      sampleValues['date_marriage'] = '2012-06-15';
-      sampleValues['date_separation'] = '2026-04-10';
-      sampleValues['marital_duration'] = '13 Years, 9 Months';
-      sampleValues['has_minor_children'] = 'Yes - Minor Children Declared';
-      sampleValues['minor_children_details'] = 'Emma Doe (DOB: 05/12/2015, Age: 11); Lucas Doe (DOB: 09/20/2018, Age: 7)';
-      sampleValues['custody_legal'] = 'Joint Legal Custody';
-      sampleValues['custody_physical'] = 'Joint Physical Custody';
-      sampleValues['visitation_requested'] = 'Reasonable visitation per FL-311 parenting attachment; alternating holidays and summer recess';
-      sampleValues['spousal_support'] = 'Reserve Jurisdiction';
-      sampleValues['separate_property_notes'] = 'Confirm Respondent separate property per Fam. Code § 770 (pre-marital inheritance and 401k pre-2012)';
-      sampleValues['community_property_notes'] = 'Divide community estate equally including marital residence (200 Coastal Way, Newport Beach) and joint investment portfolio';
-      sampleValues['attorney_fees'] = 'Petitioner to contribute per Fam. Code § 2030';
-      sampleValues['former_name_restored'] = '';
+    } else if (selectedCategory === 'Bankruptcy') {
+      sampleValues['full_name'] = 'David Miller';
+      sampleValues['ssn_last4'] = '4821';
+      sampleValues['phone'] = '(555) 432-8765';
+      sampleValues['email'] = 'david.miller@example.com';
+      sampleValues['residential_address'] = '1234 Elm Street, Irvine, CA 92614';
+      sampleValues['marital_status'] = 'Single';
+      sampleValues['bankruptcy_chapter'] = 'Chapter 7 (Liquidation)';
+      sampleValues['prior_filings'] = 'None in the past 8 years';
+      sampleValues['pending_garnishments'] = 'Notice of wage garnishment received from Midland Credit for $4,200.';
+      sampleValues['monthly_household_income'] = '$4,200.00';
+      sampleValues['unsecured_debt_estimate'] = '$38,500.00 (Credit cards & medical debt)';
+      sampleValues['secured_debt_estimate'] = 'None (Renting residence, lease current)';
+      sampleValues['real_estate_and_vehicles'] = '2019 Honda Civic (Fair market value $14,000, unencumbered)';
     } else {
       sampleValues['client_name'] = 'Alexander Wright';
       sampleValues['phone_number'] = '(949) 555-0182';
@@ -573,12 +640,13 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
       sampleValues['residential_address'] = '450 Newport Center Dr, Newport Beach, CA 92660';
       sampleValues['address'] = '450 Newport Center Dr, Newport Beach, CA 92660';
       sampleValues['preferred_contact'] = 'Email';
-      sampleValues['matter_subject'] = 'Commercial Contract Dispute & Unpaid Services';
-      sampleValues['matter_title'] = 'Commercial Contract Dispute & Unpaid Services';
-      sampleValues['incident_summary'] = 'Client rendered tech consulting services under written MSA. Retainer balance of $38,500 remains unpaid past 60 days.';
+      sampleValues['matter_subject'] = 'Commercial Contract Dispute & Breach of MSA';
+      sampleValues['matter_title'] = 'Commercial Contract Dispute & Breach of MSA';
+      sampleValues['incident_date'] = '2026-03-15';
       sampleValues['dispute_summary'] = 'Client rendered tech consulting services under written MSA. Retainer balance of $38,500 remains unpaid past 60 days.';
-      sampleValues['urgency_level'] = 'Standard (Normal Intake)';
-      sampleValues['urgency_deadlines'] = 'Demand letter deadline set for August 15, 2026.';
+      sampleValues['opposing_parties'] = 'Vanguard Pacific Holdings LLC';
+      sampleValues['damages_amount'] = '$38,500.00';
+      sampleValues['urgency_deadlines'] = 'Demand letter statutory response deadline: October 15, 2026.';
     }
 
     // Rule 5: Never guess or fabricate placeholder answers. Leave unmapped fields blank.
@@ -586,33 +654,91 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
     setIsAutoFilledSample(true);
   };
 
-  // Trigger: Auto-Fill Form from Google Drive file
-  const handleAutoFillFromDriveFile = async (fileId = 'drive-memo-watson') => {
+  // Trigger: Auto-Fill Form dynamically for currently selected client from Google Drive
+  const handleAutoFillFromDriveFile = async (customFileId?: string) => {
     setIsExtractingData(true);
     setNotification(null);
 
+    // Identify currently selected client or fallback to first client in list
+    const currentClient = clients?.find(c => c.name === fieldValues['client_name'] || c.name === selectedClientName) || clients?.[0];
+    const clientName = currentClient ? currentClient.name : (fieldValues['client_name'] || 'Selected Client');
+    const clientId = currentClient ? currentClient.id : 'current';
+    const fileIdToFetch = customFileId || `drive-intake-${clientId}`;
+
     try {
       const token = getAccessToken();
-      const driveRes = await fetch(`/api/drive/get?fileId=${fileId}`, {
+      const driveRes = await fetch(`/api/drive/get?fileId=${encodeURIComponent(fileIdToFetch)}&clientName=${encodeURIComponent(clientName)}`, {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         }
       });
       const driveData = await driveRes.json();
-      const driveText = driveData.content || '';
+      const driveText = driveData.content || currentClient?.intakeNotes || '';
 
-      if (driveText) {
+      if (currentClient) {
+        setSelectedClientName(currentClient.name);
+
+        // Dynamically adjust category to match client's practice area
+        if (currentClient.practiceArea) {
+          const pa = currentClient.practiceArea.toLowerCase();
+          if (pa.includes('immigration')) handleSelectCategory('Immigration');
+          else if (pa.includes('bankruptcy')) handleSelectCategory('Bankruptcy');
+          else if (pa.includes('family')) handleSelectCategory('Family Law');
+          else handleSelectCategory('Civil Litigation');
+        }
+
+        const newVals: Record<string, string> = {
+          ...fieldValues,
+          client_name: currentClient.name,
+          full_name: currentClient.name,
+          email: currentClient.email,
+          email_address: currentClient.email,
+          phone: currentClient.phone,
+          phone_number: currentClient.phone
+        };
+
+        if (driveText) {
+          setRawExtractionText(driveText);
+          await handleExtractFromGmailOrDrive(driveText);
+        } else {
+          setFieldValues(newVals);
+        }
+
+        setNotification({
+          type: 'success',
+          title: 'Google Drive Data Loaded!',
+          message: `Successfully populated intake fields from Google Drive file "${driveData.name || 'Client_Intake.pdf'}" for client "${currentClient.name}".`,
+          webViewLink: driveData.webViewLink
+        });
+      } else if (driveText) {
         setRawExtractionText(driveText);
         await handleExtractFromGmailOrDrive(driveText);
         setNotification({
           type: 'success',
           title: 'Google Drive Data Extracted!',
-          message: `Successfully pulled information from Google Drive file "${driveData.name || 'Intake_Memorandum_Declaration_Don_Watson.pdf'}" and populated form fields.`,
+          message: `Successfully pulled information from Google Drive file "${driveData.name || 'Client_Intake.pdf'}" and populated form fields.`,
           webViewLink: driveData.webViewLink
         });
       }
     } catch (err: any) {
-      alert('Error reading Google Drive document: ' + err.message);
+      if (currentClient) {
+        setFieldValues(prev => ({
+          ...prev,
+          client_name: currentClient.name,
+          full_name: currentClient.name,
+          email: currentClient.email,
+          email_address: currentClient.email,
+          phone: currentClient.phone,
+          phone_number: currentClient.phone
+        }));
+        setNotification({
+          type: 'info',
+          title: 'Client Data Loaded',
+          message: `Populated intake fields with client record for "${currentClient.name}".`
+        });
+      } else {
+        alert('Error reading Google Drive document: ' + err.message);
+      }
     } finally {
       setIsExtractingData(false);
     }
@@ -732,7 +858,6 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
     const intakeNotesCompiled = getCompiledFormText();
 
     const newClientId = `client_${Date.now()}`;
-    const isFl120 = selectedCategory === 'FL-120 Response' || !!fieldValues['case_number'];
 
     const newClientObj: Client = {
       id: newClientId,
@@ -742,49 +867,8 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
       status: 'active',
       intakeNotes: intakeNotesCompiled,
       createdAt: new Date().toISOString(),
-      practiceArea: isFl120 ? 'Family Law (FL-120)' : selectedCategory
+      practiceArea: selectedCategory
     };
-
-    let fl120Payload: FL120IntakeData | undefined = undefined;
-    if (isFl120) {
-      const hasChildren = fieldValues['has_minor_children'] ? !fieldValues['has_minor_children'].toLowerCase().includes('no') : false;
-      const parsedChildren = fieldValues['minor_children_details']
-        ? [{ name: fieldValues['minor_children_details'], birthdate: '', age: 0 }]
-        : [];
-
-      fl120Payload = {
-        caseNumber: fieldValues['case_number'] || '',
-        courtCounty: fieldValues['court_county'] || '',
-        branchName: fieldValues['branch_name'] || '',
-        petitionerName: fieldValues['petitioner_name'] || '',
-        respondentName: fieldValues['respondent_name'] || clientName,
-        proceedingType: (fieldValues['proceeding_type'] as any) || 'Dissolution',
-        legalRelationship: (fieldValues['legal_relationship'] as any) || 'Marriage',
-        residenceRequirementMet: fieldValues['residence_req_met']?.includes('Yes') ?? false,
-        dateOfMarriage: fieldValues['date_marriage'] || '',
-        dateOfSeparation: fieldValues['date_separation'] || '',
-        durationYears: 0,
-        durationMonths: 0,
-        hasMinorChildren: hasChildren,
-        minorChildren: parsedChildren,
-        uccjeaFormRequired: hasChildren,
-        legalGrounds: (fieldValues['legal_grounds'] as any) || 'Irreconcilable Differences',
-        custodyLegal: (fieldValues['custody_legal']?.includes('Sole') ? 'Respondent' : (fieldValues['custody_legal'] ? 'Joint' : undefined)) as any,
-        custodyPhysical: (fieldValues['custody_physical']?.includes('Sole') ? 'Respondent' : (fieldValues['custody_physical'] ? 'Joint' : undefined)) as any,
-        visitationRequested: fieldValues['visitation_requested'] || '',
-        childSupportRequested: hasChildren,
-        spousalSupportRequested: (fieldValues['spousal_support'] as any) || undefined,
-        separatePropertyConfirmed: Boolean(fieldValues['separate_property_notes']),
-        separatePropertyNotes: fieldValues['separate_property_notes'] || '',
-        communityPropertyDivision: Boolean(fieldValues['community_property_notes']),
-        communityPropertyNotes: fieldValues['community_property_notes'] || '',
-        attorneyFeesPayableBy: (fieldValues['attorney_fees'] as any) || undefined,
-        formerNameRestored: fieldValues['former_name_restored'] || '',
-        abbyyExtractionTimestamp: new Date().toISOString(),
-        abbyyBatchId: `PHOENIX-8AGENT-${Date.now().toString().slice(-6)}`
-      };
-      newClientObj.fl120Data = fl120Payload;
-    }
 
     // 1. Add Client Data Card
     onAddClient(newClientObj);
@@ -793,23 +877,19 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
     if (onAddMatter) {
       const newMatterObj: Matter = {
         id: `matter_${Date.now()}`,
-        title: isFl120 
-          ? `FL-120 Dissolution Response — ${clientName} v. ${fieldValues['petitioner_name'] || 'Petitioner'}` 
-          : fieldValues['matter_subject'] || fieldValues['matter_title'] || fieldValues['immigration_goal'] || `${selectedCategory} Legal Matter`,
-        caseNumber: isFl120 ? (fieldValues['case_number'] || '') : `MAT-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        title: fieldValues['matter_subject'] || fieldValues['matter_title'] || fieldValues['immigration_goal'] || `${selectedCategory} Legal Matter — ${clientName}`,
+        caseNumber: fieldValues['case_number'] || `MAT-2026-${Math.floor(1000 + Math.random() * 9000)}`,
         clientId: newClientId,
         clientName: clientName,
-        practiceArea: isFl120 ? 'Family Law' : selectedCategory === 'Immigration' ? 'Immigration' : selectedCategory === 'Family Law' ? 'Family Law' : 'General Practice',
+        practiceArea: selectedCategory,
         status: 'active',
         billingRate: 350,
         billedHours: 1.5,
-        description: isFl120
-          ? `Judicial Council FL-120 Response pleading and preliminary disclosures for ${clientName}. Case: ${fieldValues['case_number'] || '[Blank — Case Number Requested]'}.`
-          : fieldValues['incident_summary'] || fieldValues['dispute_summary'] || fieldValues['spouse_family_info'] || 'New client intake initialized.',
+        description: fieldValues['incident_summary'] || fieldValues['dispute_summary'] || fieldValues['spouse_family_info'] || `${selectedCategory} client intake dossier verified and recorded.`,
         createdAt: new Date().toISOString(),
         tasks: [
-          { id: 't1', title: isFl120 ? 'Verify FL-120 8-Agent Extracted Schedule' : 'Review completed AI Client Intake Dossier', completed: true, dueDate: 'Today' },
-          { id: 't2', title: isFl120 ? 'Serve Form FL-120 Response on Petitioner' : 'Prepare Judicial Council / Federal Court Forms', completed: false, dueDate: '3 Days' }
+          { id: 't1', title: 'Review completed Client Intake Dossier', completed: true, dueDate: 'Today' },
+          { id: 't2', title: 'Prepare Court Forms and Initial Pleadings', completed: false, dueDate: '3 Days' }
         ]
       };
       onAddMatter(newMatterObj);
@@ -827,73 +907,18 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
         generatedAt: new Date().toISOString()
       });
 
-      // If FL-120, also generate the official ready-to-file Form FL-120 Response pleading
-      if (isFl120 && fl120Payload) {
-        const fl = fl120Payload;
-        const reqStr = (val?: string) => (val && val.trim() ? val : '[Blank — Further Information Requested]');
-        const fl120Pleading = `SUPERIOR COURT OF CALIFORNIA, COUNTY OF ${fl.courtCounty ? fl.courtCounty.toUpperCase() : '[Blank — Further Information Requested]'}
-BRANCH: ${fl.branchName || '[Blank — Further Information Requested]'}
-
-PETITIONER: ${reqStr(fl.petitionerName)}
-RESPONDENT: ${reqStr(fl.respondentName || clientName)}
-
-RESPONSE TO PETITION FOR DISSOLUTION OF MARRIAGE (FL-120)
-CASE NUMBER: ${reqStr(fl.caseNumber)}
-
-1. LEGAL RELATIONSHIP:
-   [X] a. We are married.
-
-2. RESIDENCE REQUIREMENTS:
-   [${fl.residenceRequirementMet ? 'X' : ' '}] a. Residence requirements met.
-
-3. STATISTICAL FACTS:
-   a. Date of marriage: ${reqStr(fl.dateOfMarriage)}
-   b. Date of separation: ${reqStr(fl.dateOfSeparation)}
-   c. Duration: ${fl.durationYears || fl.durationMonths ? `${fl.durationYears} years, ${fl.durationMonths} months` : '[Blank — Further Information Requested]'}
-
-4. MINOR CHILDREN:
-   ${fl.hasMinorChildren ? `[X] Minor children declared: ${fl.minorChildren.map(c => c.name).join('; ') || '[Blank — Details Requested]'}\n   [X] UCCJEA Declaration (Form FL-105) Required` : '[ ] No minor children declared'}
-
-5. LEGAL GROUNDS (Family Code § 2310):
-   [X] a. ${fl.legalGrounds || 'Irreconcilable differences'}
-
-6. CUSTODY AND VISITATION:
-   a. Legal custody to: ${reqStr(fl.custodyLegal)}
-   b. Physical custody to: ${reqStr(fl.custodyPhysical)}
-   c. Child visitation: ${reqStr(fl.visitationRequested)}
-
-7. CHILD SUPPORT:
-   [${fl.hasMinorChildren ? 'X' : ' '}] The court may make orders for support of the children and issue earnings assignment.
-
-8. SPOUSAL SUPPORT:
-   ${fl.spousalSupportRequested ? `[X] ${fl.spousalSupportRequested}` : '[Blank — Further Information Requested]'}
-
-9. SEPARATE PROPERTY:
-   ${fl.separatePropertyNotes ? `[X] Confirm separate property per Family Code § 770:\n       ${fl.separatePropertyNotes}` : '[Blank — None Declared / Further Information Requested]'}
-
-10. COMMUNITY AND QUASI-COMMUNITY ASSETS AND DEBTS:
-    ${fl.communityPropertyNotes ? `[X] Determine rights to community and quasi-community assets:\n        ${fl.communityPropertyNotes}` : '[Blank — None Declared / Further Information Requested]'}
-
-11. OTHER ORDERS:
-    ${fl.attorneyFeesPayableBy ? `[X] Attorney fees and costs: ${fl.attorneyFeesPayableBy}` : '[Blank — Further Information Requested]'}
-    ${fl.formerNameRestored ? `[X] Restore former legal name: ${fl.formerNameRestored}` : ''}
-
-I declare under penalty of perjury under the laws of the State of California that the foregoing is true and correct.
-
-Date: ${new Date().toLocaleDateString()}
-${fl.respondentName || clientName}, Respondent: _____________________________________
-Attorney for Respondent: Alex, Esq. (State Bar No. 232323)`;
-
+      // Save each uploaded document as an attached matter record
+      uploadedFiles.forEach((file, fIdx) => {
         onAddGeneratedDoc({
-          id: `doc_fl120_${Date.now()}`,
-          title: `CA FL-120 Response Pleading — ${clientName}`,
+          id: `doc_upload_${Date.now()}_${fIdx}`,
+          title: `Attached Intake File: ${file.name}`,
           clientId: newClientId,
           clientName: clientName,
-          templateId: 'ca-fl-120',
-          content: fl120Pleading,
+          templateId: 'client_intake_upload',
+          content: file.content || `File Name: ${file.name}\nSize: ${file.size}\nType: ${file.type}\nStatus: Attached to Client Intake`,
           generatedAt: new Date().toISOString()
         });
-      }
+      });
     }
 
     setTimeout(() => {
@@ -1053,9 +1078,11 @@ Attorney for Respondent: Alex, Esq. (State Bar No. 232323)`;
                   };
 
                   if (client.practiceArea) {
-                    if (client.practiceArea.includes('Immigration')) handleSelectCategory('Immigration');
-                    else if (client.practiceArea.includes('Family') || client.practiceArea.includes('FL-120')) handleSelectCategory('FL-120 Response');
-                    else handleSelectCategory('General');
+                    const pa = client.practiceArea.toLowerCase();
+                    if (pa.includes('immigration')) handleSelectCategory('Immigration');
+                    else if (pa.includes('bankruptcy')) handleSelectCategory('Bankruptcy');
+                    else if (pa.includes('family')) handleSelectCategory('Family Law');
+                    else handleSelectCategory('Civil Litigation');
                   }
 
                   if (client.fl120Data) {
@@ -1081,7 +1108,7 @@ Attorney for Respondent: Alex, Esq. (State Bar No. 232323)`;
             >
               <option value="">-- Choose Target Client --</option>
               {clients?.map(c => (
-                <option key={c.id} value={c.name}>{c.name} ({c.practiceArea || 'General'})</option>
+                <option key={c.id} value={c.name}>{c.name} ({c.practiceArea || 'Civil Litigation'})</option>
               ))}
             </select>
           </div>
@@ -1101,24 +1128,24 @@ Attorney for Respondent: Alex, Esq. (State Bar No. 232323)`;
               )}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-              {/* Button 1: Immigration */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {/* Button 1: Civil Litigation */}
               <button
                 type="button"
-                onClick={() => handleSelectCategory('Immigration')}
+                onClick={() => handleSelectCategory('Civil Litigation')}
                 className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-1 ${
-                  selectedCategory === 'Immigration'
-                    ? 'bg-gradient-to-br from-teal-500/20 to-teal-900/40 border-teal-400 text-white shadow-lg shadow-teal-500/10'
+                  selectedCategory === 'Civil Litigation'
+                    ? 'bg-gradient-to-br from-teal-500/20 to-teal-900/40 border-teal-400 text-white shadow-lg shadow-teal-500/10 ring-1 ring-teal-400/40'
                     : 'bg-[#070b13] border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <Globe className={`w-5 h-5 ${selectedCategory === 'Immigration' ? 'text-teal-400' : 'text-slate-400'}`} />
-                  {selectedCategory === 'Immigration' && <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />}
+                  <Scale className={`w-5 h-5 ${selectedCategory === 'Civil Litigation' ? 'text-teal-400' : 'text-slate-400'}`} />
+                  {selectedCategory === 'Civil Litigation' && <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />}
                 </div>
                 <div>
-                  <div className="text-xs font-mono font-extrabold uppercase">Immigration</div>
-                  <div className="text-[9.5px] text-slate-400 font-sans">USCIS Visas & Petitions</div>
+                  <div className="text-xs font-mono font-extrabold uppercase">Civil Litigation</div>
+                  <div className="text-[9.5px] text-slate-400 font-sans">Disputes, Contracts & Torts</div>
                 </div>
               </button>
 
@@ -1128,7 +1155,7 @@ Attorney for Respondent: Alex, Esq. (State Bar No. 232323)`;
                 onClick={() => handleSelectCategory('Family Law')}
                 className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-1 ${
                   selectedCategory === 'Family Law'
-                    ? 'bg-gradient-to-br from-teal-500/20 to-teal-900/40 border-teal-400 text-white shadow-lg shadow-teal-500/10'
+                    ? 'bg-gradient-to-br from-teal-500/20 to-teal-900/40 border-teal-400 text-white shadow-lg shadow-teal-500/10 ring-1 ring-teal-400/40'
                     : 'bg-[#070b13] border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white'
                 }`}
               >
@@ -1142,69 +1169,49 @@ Attorney for Respondent: Alex, Esq. (State Bar No. 232323)`;
                 </div>
               </button>
 
-              {/* Button 3: FL-120 Response (ABBYY OCR) */}
+              {/* Button 3: Bankruptcy */}
               <button
                 type="button"
-                onClick={() => handleSelectCategory('FL-120 Response')}
+                onClick={() => handleSelectCategory('Bankruptcy')}
                 className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-1 ${
-                  selectedCategory === 'FL-120 Response'
-                    ? 'bg-gradient-to-br from-emerald-500/25 to-teal-950/60 border-emerald-400 text-white shadow-lg shadow-emerald-500/20 ring-1 ring-emerald-400/50'
-                    : 'bg-[#070b13] border-slate-800 hover:border-emerald-700 text-slate-300 hover:text-white'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <FileCheck className={`w-5 h-5 ${selectedCategory === 'FL-120 Response' ? 'text-emerald-400' : 'text-slate-400'}`} />
-                  {selectedCategory === 'FL-120 Response' && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />}
-                </div>
-                <div>
-                  <div className="text-xs font-mono font-extrabold uppercase text-emerald-300">FL-120 Response</div>
-                  <div className="text-[9.5px] text-emerald-400/90 font-sans font-medium">ABBYY OCR / 11 Sections</div>
-                </div>
-              </button>
-
-              {/* Button 4: General */}
-              <button
-                type="button"
-                onClick={() => handleSelectCategory('General')}
-                className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-1 ${
-                  selectedCategory === 'General'
-                    ? 'bg-gradient-to-br from-teal-500/20 to-teal-900/40 border-teal-400 text-white shadow-lg shadow-teal-500/10'
+                  selectedCategory === 'Bankruptcy'
+                    ? 'bg-gradient-to-br from-amber-500/20 to-amber-900/40 border-amber-400 text-white shadow-lg shadow-amber-500/10 ring-1 ring-amber-400/40'
                     : 'bg-[#070b13] border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <Scale className={`w-5 h-5 ${selectedCategory === 'General' ? 'text-teal-400' : 'text-slate-400'}`} />
-                  {selectedCategory === 'General' && <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />}
+                  <FileSpreadsheet className={`w-5 h-5 ${selectedCategory === 'Bankruptcy' ? 'text-amber-400' : 'text-slate-400'}`} />
+                  {selectedCategory === 'Bankruptcy' && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />}
                 </div>
                 <div>
-                  <div className="text-xs font-mono font-extrabold uppercase">General</div>
-                  <div className="text-[9.5px] text-slate-400 font-sans">Civil Disputes & Claims</div>
+                  <div className="text-xs font-mono font-extrabold uppercase text-amber-300">Bankruptcy</div>
+                  <div className="text-[9.5px] text-slate-400 font-sans">Chapter 7 & 13 Filings</div>
                 </div>
               </button>
 
-              {/* Button 5: Custom */}
+              {/* Button 4: Immigration */}
               <button
                 type="button"
-                onClick={() => handleSelectCategory('Custom')}
+                onClick={() => handleSelectCategory('Immigration')}
                 className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-1 ${
-                  selectedCategory === 'Custom'
-                    ? 'bg-gradient-to-br from-amber-500/20 to-amber-900/40 border-amber-400 text-white shadow-lg shadow-amber-500/10'
+                  selectedCategory === 'Immigration'
+                    ? 'bg-gradient-to-br from-teal-500/20 to-teal-900/40 border-teal-400 text-white shadow-lg shadow-teal-500/10 ring-1 ring-teal-400/40'
                     : 'bg-[#070b13] border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <Sparkles className={`w-5 h-5 ${selectedCategory === 'Custom' ? 'text-amber-400' : 'text-slate-400'}`} />
-                  {selectedCategory === 'Custom' && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />}
+                  <Globe className={`w-5 h-5 ${selectedCategory === 'Immigration' ? 'text-teal-400' : 'text-slate-400'}`} />
+                  {selectedCategory === 'Immigration' && <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />}
                 </div>
                 <div>
-                  <div className="text-xs font-mono font-extrabold uppercase text-amber-300">Custom</div>
-                  <div className="text-[9.5px] text-slate-400 font-sans">Contact + Custom Fields</div>
+                  <div className="text-xs font-mono font-extrabold uppercase">Immigration</div>
+                  <div className="text-[9.5px] text-slate-400 font-sans">USCIS Visas & Petitions</div>
                 </div>
               </button>
             </div>
           </div>
 
-          {/* CUSTOM CATEGORY AI PROMPT BOX ("ask the user if there is anything or fields that they would like added") */}
+          {/* CUSTOM CATEGORY AI PROMPT BOX */}
           <div className="bg-[#0b1322] border border-amber-500/30 p-4 rounded-xl space-y-3">
             <div className="flex items-start gap-3">
               <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 shrink-0 mt-0.5">
@@ -1216,9 +1223,9 @@ Attorney for Respondent: Alex, Esq. (State Bar No. 232323)`;
                   <span className="text-[9px] font-normal text-slate-400">Interactive Customizer</span>
                 </div>
                 <p className="text-xs text-slate-200 font-sans leading-relaxed">
-                  {selectedCategory === 'Custom' ? (
+                  {selectedCategory === 'Bankruptcy' ? (
                     <span>
-                      I've set up the default Custom Intake Form with <strong>basic contact information</strong> and <strong>general matter information requests</strong>. Are there any additional specific fields, questions, or documentation requests you would like added to this custom intake form?
+                      I've set up the standard <strong>Bankruptcy (Chapter 7 / 13)</strong> intake questionnaire covering debtor identification, income, assets, and creditor schedules. Are there any additional specific debt categories, prior filing questions, or schedules you would like added?
                     </span>
                   ) : (
                     <span>
@@ -1314,10 +1321,10 @@ Attorney for Respondent: Alex, Esq. (State Bar No. 232323)`;
               <div className="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
-                  onClick={() => handleAutoFillFromDriveFile('drive-memo-watson')}
+                  onClick={() => handleAutoFillFromDriveFile()}
                   disabled={isExtractingData}
                   className="px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 hover:border-amber-400 text-amber-300 text-[10.5px] font-mono font-bold uppercase rounded-lg cursor-pointer transition-all flex items-center gap-1.5"
-                  title="Extract info from Google Drive files to fill requested form"
+                  title="Extract info dynamically from Google Drive for selected client"
                 >
                   {isExtractingData ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <HardDrive className="w-3.5 h-3.5 text-amber-400" />}
                   <span>📁 Fill Form from Google Drive</span>
@@ -1332,6 +1339,115 @@ Attorney for Respondent: Alex, Esq. (State Bar No. 232323)`;
                   <span>⚡ Auto-Fill Sample Data</span>
                 </button>
               </div>
+            </div>
+
+            {/* FILE UPLOAD COMPONENT FOR CLIENT INTAKE DOCUMENTS (.pdf, .docx, .doc, .txt, etc.) */}
+            <div className="bg-[#070b13] border border-teal-500/30 rounded-xl p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-teal-500/10 border border-teal-500/30 rounded-lg text-teal-400">
+                    <Upload className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-mono font-bold text-white uppercase flex items-center gap-2">
+                      Client Documents & File Upload
+                      <span className="text-[9px] px-2 py-0.5 bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded-full font-sans">
+                        .pdf, .docx, .doc, .txt, .png
+                      </span>
+                    </h4>
+                    <p className="text-[10px] text-slate-400 font-sans">
+                      Upload client questionnaires, retainer agreements, or case records to gather documents and extract facts into this form.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isParsingUpload}
+                  className="px-3 py-1.5 bg-gradient-to-r from-teal-500 to-emerald-400 hover:from-teal-400 hover:to-emerald-300 text-slate-950 text-xs font-mono font-black uppercase rounded-lg cursor-pointer transition-all flex items-center gap-1.5 shadow-sm shrink-0"
+                >
+                  {isParsingUpload ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+                  <span>Upload Documents</span>
+                </button>
+              </div>
+
+              {/* Hidden File Input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.docx,.doc,.txt,.png,.jpg,.jpeg"
+                onChange={(e) => handleFileUpload(e.target.files)}
+                className="hidden"
+              />
+
+              {/* Drag and Drop Zone */}
+              <div
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    handleFileUpload(e.dataTransfer.files);
+                  }
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-slate-700 hover:border-teal-400/60 bg-[#090e1a]/60 hover:bg-teal-950/10 p-4 rounded-xl text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1.5 group"
+              >
+                <UploadCloud className="w-6 h-6 text-slate-400 group-hover:text-teal-400 transition-colors" />
+                <span className="text-xs font-mono font-bold text-slate-200 group-hover:text-teal-300">
+                  Drop client documents here or click to browse
+                </span>
+                <span className="text-[10px] text-slate-400 font-sans">
+                  Accepts .pdf, .docx, .doc, .txt, .png, .jpg — Automatic fact extraction and matter attachment
+                </span>
+              </div>
+
+              {/* Uploading Status Banner */}
+              {isParsingUpload && (
+                <div className="p-2.5 bg-teal-500/10 border border-teal-500/30 rounded-lg flex items-center gap-2 text-xs font-mono text-teal-300">
+                  <Loader2 className="w-4 h-4 animate-spin text-teal-400 shrink-0" />
+                  <span>Processing uploaded document and extracting client intake information...</span>
+                </div>
+              )}
+
+              {/* Uploaded Files List */}
+              {uploadedFiles.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <div className="text-[10px] font-mono font-bold uppercase text-slate-400">
+                    Uploaded Documents ({uploadedFiles.length}):
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {uploadedFiles.map((file, idx) => (
+                      <div
+                        key={idx}
+                        className="bg-[#050811] border border-slate-800 p-2 rounded-lg flex items-center justify-between gap-2 text-xs font-mono"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Paperclip className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                          <div className="min-w-0">
+                            <span className="text-slate-200 text-xs font-bold truncate block">{file.name}</span>
+                            <span className="text-[9.5px] text-slate-500">{file.size}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded font-bold">
+                            Attached
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleRemoveFile(idx); }}
+                            className="p-1 text-slate-500 hover:text-rose-400 rounded transition-colors"
+                            title="Remove file"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* SECTIONS & INPUT FIELDS */}

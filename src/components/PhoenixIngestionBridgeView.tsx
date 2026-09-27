@@ -684,7 +684,7 @@ export default function PhoenixIngestionBridgeView({
                           </div>
                           <div className="text-[11px] text-slate-300 space-y-1">
                             <div><span className="text-slate-500">Party Served:</span> {selectedIntake.formPopulation?.fl115?.partyServed || 'Respondent'}</div>
-                            <div><span className="text-slate-500">Pleadings:</span> Summons (FL-110), Petition (FL-100), Blank Response (FL-120)</div>
+                            <div><span className="text-slate-500">Pleadings:</span> Summons (FL-110), Petition (FL-100), Blank Response Form</div>
                           </div>
                         </div>
 

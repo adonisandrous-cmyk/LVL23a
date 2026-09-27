@@ -173,7 +173,7 @@ Transcript: "Calling regarding Epstein credits and Watts fair rental charges. I 
     {
       id: 'doc_automation',
       name: 'Court Form & Judicial Council Engine',
-      tagline: 'California FL-120, FL-105, FL-311, FL-160 Synthesis',
+      tagline: 'California Statutory Response & Family Law Form Synthesis',
       category: 'Documents',
       icon: FileText,
       accentColor: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
@@ -181,7 +181,7 @@ Transcript: "Calling regarding Epstein credits and Watts fair rental charges. I 
       decoupledState: 'Fully Decoupled',
       accuracyBenchmark: '100% Statutory Field Mapping',
       latencyBenchmark: '18ms synthesis speed',
-      description: 'Standalone legal form injector. Maps case ledger data directly into California Judicial Council standards (FL-120 Response, FL-105 UCCJEA, FL-311 Custody, FL-160 Property) with statutory compliance checks.'
+      description: 'Standalone legal form injector. Maps case ledger data directly into California Judicial Council standards (Statutory Response, FL-105 UCCJEA, FL-311 Custody, FL-160 Property) with statutory compliance checks.'
     },
     {
       id: 'drive_bridge',
@@ -283,7 +283,7 @@ Transcript: "Calling regarding Epstein credits and Watts fair rental charges. I 
           ? ['Fullerton residential equity ($680,000 estimated)', 'Chase joint bank accounts']
           : ['Pasadena community residence ($4,800/mo mortgage)'],
         urgencyLevel: isJenkins ? 'HIGH (Ex-Parte Hearing Requested)' : 'STANDARD (Responsive Pleading 30-Day Window)',
-        recommendedForms: isGuinto ? ['FL-120', 'FL-105', 'FL-311', 'FL-160', 'FL-150'] : ['FL-300', 'FL-305', 'FL-311']
+        recommendedForms: isGuinto ? ['Response (FL-120)', 'FL-105', 'FL-311', 'FL-160', 'FL-150'] : ['FL-300', 'FL-305', 'FL-311']
       };
 
       setPhoneTestResult(parsed);
@@ -447,7 +447,7 @@ Transcript: "Calling regarding Epstein credits and Watts fair rental charges. I 
         '🔍 SENTINEL: Checking memory boundaries and cache leak protection... PASSED',
         '📊 VERITAS: Benchmarking Module 1 (Phone Parser)... 98.4% precision (42ms)',
         '📊 VERITAS: Benchmarking Module 2 (Video Conferencing)... WebRTC Mesh & Google Meet Bridge verified',
-        '📊 VERITAS: Benchmarking Module 3 (Court Form Automation)... FL-120, FL-105, FL-311, FL-160 valid',
+        '📊 VERITAS: Benchmarking Module 3 (Court Form Automation)... Statutory Response, FL-105, FL-311, FL-160 valid',
         '📊 VERITAS: Benchmarking Module 4 (Google Drive Bridge)... level23consulting@gmail.com verified',
         '📊 VERITAS: Benchmarking Module 5 (Statutory Citation)... Cal. Fam. Code §§ 770, 2550 verified',
         '📊 VERITAS: Benchmarking Module 6 (Voice Engine)... Speech synthesis latency < 15ms',
@@ -783,7 +783,7 @@ Transcript: "Calling regarding Epstein credits and Watts fair rental charges. I 
                           onClick={() => onOpenOfficialForm('FL-120', phoneTestResult.callerName)}
                           className="mt-2 w-full py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold text-center transition cursor-pointer"
                         >
-                          Auto-Populate FL-120 Now
+                          Auto-Populate Judicial Form Now
                         </button>
                       )}
                     </div>
@@ -875,7 +875,7 @@ Transcript: "Calling regarding Epstein credits and Watts fair rental charges. I 
                           : 'bg-[#080d18] border-slate-800 text-slate-300 hover:border-slate-700'
                       }`}
                     >
-                      {code}
+                      {code === 'FL-120' ? 'Response Form' : code}
                     </button>
                   ))}
 

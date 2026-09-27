@@ -261,6 +261,40 @@ def populate_document(
     }
 
 
+class UniversalPDFEngine:
+    def __init__(self, base_dir=None):
+        if base_dir is None:
+            self.base_dir = os.path.dirname(os.path.abspath(__file__))
+        else:
+            self.base_dir = base_dir
+
+    def populate(self, form_code: str, data: dict, output_filename: Optional[str] = None) -> dict:
+        template_path = os.path.join(self.base_dir, "templates", f"{form_code}.pdf")
+        mapping_path = os.path.join(self.base_dir, "mappings", f"{form_code}.mapping.json")
+        
+        if not os.path.exists(template_path):
+            alt_template = os.path.join(self.base_dir, "templates", f"{form_code.upper()}.pdf")
+            if os.path.exists(alt_template):
+                template_path = alt_template
+                
+        if not os.path.exists(mapping_path):
+            alt_mapping = os.path.join(self.base_dir, "mappings", f"{form_code.upper()}.mapping.json")
+            if os.path.exists(alt_mapping):
+                mapping_path = alt_mapping
+
+        if not output_filename:
+            output_filename = f"{form_code}_populated.pdf"
+        output_path = os.path.join(self.base_dir, "output", output_filename)
+        
+        if os.path.exists(mapping_path):
+            with open(mapping_path, "r") as f:
+                mapping_dict = json.load(f)
+        else:
+            mapping_dict = {"fields": {}}
+            
+        return populate_document(template_path, data, mapping_dict, output_path)
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) >= 5:

@@ -517,7 +517,7 @@ export const OfficialCaliforniaJudicialCouncilFormModal: React.FC<OfficialCalifo
   const handleSaveToDocuments = () => {
     if (!activeClient) return;
 
-    let formTitle = `Official CA Form FL-120 (Response) — ${formData.respondentName}`;
+    let formTitle = `Official CA Statutory Response — ${formData.respondentName}`;
     if (activeFormTab === 'FL-105') formTitle = `Official CA Form FL-105 (UCCJEA Declaration) — ${formData.respondentName}`;
     if (activeFormTab === 'FL-311') formTitle = `Official CA Form FL-311 (Parenting Plan) — ${formData.respondentName}`;
     if (activeFormTab === 'FL-160') formTitle = `Official CA Form FL-160 (Property Declaration) — ${formData.respondentName}`;
@@ -635,7 +635,7 @@ Attorney: ${formData.attorneyName}`;
                   : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >
-              FL-120 (Response)
+              Response (Statutory)
             </button>
             <button
               type="button"
@@ -1124,7 +1124,7 @@ Attorney: ${formData.attorneyName}`;
                 {/* Official Judicial Council Footer */}
                 <div className="pt-4 border-t border-slate-400 flex flex-col sm:flex-row items-center justify-between text-[9px] text-slate-600">
                   <div>
-                    Form Adopted for Mandatory Use &bull; Judicial Council of California &bull; FL-120 [Rev. January 1, 2020]
+                    Form Adopted for Mandatory Use &bull; Judicial Council of California &bull; Statutory Response [Rev. January 1, 2020]
                   </div>
                   <div className="font-bold uppercase tracking-wider">
                     RESPONSE—MARRIAGE / DOMESTIC PARTNERSHIP

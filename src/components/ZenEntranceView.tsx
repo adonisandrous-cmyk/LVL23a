@@ -1529,7 +1529,7 @@ export default function ZenEntranceView({
             <div className="px-4 py-3 bg-slate-900/90 border border-amber-500/40 rounded-xl text-xs font-mono text-amber-300 flex items-center justify-between animate-pulse">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-amber-400 animate-spin" />
-                <span>Extracting text & OCR data from "{parsingFileName}" for {ZEN_AGENTS.find(a => a.id === selectedAgent)?.name || selectedAgent}...</span>
+                <span>Reading and extracting document facts from "{parsingFileName}" for {ZEN_AGENTS.find(a => a.id === selectedAgent)?.name || selectedAgent}...</span>
               </div>
               <span className="text-[10px] text-slate-400">Processing...</span>
             </div>
@@ -2047,7 +2047,7 @@ export default function ZenEntranceView({
               {previewingDoc.content || '(No extractable text content found in document)'}
             </div>
             <div className="px-5 py-3 bg-slate-900/90 border-t border-slate-800 flex items-center justify-between text-xs font-mono">
-              <span className="text-[11px] text-slate-400">Level 23 OCR & File Ingestion Engine</span>
+              <span className="text-[11px] text-slate-400">Level 23 Document & File Ingestion Engine</span>
               <button
                 type="button"
                 onClick={() => {

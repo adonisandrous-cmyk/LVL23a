@@ -240,18 +240,22 @@ export default function LegalFormsTemplateManager({
   };
 
   // Trigger: Auto-fill ALL form fields directly using Google Drive files
-  const handleAutoFillFromDrive = async (fileId = 'drive-memo-watson') => {
+  const handleAutoFillFromDrive = async (customFileId?: string) => {
     if (!activeFormModal) return;
     setIsExtractingFields(true);
     setSubmissionNotice(null);
 
     const requiredFields = getTemplateRequiredFields(activeFormModal);
     const clientToUse = selectedClient;
+    const fileId = customFileId || (clientToUse ? `drive-intake-${clientToUse.id}` : 'drive-intake-current');
 
     try {
       const token = getAccessToken();
       // 1. Fetch file content from Google Drive
-      const driveRes = await fetch(`/api/drive/get?fileId=${fileId}`, {
+      const url = clientToUse
+        ? `/api/drive/get?fileId=${encodeURIComponent(fileId)}&clientName=${encodeURIComponent(clientToUse.name)}`
+        : `/api/drive/get?fileId=${encodeURIComponent(fileId)}`;
+      const driveRes = await fetch(url, {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         }
@@ -286,7 +290,7 @@ export default function LegalFormsTemplateManager({
           extracted: Object.keys(data.extractedFields).length,
           source: `Google Drive File: ${driveData.name || 'Drive Intake Document'}`
         });
-        setSubmissionNotice(`⚡ Form fields populated from Google Drive file: ${driveData.name || 'Intake_Memorandum_Declaration_Don_Watson.pdf'}`);
+        setSubmissionNotice(`⚡ Form fields populated from Google Drive file: ${driveData.name || (clientToUse ? `Intake_${clientToUse.name.replace(/\s+/g, '_')}.pdf` : 'Drive Document')}`);
       } else {
         runFallbackFieldExtractor(clientToUse, driveText, requiredFields);
       }
@@ -834,10 +838,10 @@ export default function LegalFormsTemplateManager({
               setShowOfficialFormModal(true);
             }}
             className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-mono text-[10.5px] font-black uppercase cursor-pointer flex items-center gap-1.5 transition-all shadow-[2px_2px_0px_#000] shrink-0"
-            title="Open official California Judicial Council Form FL-120 populated with client data"
+            title="Open official California Judicial Council statutory form populated with client data"
           >
             <FileCheck className="w-3.5 h-3.5 text-slate-950" />
-            <span>Official FL-120 Form</span>
+            <span>Official Judicial Form</span>
           </button>
 
           {/* View Mode Toggle */}
@@ -1310,7 +1314,7 @@ export default function LegalFormsTemplateManager({
 
                     <button
                       type="button"
-                      onClick={() => handleAutoFillFromDrive('drive-memo-watson')}
+                      onClick={() => handleAutoFillFromDrive()}
                       disabled={isExtractingFields}
                       className="py-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-[#090d16] font-mono text-xs font-black uppercase cursor-pointer flex items-center justify-center gap-1.5 transition-all shadow-md disabled:opacity-50"
                       title="Fetch & extract form fields directly from Google Drive intake files"

@@ -247,15 +247,15 @@ END OF JUDICIAL COUNCIL FL-120 ET SEQ. RESPONSE PACKET
             <div>
               <div className="flex items-center gap-2">
                 <h4 className="text-sm font-heading font-black text-white uppercase tracking-wider">
-                  California Form FL-120 Response Dossier
+                  California Statutory Response Dossier
                 </h4>
                 <span className="px-2 py-0.5 text-[9px] font-mono font-bold rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3" />
-                  ABBYY FlexiCapture OCR
+                  Verified Statutory Data
                 </span>
               </div>
               <p className="text-[11px] font-mono text-slate-400">
-                Judicial Council Mandatory 11-Section Statutory Schedule • Batch: {fl.abbyyBatchId || 'ABBYY-FL120-VERIFIED'}
+                Judicial Council Mandatory 11-Section Statutory Schedule
               </p>
             </div>
           </div>
@@ -267,10 +267,10 @@ END OF JUDICIAL COUNCIL FL-120 ET SEQ. RESPONSE PACKET
             type="button"
             onClick={() => handleOpenOfficial('FL-120')}
             className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 via-emerald-500 to-teal-400 hover:from-amber-400 hover:to-emerald-400 text-[#090d16] text-xs font-mono font-black flex items-center gap-1.5 shadow-lg shadow-emerald-500/40 transition-all cursor-pointer ring-2 ring-emerald-400/50"
-            title="Open authentic California Judicial Council Form FL-120 populated with extracted case data"
+            title="Open authentic California Judicial Council statutory form populated with case data"
           >
             <Eye className="w-3.5 h-3.5 text-black" />
-            <span>Open Official Form FL-120</span>
+            <span>Open Official Response Form</span>
           </button>
 
           <button
@@ -295,10 +295,10 @@ END OF JUDICIAL COUNCIL FL-120 ET SEQ. RESPONSE PACKET
             type="button"
             onClick={handleGenerateCompletePacket}
             className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-mono font-bold flex items-center gap-1.5 border border-emerald-500/30 transition-all cursor-pointer"
-            title="Generate full Judicial Council response packet: FL-120, FL-105 UCCJEA, FL-311, and FL-160"
+            title="Generate full Judicial Council response packet: FL-105 UCCJEA, FL-311, and FL-160"
           >
             <FileCheck className="w-3.5 h-3.5" />
-            <span>Full FL-120 Packet</span>
+            <span>Full Response Packet</span>
           </button>
         </div>
       </div>

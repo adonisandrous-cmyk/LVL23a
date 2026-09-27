@@ -236,8 +236,8 @@ Signature of Declarant / Party
         courtAddress: fl?.branchName || 'Lamoreaux Justice Center, 341 The City Dr S, Orange, CA 92868',
       };
 
-      if (form.code === 'FL-120' || form.code === 'FL-100') {
-        const isResponse = form.code === 'FL-120';
+      if (form.code?.includes('120') || form.code === 'FL-100' || form.code?.toLowerCase().includes('response')) {
+        const isResponse = form.code?.includes('120') || form.code?.toLowerCase().includes('response');
         data.petitionerName = fl?.petitionerName || 'Maria Guinto';
         data.respondentName = fl?.respondentName || client.name || 'Christopher Guinto';
         data.clientRole = isResponse ? 'Respondent' : 'Petitioner';

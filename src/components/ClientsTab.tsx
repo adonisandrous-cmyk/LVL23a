@@ -658,6 +658,7 @@ END:VCARD`;
         executiveDirective: {
           id: generateUUID(),
           dispatcher: 'eve',
+          dispatcherAgent: 'eve',
           dispatcherName: 'EVE',
           dispatcherTitle: 'Director of Legal Operations & Executive Intake Lead',
           directiveTitle: `Client Intake Extraction: ${fileName}`,
@@ -947,7 +948,7 @@ END:VCARD`;
       return match && match[1] && match[1].trim() ? match[1].trim() : '';
     };
 
-    // Structured CA Judicial Council Form FL-120 data from ABBYY OCR or Intake
+    // Structured CA Judicial Council Form statutory data from Intake
     if (client.fl120Data) {
       const fl = client.fl120Data;
       const childrenStr = fl.minorChildren && fl.minorChildren.length > 0
@@ -968,7 +969,7 @@ END:VCARD`;
         'Minor Children & DOBs': childrenStr,
         'Requested Custody & Relief': fl.custodyLegal ? `Legal: ${fl.custodyLegal} | Physical: ${fl.custodyPhysical || 'Joint'}${fl.visitationRequested ? ` (${fl.visitationRequested})` : ''}` : findField(/(?:Custody|Relief Requested)[:\s]+([^\n\r]+)/i),
         'Community Assets & Debts': fl.communityPropertyNotes || findField(/(?:Assets|Debts|Property)[:\s]+([^\n\r]+)/i),
-        'Primary Legal Risks & Next Steps': fl.legalGrounds ? `Grounds: ${fl.legalGrounds}${fl.abbyyBatchId ? ` | Batch: ${fl.abbyyBatchId}` : ''}` : ''
+        'Primary Legal Risks & Next Steps': fl.legalGrounds ? `Grounds: ${fl.legalGrounds}` : ''
       };
     }
 
@@ -1024,6 +1025,7 @@ END:VCARD`;
         executiveDirective: {
           id: generateUUID(),
           dispatcher: 'eve',
+          dispatcherAgent: 'eve',
           dispatcherName: 'EVE',
           dispatcherTitle: 'Director of Legal Operations & Executive Intake Lead',
           directiveTitle: `Executive Pipeline Ingestion for ${selectedClient.name}`,
@@ -1450,16 +1452,16 @@ END:VCARD`;
                        {selectedClient.fl120Data && (
                          <button
                            type="button"
-                           id="btn-open-official-fl120-card"
+                           id="btn-open-official-response-card"
                            onClick={() => {
                              setOfficialFormCode('FL-120');
                              setShowOfficialFormModal(true);
                            }}
                            className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-mono text-xs font-black uppercase rounded-lg cursor-pointer transition-all flex items-center gap-1.5 shadow-md shadow-emerald-500/30 ring-1 ring-emerald-400/50"
-                           title="Open authentic California Judicial Council Form FL-120 populated with extracted facts"
+                           title="Open authentic California Judicial Council statutory form populated with extracted facts"
                          >
                            <FileCheck className="w-3.5 h-3.5 text-slate-950" />
-                           <span>📄 Open Official Form FL-120</span>
+                           <span>📄 Open Official Response Form</span>
                          </button>
                        )}
                        <button
@@ -1765,7 +1767,7 @@ END:VCARD`;
 
                        </div>
 
-                       {/* FL-120 STATUTORY RESPONSE DOSSIER (ABBYY FLEXICAPTURE OCR / CA JUDICIAL COUNCIL) */}
+                       {/* STATUTORY RESPONSE DOSSIER (CA JUDICIAL COUNCIL) */}
                        {selectedClient.fl120Data && (
                          <FL120ResponseDossier
                            client={selectedClient}
@@ -2485,12 +2487,12 @@ END:VCARD`;
                           type="button"
                           onClick={() => handleProcessUploadedDoc(
                             'Christopher-Guinto-Dissolution-Intake.txt',
-                            `CLIENT INTAKE MEMORANDUM & CASE FILE\nClient Name: Christopher Guinto\nEmail Address: christopher.guinto@gmail.com\nPhone Number: +1 (714) 555-0199\nPractice Area: Family Law\nOpposing Party: Maria Guinto\nCourt Jurisdiction: Superior Court of California, County of Orange\nMarriage Date: 2015-09-18\nSeparation Date: 2026-04-10\nMinor Children: Ethan Guinto (DOB: 2017-04-12, Age 9), Sophia Guinto (DOB: 2020-11-05, Age 5)\nCustody Requested: Joint legal and physical custody (FL-311 2-2-3 schedule)\nAssets: Community equity in marital home, separate pre-marital retirement accounts\nCase Summary: Respondent statutory response forms packet (FL-120, FL-105 UCCJEA, FL-311).`
+                            `CLIENT INTAKE MEMORANDUM & CASE FILE\nClient Name: Christopher Guinto\nEmail Address: christopher.guinto@gmail.com\nPhone Number: +1 (714) 555-0199\nPractice Area: Family Law\nOpposing Party: Maria Guinto\nCourt Jurisdiction: Superior Court of California, County of Orange\nMarriage Date: 2015-09-18\nSeparation Date: 2026-04-10\nMinor Children: Ethan Guinto (DOB: 2017-04-12, Age 9), Sophia Guinto (DOB: 2020-11-05, Age 5)\nCustody Requested: Joint legal and physical custody (FL-311 2-2-3 schedule)\nAssets: Community equity in marital home, separate pre-marital retirement accounts\nCase Summary: Respondent statutory response forms packet (FL-105 UCCJEA, FL-311).`
                           )}
                           className="px-2.5 py-1 bg-[#0e172a] hover:bg-teal-950/40 border border-slate-700 hover:border-teal-500/50 rounded-lg text-[10.5px] font-mono text-slate-300 hover:text-teal-300 transition-all flex items-center gap-1 cursor-pointer"
                         >
                           <FileText className="w-3 h-3 text-teal-400" />
-                          <span>CA FL-120 Dissolution (Christopher Guinto)</span>
+                          <span>CA Dissolution (Christopher Guinto)</span>
                         </button>
                         <button
                           type="button"
