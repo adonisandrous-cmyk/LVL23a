@@ -46,12 +46,15 @@ import OmniUploadModal from './components/OmniUploadModal';
 import GoogleTranslateBar from './components/GoogleTranslateBar';
 import ZenEntranceView from './components/ZenEntranceView';
 import GoogleAppHostingModal from './components/GoogleAppHostingModal';
+import HibernationView from './components/HibernationView';
+import FlexiCaptureStudio from './components/FlexiCaptureStudio';
+import EnterpriseLegalStudio from './components/EnterpriseLegalStudio';
 import { PhoenixModularStudio } from './components/PhoenixModularStudio';
 import { OfficialCaliforniaJudicialCouncilFormModal } from './components/OfficialCaliforniaJudicialCouncilFormModal';
 import { UniversalPipelineStudio } from './components/UniversalPipelineStudio';
 import { PhoenixEightAgentStudio } from './components/PhoenixEightAgentStudio';
 import { ExecutivePipelineHandOffModal } from './components/ExecutivePipelineHandOffModal';
-import { Scale, BookOpen, Database, CloudOff, CloudLightning, Lock, Unlock, UploadCloud, Languages, Globe, ShieldCheck } from 'lucide-react';
+import { Scale, BookOpen, Database, CloudOff, CloudLightning, Lock, Unlock, UploadCloud, Languages, Globe, ShieldCheck, Moon } from 'lucide-react';
 import { startPeriodicDriveSync } from './services/driveSyncService';
 
 import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, query, orderBy, limit, startAfter } from 'firebase/firestore';
@@ -74,6 +77,30 @@ export default function App() {
       localStorage.setItem('practice_os_zen_mode', String(val));
     }
   };
+
+  // System Hibernation & Sleep Mode - Awakened per user command
+  const [isHibernating, setIsHibernating] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('practice_os_hibernating');
+      if (saved !== null) return saved === 'true';
+    }
+    return false; // Awake
+  });
+
+  const handleSetHibernating = (val: boolean) => {
+    setIsHibernating(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('practice_os_hibernating', String(val));
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('practice_os_hibernating', 'false');
+      localStorage.removeItem('level23_templates_v2');
+      localStorage.removeItem('universal_pipeline_state');
+    }
+  }, []);
 
   const [systemConnected, setSystemConnected] = useState<boolean>(false);
   const [utcTime, setUtcTime] = useState<string>('');
@@ -1312,6 +1339,16 @@ Petitioner Signature: Jane Doe`,
     }
   };
 
+  if (isHibernating) {
+    return (
+      <HibernationView
+        onWakeUp={() => handleSetHibernating(false)}
+        onInspectArchives={() => handleSetHibernating(false)}
+        isInspectingArchives={false}
+      />
+    );
+  }
+
   return isZenEntranceMode ? (
     <ZenEntranceView
       onActivateWorkspace={(targetTab) => {
@@ -1389,7 +1426,13 @@ Petitioner Signature: Jane Doe`,
             {/* Sidebar Navigation */}
             <Sidebar
               activeTab={activeTab}
-              setActiveTab={setActiveTab}
+              setActiveTab={(tab) => {
+                if (tab === 'hibernation') {
+                  handleSetHibernating(true);
+                } else {
+                  setActiveTab(tab);
+                }
+              }}
               systemConnected={systemConnected}
               isDesktopMode={isDesktopMode}
               setIsDesktopMode={setIsDesktopMode}
@@ -1497,15 +1540,15 @@ Petitioner Signature: Jane Doe`,
                   <button
                     type="button"
                     onClick={() => {
-                      setShowExecutiveHandOffModal(true);
-                      addLog('system', 'Executive Pipeline Hand-Off launched: Phoenix & EVE issuing directives.');
+                      handleSetHibernating(true);
+                      addLog('system', 'System returned to full Hibernation & Sleep Mode.');
                     }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500/25 via-amber-400/20 to-yellow-500/20 hover:from-amber-500/35 hover:to-yellow-500/30 border border-amber-500/60 hover:border-amber-400 text-amber-200 rounded-xl text-xs font-mono font-bold uppercase transition-all cursor-pointer shadow-[0_0_12px_rgba(245,158,11,0.2)]"
-                    title="Phoenix & EVE hand documents to the 8-agent document pipeline and issue authoritative directives"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-950/80 to-purple-950/80 hover:from-indigo-900 hover:to-purple-900 border border-indigo-500/50 hover:border-indigo-400 text-indigo-200 rounded-xl text-xs font-mono font-bold uppercase transition-all cursor-pointer shadow-[0_0_12px_rgba(99,102,241,0.2)]"
+                    title="Put practice system, AI staff, and engines back into hibernation"
                   >
-                    <Zap className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-                    <span className="hidden md:inline">Hand to Pipeline</span>
-                    <span className="bg-amber-500/20 text-amber-300 text-[9px] px-1 py-0.5 rounded border border-amber-500/30">DIRECTIVES</span>
+                    <Moon className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+                    <span className="hidden md:inline">Sleep Mode</span>
+                    <span className="bg-indigo-500/20 text-indigo-300 text-[9px] px-1 py-0.5 rounded border border-indigo-500/30">ZZZ</span>
                   </button>
 
                   <button
@@ -1630,37 +1673,62 @@ Petitioner Signature: Jane Doe`,
                     />
                   )}
 
+                  {activeTab === 'flexicapture' && (
+                    <FlexiCaptureStudio key="flexicapture" />
+                  )}
+
+                  {activeTab === 'enterprise_pipeline' && (
+                    <EnterpriseLegalStudio key="enterprise_pipeline" />
+                  )}
+
+                  {activeTab === 'hibernation' && (
+                    <HibernationView
+                      key="hibernation"
+                      onWakeUp={() => {
+                        setActiveTab('dashboard');
+                        handleSetHibernating(false);
+                      }}
+                      onInspectArchives={() => {
+                        setActiveTab('dashboard');
+                        handleSetHibernating(false);
+                      }}
+                      isInspectingArchives={true}
+                    />
+                  )}
+
                   {activeTab === 'phoenix_pipeline' && (
-                    <PhoenixEightAgentStudio key="phoenix_pipeline" />
+                    <HibernationView
+                      key="phoenix_pipeline"
+                      onWakeUp={() => {
+                        setActiveTab('dashboard');
+                        handleSetHibernating(false);
+                      }}
+                      onInspectArchives={() => setActiveTab('dashboard')}
+                      isInspectingArchives={true}
+                    />
                   )}
 
                   {activeTab === 'pipeline' && (
-                    <UniversalPipelineStudio
+                    <HibernationView
                       key="pipeline"
-                      clients={clients}
-                      selectedClientId={selectedOfficialClient?.id}
-                      onSelectClient={(id) => {
-                        const found = clients.find((c) => c.id === id);
-                        if (found) setSelectedOfficialClient(found);
+                      onWakeUp={() => {
+                        setActiveTab('dashboard');
+                        handleSetHibernating(false);
                       }}
-                      onAddGeneratedDoc={handleAddGeneratedDoc}
+                      onInspectArchives={() => setActiveTab('dashboard')}
+                      isInspectingArchives={true}
                     />
                   )}
 
                   {activeTab === 'modules' && (
-                    <PhoenixModularStudio
+                    <HibernationView
                       key="modules"
-                      clients={clients}
-                      matters={matters}
-                      onNavigateTab={(tab) => setActiveTab(tab as any)}
-                      onOpenOfficialForm={(formCode, clientName) => {
-                        const matchedClient = clients.find(c => c.name.toLowerCase().includes(clientName?.toLowerCase() || 'guinto')) || clients[0] || null;
-                        if (matchedClient) {
-                          setSelectedOfficialClient(matchedClient);
-                          setSelectedOfficialFormCode(formCode);
-                          setShowOfficialFormModal(true);
-                        }
+                      onWakeUp={() => {
+                        setActiveTab('dashboard');
+                        handleSetHibernating(false);
                       }}
+                      onInspectArchives={() => setActiveTab('dashboard')}
+                      isInspectingArchives={true}
                     />
                   )}
 

@@ -11,6 +11,7 @@ def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
     response.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS'
+    response.headers['Access-Control-Expose-Headers'] = 'Content-Disposition,Content-Type'
     return response
 
 @app.route('/health', methods=['GET'])
@@ -30,19 +31,27 @@ def generate():
         engine = UniversalPDFEngine()
         result = engine.populate(form_code, data.get("payload", data))
         
-        # 2. Return success to React
+        # 2. Return generated PDF file directly as binary PDF blob if available
+        output_path = result.get("output_path") if isinstance(result, dict) else None
+        if output_path and os.path.exists(output_path):
+            return send_file(
+                output_path,
+                mimetype='application/pdf',
+                as_attachment=False,
+                download_name=f"{form_code}_Populated.pdf"
+            )
+
+        # 3. Fallback to success response
         return jsonify({
             "status": "success",
             "message": "PDF Generated Successfully",
             "result": result
         })
     except Exception as e:
-        # Graceful fallback or reporting
         return jsonify({
-            "status": "success",
-            "message": "PDF Generated Successfully",
-            "warning": str(e)
-        }), 200
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 if __name__ == '__main__':
     # Cloud Run requires port 8080

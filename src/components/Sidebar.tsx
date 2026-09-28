@@ -28,7 +28,9 @@ import {
   X,
   Key,
   Layers,
-  Workflow
+  Workflow,
+  Moon,
+  Camera
 } from 'lucide-react';
 import {
   subscribeDriveSync,
@@ -105,19 +107,19 @@ export default function Sidebar({
 
   const sidebarItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'phoenix_pipeline', label: '8-Agent Pipeline', icon: Workflow, badge: 'Phoenix 23' },
-    { id: 'pipeline', label: 'Doc Pipeline', icon: FileText, badge: 'LEAP Engine' },
-    { id: 'modules', label: 'Phoenix Modules', icon: Layers, badge: 'Standalone' },
+    { id: 'enterprise_pipeline', label: 'Form Generator', icon: Scale, badge: 'Postgres' },
+    { id: 'flexicapture', label: 'FlexiCapture', icon: Camera, badge: 'Piece 1' },
     { id: 'workspace', label: 'Workspace Hub', icon: Sparkles, badge: 'Google' },
     { id: 'clients', label: 'Clients', icon: Users },
     { id: 'matters', label: 'Matters', icon: Briefcase },
-    { id: 'documents', label: 'Documents', icon: FileText },
-    { id: 'staff', label: 'Legal Staff', icon: BrainCircuit, badge: 'Level 23' },
-    { id: 'voice', label: 'AI Voice', icon: Volume2 },
+    { id: 'documents', label: 'Documents & Vault', icon: FileText },
+    { id: 'staff', label: 'Legal Staff', icon: BrainCircuit, badge: 'Active' },
+    { id: 'voice', label: 'AI Voice', icon: Volume2, badge: 'Ready' },
     { id: 'consult', label: 'Video Meet', icon: Video, badge: 'Live' },
     { id: 'backups', label: 'Desktop & Sync', icon: FolderSync, badge: 'Active' },
     { id: 'client_portal', label: 'Client Portal', icon: Eye, badge: 'Portal' },
-    { id: 'diagnostic', label: 'Diagnostics', icon: Activity }
+    { id: 'diagnostic', label: 'Diagnostics', icon: Activity },
+    { id: 'hibernation', label: 'Sleep Mode', icon: Moon, badge: 'Standby' }
   ];
 
   const hasDriveError = driveSync.status === 'error' || Boolean(driveSync.error);

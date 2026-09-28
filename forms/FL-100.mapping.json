@@ -1,0 +1,34 @@
+{
+  "form_id": "FL-120",
+  "jurisdiction": "California Judicial Council",
+  "title": "Response—Marriage / Domestic Partnership",
+  "revision": "Rev. January 1, 2020",
+  "description": "Declarative mapping dictionary linking Master Standardized JSON schema to California Judicial Council FL-120 AcroForm targets.",
+  "fields": {
+    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].AttyName_ft[0]": "attorney.name",
+    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].BarNo_ft[0]": "attorney.bar_number",
+    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].AttyFirm_ft[0]": "attorney.firm_name",
+    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].AttyStreet_ft[0]": "attorney.street",
+    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].AttyCity_ft[0]": "attorney.city",
+    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].AttyState_ft[0]": "attorney.state",
+    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].AttyZip_ft[0]": "attorney.zip",
+    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].Phone_ft[0]": "attorney.phone",
+    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].Fax_ft[0]": "attorney.fax",
+    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].Email_ft[0]": "attorney.email",
+    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].AttyFor_ft[0]": "attorney.representing",
+
+    "FL-120[0].Page1[0].Caption_sf[0].CourtInfo[0].CrtCounty_ft[0]": {
+      "type": "format_string",
+      "source": "case.county",
+      "case": "upper"
+    },
+    "FL-120[0].Page1[0].Caption_sf[0].CourtInfo[0].Street_ft[0]": "case.court_street",
+    "FL-120[0].Page1[0].Caption_sf[0].CourtInfo[0].MailingAdd_ft[0]": "case.court_mailing",
+    "FL-120[0].Page1[0].Caption_sf[0].CourtInfo[0].CityZip_ft[0]": "case.court_city_zip",
+    "FL-120[0].Page1[0].Caption_sf[0].CourtInfo[0].Branch_ft[0]": "case.branch_name",
+
+    "FL-120[0].Page1[0].Caption_sf[0].CaseNumber[0].CaseNumber_ft[0]": "case.number",
+    "FL-120[0].Page1[0].Caption_sf[0].TitlePartyName[0].Petitioner_1_ft[0]": "case.title_petitioner",
+    "FL-120[0].Page1[0].Caption_sf[0].TitlePartyName[0].Respondent_ft[0]": "case.title_respondent"
+  }
+}

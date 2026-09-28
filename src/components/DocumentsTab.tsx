@@ -46,7 +46,8 @@ import {
   Edit3,
   Save,
   Globe,
-  BookmarkPlus
+  BookmarkPlus,
+  Moon
 } from 'lucide-react';
 import { Client, DocumentTemplate, GeneratedDocument, Matter, EvidenceFile } from '../types';
 import { ALL_DOCUMENT_TEMPLATES, ALL_COURT_FORM_SCHEMAS, CourtFormSchema } from '../data/legalFormsCatalog';
@@ -93,8 +94,8 @@ export default function DocumentsTab({
   const sharp3DRoseButton = "rounded-none border-2 border-rose-500 bg-[#12070c] text-rose-500 font-mono text-[10px] font-bold uppercase py-1.5 px-3 shadow-[3px_3px_0px_#f43f5e] hover:translate-x-[-1.5px] hover:translate-y-[-1.5px] hover:shadow-[4px_4px_0px_#f43f5e] active:translate-x-[1.5px] active:translate-y-[1.5px] active:shadow-none transition-all cursor-pointer shrink-0";
   const smallSharp3D = "rounded-none border border-slate-700 bg-slate-900 text-slate-300 font-mono text-[10px] font-bold uppercase py-1.5 px-2.5 shadow-[2.5px_2.5px_0px_#475569] hover:translate-x-[-0.5px] hover:translate-y-[-0.5px] hover:shadow-[3.5px_3.5px_0px_#475569] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all cursor-pointer";
 
-  // 1. Primary Workspace Screens
-  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'synthesis' | 'evidence_room' | 'judicial_mapper' | 'template_builder' | 'forms_manager' | 'drive_portal'>('forms_manager');
+  // 1. Primary Workspace Screens (Automated generators decommissioned, dormant archives active)
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'synthesis' | 'evidence_room' | 'judicial_mapper' | 'template_builder' | 'forms_manager' | 'drive_portal'>('evidence_room');
   const [draftingModel, setDraftingModel] = useState<string>('default');
   const [showTabOmniUpload, setShowTabOmniUpload] = useState<boolean>(false);
 
@@ -162,23 +163,14 @@ export default function DocumentsTab({
   // Template Category Filter State
   const [templateCategoryFilter, setTemplateCategoryFilter] = useState<string>('all');
 
-  // Convert templates constant into a robust client-persisted React state hook
-  const [templates, setTemplates] = useState<DocumentTemplate[]>(() => {
-    const defaultTemplates: DocumentTemplate[] = ALL_DOCUMENT_TEMPLATES;
+  // Form templates deleted per user directive
+  const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
 
-    const saved = localStorage.getItem('level23_templates_v2');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      } catch (e) {
-        // Fall back to default
-      }
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('level23_templates_v2');
     }
-    return defaultTemplates;
-  });
+  }, []);
 
   // Scanned paperwork presets corresponding to templates for testing immediately
   const ocrPresets: OCRPreset[] = [
@@ -1787,14 +1779,36 @@ Respectfully submitted,
   const activePreset = ocrPresets.find(p => p.templateId === selectedTemplate.id);
 
   return (
-    <div id="documents-tab" className="flex flex-col gap-5 h-[calc(100vh-140px)]">
+    <div id="documents-tab" className="flex flex-col gap-4 h-[calc(100vh-140px)]">
       
+      {/* ------------------------------------------------------------- */}
+      {/* HIBERNATION & AUTOMATION DECOMMISSIONED BANNER */}
+      {/* ------------------------------------------------------------- */}
+      <div className="bg-indigo-950/40 border border-indigo-500/40 rounded-xl p-3.5 flex items-center justify-between gap-3 text-indigo-200 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-indigo-900/60 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+            <Moon className="w-4.5 h-4.5" />
+          </div>
+          <div>
+            <div className="text-xs font-bold text-white flex items-center gap-2">
+              <span>DOCUMENT AUTOMATION DECOMMISSIONED • FORM TEMPLATES PURGED</span>
+              <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase">
+                Hibernation Active
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-400">
+              Form templates have been deleted and automated PDF pipelines powered down. Existing client evidence and archive files remain safely accessible.
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ------------------------------------------------------------- */}
       {/* SHARP 3D WORKSPACE INTERACTION MODE BAR SWITCH */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex bg-[#0a101b] border-2 border-[#1e293b] p-1.5 justify-between items-center gap-3 select-none flex-wrap">
+      <div className="flex bg-[#0a101b] border-2 border-[#1e293b] p-1.5 justify-between items-center gap-3 select-none flex-wrap shrink-0">
         
-        <div className="flex gap-3 flex-wrap">
+        <div className="flex gap-3 flex-wrap items-center">
           <button
             type="button"
             onClick={() => setShowTabOmniUpload(true)}
@@ -1802,25 +1816,8 @@ Respectfully submitted,
             title="Upload any document, intake sheet, or evidence file and translate to Spanish / extract data"
           >
             <UploadCloud className="w-4.5 h-4.5 text-purple-300 animate-pulse" />
-            <span>Upload & Translate Hub</span>
+            <span>Upload Hub</span>
             <span className="bg-purple-500/30 text-[9px] px-1 py-0.5 rounded text-purple-200">ES/EN</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveWorkspaceTab('synthesis');
-              setViewingDoc(null);
-              setCompiledText(null);
-            }}
-            className={`px-4 py-2 text-xs font-mono font-extrabold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeWorkspaceTab === 'synthesis'
-                ? 'bg-teal-500 text-[#090d16] border border-teal-400 font-bold'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-[#0f1725] border border-transparent'
-            }`}
-          >
-            <ClipboardList className="w-4.5 h-4.5" />
-            <span>Intake Synthesis & OCR</span>
           </button>
 
           <button
@@ -1843,62 +1840,6 @@ Respectfully submitted,
           <button
             type="button"
             onClick={() => {
-              setActiveWorkspaceTab('judicial_mapper');
-              setViewingDoc(null);
-              setCompiledText(null);
-            }}
-            className={`px-4 py-2 text-xs font-mono font-extrabold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeWorkspaceTab === 'judicial_mapper'
-                ? 'bg-teal-500 text-[#090d16] border border-teal-400 font-bold'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-[#0f1725] border border-transparent'
-            }`}
-          >
-            <FileSignature className="w-4.5 h-4.5" />
-            <span>Judicial Court Forms & Mail Extractor</span>
-          </button>
-
-          <button
-            type="button"
-            id="template-builder-tab-btn"
-            onClick={() => {
-              setActiveWorkspaceTab('template_builder');
-              setViewingDoc(null);
-              setCompiledText(null);
-              // Default select template first to avoid null crash
-              if (templates.length > 0 && !selectedBuilderTemplate) {
-                setSelectedBuilderTemplate(templates[0]);
-              }
-            }}
-            className={`px-4 py-2 text-xs font-mono font-extrabold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeWorkspaceTab === 'template_builder'
-                ? 'bg-teal-500 text-[#090d16] border border-teal-400 font-bold shadow-[0_0_12px_rgba(20,184,166,0.35)]'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-[#0f1725] border border-transparent'
-            }`}
-          >
-            <Sliders className="w-4.5 h-4.5 text-teal-400" />
-            <span>Template Builder</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveWorkspaceTab('forms_manager');
-              setViewingDoc(null);
-              setCompiledText(null);
-            }}
-            className={`px-4 py-2 text-xs font-mono font-extrabold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeWorkspaceTab === 'forms_manager'
-                ? 'bg-teal-500 text-[#090d16] border border-teal-400 font-bold shadow-[0_0_12px_rgba(20,184,166,0.35)]'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-[#0f1725] border border-transparent'
-            }`}
-          >
-            <Scale className="w-4.5 h-4.5 text-teal-400" />
-            <span>Legal Forms Template Manager</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
               setActiveWorkspaceTab('drive_portal');
               setViewingDoc(null);
               setCompiledText(null);
@@ -1909,53 +1850,14 @@ Respectfully submitted,
                 : 'text-amber-500 hover:text-amber-400 hover:bg-amber-950/20 border border-transparent'
             }`}
           >
-            <FolderOpen className="w-4.5 h-4.5 text-amber-500 animate-pulse" />
-            <span>Google Drive Cloud Editor</span>
+            <FolderOpen className="w-4.5 h-4.5 text-amber-500" />
+            <span>Google Drive Cloud Vault</span>
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Quick Online Judicial Form Harvester Action */}
-          <button
-            type="button"
-            onClick={() => setShowOnlineHarvesterModal(true)}
-            className="px-3 py-1.5 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-[#090d16] font-mono text-[11px] font-black uppercase flex items-center gap-1.5 transition-all shadow-[2px_2px_0px_#000] cursor-pointer"
-            title="Search and grab Judicial Council forms from courts.ca.gov and map them for auto-population"
-          >
-            <Globe className="w-3.5 h-3.5" />
-            <span>Grab Court Form Online</span>
-          </button>
-
-          {/* Quick Open Official California Judicial Council Form Modal */}
-          <button
-            type="button"
-            onClick={() => {
-              const guinto = clients?.find(c => c.name.includes('Christopher Guinto')) || clients?.[0] || null;
-              setSelectedOfficialClient(guinto);
-              setSelectedOfficialFormCode('FL-120');
-              setShowOfficialFormModal(true);
-            }}
-            className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-mono text-[11px] font-black uppercase flex items-center gap-1.5 transition-all shadow-[2px_2px_0px_#000] cursor-pointer"
-            title="Open official California Judicial Council Form FL-120 populated with client data"
-          >
-            <FileCheck className="w-3.5 h-3.5 text-slate-950" />
-            <span>Official Form FL-120</span>
-          </button>
-
-          {/* Model Selector Dropdown for drafting / synthesis */}
-          <div className="flex items-center gap-2 px-3 py-1 bg-[#111926] border border-slate-700/60 rounded-none font-mono text-[11px] text-slate-300">
-            <span className="text-slate-400 font-extrabold uppercase text-[10px] tracking-wider">Drafting Co-Pilot:</span>
-            <select
-              value={draftingModel}
-              onChange={(e) => setDraftingModel(e.target.value)}
-              className="bg-[#070b13] border border-[#1e293b] rounded-none px-2 py-1 text-xs text-slate-200 focus:border-teal-400 outline-none transition-colors cursor-pointer"
-            >
-              <option value="default">Default AI Router</option>
-              <option value="openrouter-fusion">OpenRouter Fusion</option>
-              <option value="claude-3.7-sonnet">Claude 3.7 Sonnet</option>
-              <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option>
-            </select>
-          </div>
+        <div className="flex items-center gap-2 text-xs font-mono text-slate-500">
+          <Moon className="w-3.5 h-3.5 text-indigo-400" />
+          <span>Generators: Dormant</span>
         </div>
 
       </div>

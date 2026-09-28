@@ -503,7 +503,7 @@ export default function PhoenixIngestionBridgeView({
                     onChange={(e) => setSimPreset(e.target.value as any)}
                     className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-amber-500 cursor-pointer"
                   >
-                    <option value="divorce">Sarah Jenkins — Contested Dissolution (Family Code § 2104)</option>
+                    <option value="divorce">Family Law — Contested Dissolution (Family Code § 2104)</option>
                     <option value="bankruptcy">Marcus Vance — Chapter 7 Bankruptcy Liquidation</option>
                     <option value="custody">Eleanor Vance — Minor Custody & Support Allocation</option>
                   </select>

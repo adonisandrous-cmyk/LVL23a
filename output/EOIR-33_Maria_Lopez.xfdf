@@ -1,0 +1,2 @@
+<?xml version='1.0' encoding='utf-8'?>
+<xfdf xmlns="http://ns.adobe.com/xfdf/" xml:space="preserve"><fields><field name="ImmigrationCourtDocketNumber"><value>23-12345</value></field><field name="AlienRegistrationNumber"><value>A-204-589-123</value></field><field name="AlienDOB"><value>1990-05-12</value></field><field name="AlienNewAddress"><value>123 Main St, Las Vegas, NV 89101</value></field><field name="AlienFirstName"><value>Maria</value></field><field name="AlienLastName"><value>Lopez</value></field></fields><f href="templates/EOIR-33.pdf" /></xfdf>

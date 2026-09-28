@@ -13,6 +13,7 @@ import { createRequire } from "module";
 import { DocumentProcessorServiceClient } from "@google-cloud/documentai";
 import twilio from "twilio";
 import { phoenixRouter } from "./src/api/phoenixRouter";
+import { enterpriseLegalRouter } from "./src/api/enterpriseLegalRouter";
 
 // Safe hybrid loader for pdf-parse supporting both tsx (ESM) and bundled server.cjs (CommonJS)
 const nodeRequire = typeof require !== "undefined"
@@ -90,6 +91,13 @@ app.use((req, res, next) => {
 
 // Level 23 / Phoenix 23 Document Intelligence 8-Agent Pipeline Router
 app.use("/api/phoenix", phoenixRouter);
+
+// Enterprise Legal Automation Platform REST API (v1)
+app.use("/api/v1", enterpriseLegalRouter);
+app.use("/output", express.static(path.join(process.cwd(), "output")));
+app.use("/templates", express.static(path.join(process.cwd(), "templates")));
+app.use("/forms", express.static(path.join(process.cwd(), "forms")));
+app.use("/google_drive_level23", express.static(path.join(process.cwd(), "google_drive_level23")));
 
 // Initialize GoogleGenAI client (lazy load to prevent crashing if GEMINI_API_KEY is missing initially)
 let aiClient: GoogleGenAI | null = null;

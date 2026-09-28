@@ -31,17 +31,17 @@
     }
   },
   "attorney": {
-    "name": "Sarah Jenkins, Esq.",
-    "firm_name": "Nexus Family Law Group, LLP",
-    "bar_number": "284910",
-    "street": "500 Montgomery Street, Suite 800",
-    "city": "San Francisco",
+    "name": "",
+    "firm_name": "",
+    "bar_number": "",
+    "street": "",
+    "city": "",
     "state": "CA",
-    "zip": "94111",
-    "phone": "(415) 555-0199",
-    "fax": "(415) 555-0198",
-    "email": "sjenkins@nexuslaw.com",
-    "representing": "Respondent (Christopher Guinto)"
+    "zip": "",
+    "phone": "",
+    "fax": "",
+    "email": "",
+    "representing": ""
   },
   "case": {
     "number": "FDI-24-789012",

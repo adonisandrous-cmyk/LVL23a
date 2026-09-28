@@ -1,0 +1,11 @@
+{
+  "template": "templates/EOIR-33.pdf",
+  "fields": {
+    "client_first_name": "AlienFirstName",
+    "client_last_name": "AlienLastName",
+    "client_DOB": "AlienDOB",
+    "client_A_number": "AlienRegistrationNumber",
+    "client_address": "AlienNewAddress",
+    "case_number": "ImmigrationCourtDocketNumber"
+  }
+}

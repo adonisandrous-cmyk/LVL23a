@@ -1,0 +1,10 @@
+{
+  "template": "templates/FL-115.pdf",
+  "fields": {
+    "client_first_name": "FL115FirstName",
+    "client_last_name": "FL115LastName",
+    "client_DOB": "FL115DOB",
+    "client_address": "FL115Address",
+    "case_number": "FL115CaseNumber"
+  }
+}
