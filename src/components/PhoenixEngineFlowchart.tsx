@@ -245,10 +245,10 @@ export function PhoenixEngineFlowchart({ onSelectStep, onLaunchExecutiveHandOff 
                 Petition For Dissolution
               </div>
               <div className="space-y-0.5 pt-1 text-[7px] text-slate-600">
-                <div>Petitioner: Eleanor Vance</div>
-                <div>Respondent: Jonathan Vance</div>
-                <div>Case Number: 24FL-009412</div>
-                <div>County: Orange County</div>
+                <div>Petitioner: [PETITIONER_NAME]</div>
+                <div>Respondent: [RESPONDENT_NAME]</div>
+                <div>Case Number: [CASE_NUMBER]</div>
+                <div>County: [COUNTY]</div>
               </div>
             </div>
 
@@ -266,11 +266,11 @@ export function PhoenixEngineFlowchart({ onSelectStep, onLaunchExecutiveHandOff 
             
             <div className="p-2.5 bg-[#050a14] rounded-lg text-[9px] font-mono text-cyan-300 space-y-1 border border-cyan-500/20">
               <div className="text-[8px] text-slate-400 uppercase font-bold">Extracted Values:</div>
-              <div className="truncate text-slate-200">• Petitioner: Eleanor Vance</div>
-              <div className="truncate text-slate-200">• Respondent: Jonathan Vance</div>
-              <div className="truncate text-slate-200">• Case #: 24FL-009412</div>
+              <div className="truncate text-slate-200">• Petitioner: [PETITIONER_NAME]</div>
+              <div className="truncate text-slate-200">• Respondent: [RESPONDENT_NAME]</div>
+              <div className="truncate text-slate-200">• Case #: [CASE_NUMBER]</div>
               <div className="truncate text-slate-200">• Filing Date: 09/24/2026</div>
-              <div className="truncate text-slate-200">• Court: Orange County</div>
+              <div className="truncate text-slate-200">• Court: [COUNTY]</div>
             </div>
 
             <p className="text-[10px] text-slate-400 font-sans leading-relaxed">
@@ -341,7 +341,7 @@ export function PhoenixEngineFlowchart({ onSelectStep, onLaunchExecutiveHandOff 
                 <span>Certified Template</span>
               </div>
               <div className="text-[8px] text-slate-300 leading-snug">
-                Populate with Eleanor Vance facts today, or any new client matter tomorrow.
+                Populate with verified client facts today, or any new client matter tomorrow.
               </div>
             </div>
 

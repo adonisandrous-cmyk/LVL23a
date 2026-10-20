@@ -66,6 +66,7 @@ import { ExecutivePipelineHandOffModal } from './ExecutivePipelineHandOffModal';
 import { ExecutiveDispatchResult } from '../services/phoenixEngine/ExecutivePipelineBridge';
 import { audioService } from '../services/audioPlaybackService';
 import { getAccessToken } from '../lib/driveAuth';
+import { getModelVoiceAssignments, ModelVoiceAssignment } from '../services/voiceAssignmentService';
 
 interface AIStaffTabProps {
   chatThread: LegalMessage[];
@@ -102,7 +103,7 @@ export default function AIStaffTab({
   const [showOfficialFormModal, setShowOfficialFormModal] = useState<boolean>(false);
   const [selectedOfficialFormCode, setSelectedOfficialFormCode] = useState<'FL-120' | 'FL-105' | 'FL-311' | 'FL-160'>('FL-120');
   const [selectedOfficialClient, setSelectedOfficialClient] = useState<Client | null>(() => {
-    return clients?.find(c => c.name.includes('Christopher Guinto')) || clients?.[0] || null;
+    return clients?.[0] || null;
   });
   
   // Manage Custom Agent Names persistently via localStorage/state
@@ -221,6 +222,17 @@ export default function AIStaffTab({
     return terms.some(term => normMsg.includes(term));
   };
 
+  // Model Voice Assignments dynamically synchronized with Voice Engine Tab (Strict Female Voices)
+  const [modelVoiceAssignments, setModelVoiceAssignments] = useState<Record<string, ModelVoiceAssignment>>(() => getModelVoiceAssignments());
+
+  useEffect(() => {
+    const handleVoiceSync = () => {
+      setModelVoiceAssignments(getModelVoiceAssignments());
+    };
+    window.addEventListener('level23_voice_assignment_changed', handleVoiceSync);
+    return () => window.removeEventListener('level23_voice_assignment_changed', handleVoiceSync);
+  }, []);
+
   // Dedicated Agent Profiles with clear hierarchy, roles, and full Google Drive edit authority
   const agentProfiles: VoiceAgentProfile[] = [
     {
@@ -228,7 +240,7 @@ export default function AIStaffTab({
       name: customNames['ap-4'] || 'EVE',
       avatar: '🤖',
       role: 'Office Manager & Operations Lead',
-      voiceName: 'Eve', // Specialized US Receptionist / Office Manager Voice
+      voiceName: modelVoiceAssignments['ap-4']?.voiceName || 'Sarah', // Reassuring Female (Sarah ElevenLabs / Eve Studio)
       description: 'Second in seniority behind Phoenix (#2 Seniority). Office Manager who keeps order, schedules appointments, coordinates client intakes, organizes case files, routes filings, audits evidence, and has FULL READ/WRITE/EDIT access to the firm Google Drive repository (level23consulting@gmail.com).',
       accent: 'Professional & Efficient (US Female)',
       style: 'Organized, proactive, orderly, supportive, task-focused, full Drive edit authority',
@@ -238,11 +250,11 @@ export default function AIStaffTab({
       id: 'ap-1',
       name: customNames['ap-1'] || 'Phoenix',
       avatar: '👩‍⚖️',
-      role: 'Senior Managing Partner & Litigation Lead',
-      voiceName: 'Aoede', // Professional UK Female
-      description: 'Leader of the firm (#1 Seniority). Guides master legal strategy, tri-jurisdictional trial doctrine (CA, NV, Federal), high-stakes litigation, and leads the overall practice with FULL READ/WRITE/EDIT access to the firm Google Drive repository (level23consulting@gmail.com).',
-      accent: 'Distinguished British Accent (UK Female)',
-      style: 'Authoritative, strategic, commanding, visionary, full Drive edit authority',
+      role: 'Senior Counsel & BigLaw Managing Partner',
+      voiceName: modelVoiceAssignments['ap-1']?.voiceName || 'Lilly', // Distinguished Executive Managing Partner (Lilly ElevenLabs / Aoede UK Female)
+      description: 'Phoenix IS BigLaw. Leader of the firm (#1 Seniority) and Senior Counsel commanding BigLaw\'s 100+ agent DyTopo debate bench. Blends elite tri-jurisdictional trial doctrine (CA, NV, Federal, UK High Court) with CitationGate verbatim grounding, CourtListener authority checks, playbook counter-redlining, and court deadline calculation with FULL READ/WRITE/EDIT access to the firm Google Drive repository (level23consulting@gmail.com).',
+      accent: 'Distinguished Executive British Accent (UK Female)',
+      style: 'Senior Counsel persona: Authoritative British cadence, strategic, commanding, visionary, deploying the full analytical power of BigLaw DyTopo multi-round verification.',
       portrait: phoenixPortrait
     },
     {
@@ -250,7 +262,7 @@ export default function AIStaffTab({
       name: customNames['ap-2'] || 'Sentry',
       avatar: '🛡️',
       role: 'Systems Security & Diagnostic Specialist',
-      voiceName: 'Zephyr', // Mid-Atlantic Academic Female
+      voiceName: modelVoiceAssignments['ap-2']?.voiceName || 'Maya', // Smooth Calm Diagnostic Specialist (Maya ElevenLabs)
       description: 'Responsible for diagnostic sweeps, applet health integrity, package tracking, and active deployment monitoring.',
       accent: 'Mid-Atlantic Academic (US Female)',
       style: 'Extremely detailed, reassuring',
@@ -261,9 +273,9 @@ export default function AIStaffTab({
       name: customNames['ap-3'] || 'Alure',
       avatar: '💼',
       role: 'Legal Research Associate & Case File Reviewer',
-      voiceName: 'Kore', // West Coast Modern Female
+      voiceName: modelVoiceAssignments['ap-3']?.voiceName || 'Jessica', // Articulate Trial Consultant & Case File Reviewer (Jessica ElevenLabs)
       description: 'Conducts statutory legal research, brief drafting support, and comprehensive case analysis with FULL READ/WRITE/EDIT access to the firm Google Drive repository (level23consulting@gmail.com).',
-      accent: 'Modern West Coast (US Female)',
+      accent: 'Articulate & Analytical (US Female)',
       style: 'Analytical, highly responsive, concise, full Drive edit authority',
       portrait: alurePortrait
     },
@@ -272,9 +284,9 @@ export default function AIStaffTab({
       name: customNames['ap-5'] || 'Sentinel',
       avatar: '🔬',
       role: 'Code Quality & Architectural Auditor',
-      voiceName: 'Charon',
+      voiceName: modelVoiceAssignments['ap-5']?.voiceName || 'Misa', // Gentle Serene Female (Misa ElevenLabs)
       description: 'Spawned dedicated model strictly focused on software quality, code correctness, zero-loop guarantees, validating component boundaries, and testing individual system subroutines.',
-      accent: 'Precise & Direct (Analytical)',
+      accent: 'Gentle & Serene (Analytical Female)',
       style: 'Rigorous, audit-driven, zero tolerance for loops or hallucinations',
       portrait: sentryPortrait
     },
@@ -283,9 +295,9 @@ export default function AIStaffTab({
       name: customNames['ap-6'] || 'Veritas',
       avatar: '⚖️',
       role: 'Feature Effectiveness & Verification Engine',
-      voiceName: 'Fenrir',
+      voiceName: modelVoiceAssignments['ap-6']?.voiceName || 'Michelle', // Empathetic Clear Verification Lead (Michelle ElevenLabs)
       description: 'Spawned dedicated model strictly focused on empirical feature effectiveness: benchmarks phone parsing accuracy, video conferencing stability, court form generation precision, and modular autonomy.',
-      accent: 'Authoritative Benchmark (Verification)',
+      accent: 'Authoritative Benchmark (Verification Female)',
       style: 'Empirical, test-driven, metric-focused, feature validator',
       portrait: phoenixPortrait
     }
@@ -301,7 +313,7 @@ export default function AIStaffTab({
 
   // EVE ('ap-4') Administrative and Router Local States
   const [evePendingFiles, setEvePendingFiles] = useState([
-    { id: 'f-1', name: 'FL-100_Petitioner_Sarah_Jenkins.pdf', size: '148 KB', category: 'Petition Filings' },
+    { id: 'f-1', name: 'FL-100_Petitioner_Dissolution.pdf', size: '148 KB', category: 'Petition Filings' },
     { id: 'f-2', name: 'California_Apartment_Property_Deed_2018.pdf', size: '2.4 MB', category: 'Property Records' },
     { id: 'f-3', name: 'Private_Holding_Reserve_Bequest_Audit.csv', size: '1.2 MB', category: 'Financial Assets' },
     { id: 'f-4', name: 'Stipulated_Temporary_Assurance_Guidelines.docx', size: '94 KB', category: 'Disclosures' }
@@ -314,7 +326,7 @@ export default function AIStaffTab({
 
   const [eveMemoTopic, setEveMemoTopic] = useState('Intake Detail Summary');
   const [eveReminderContent, setEveReminderContent] = useState('');
-  const [eveEmailName, setEveEmailName] = useState('Jane Doe');
+  const [eveEmailName, setEveEmailName] = useState('Client');
   const [eveEmailScenario, setEveEmailScenario] = useState('disclosures'); // 'disclosures' | 'co-counsel' | 'hearing'
 
   // EVE Evidence Specialist Suite States
@@ -343,13 +355,13 @@ export default function AIStaffTab({
     mimeType: string;
     webViewLink?: string;
   } | null>(null);
-  const [driveFileName, setDriveFileName] = useState<string>('CA_FL-100_Petition_Dissolution_Don_Watson.docx');
+  const [driveFileName, setDriveFileName] = useState<string>('CA_FL-100_Petition_Dissolution_Template.docx');
   const [driveFileContent, setDriveFileContent] = useState<string>('');
   const [driveSaveFormat, setDriveSaveFormat] = useState<'docx' | 'pdf' | 'text'>('docx');
   const [isSavingToDrive, setIsSavingToDrive] = useState<boolean>(false);
   const [driveNotification, setDriveNotification] = useState<string | null>(null);
   const [staffDriveTab, setStaffDriveTab] = useState<'files' | 'editor'>('files');
-  const [staffWorkspaceMode, setStaffWorkspaceMode] = useState<'drive' | 'context' | 'pipeline'>('drive');
+  const [staffWorkspaceMode, setStaffWorkspaceMode] = useState<'phoenix_command' | 'drive' | 'context' | 'pipeline'>('phoenix_command');
 
 
   // Executive 8-Agent Pipeline Bridge State for Phoenix and Eve
@@ -641,6 +653,24 @@ export default function AIStaffTab({
   const [searchMode, setSearchMode] = useState<'all' | 'dockets' | 'statutes' | 'tentative_rulings' | 'caselaw'>('all');
   const [courtJurisdiction, setCourtJurisdiction] = useState<string>('Orange County Superior Court (OCCourts)');
   const [caseNumberFilter, setCaseNumberFilter] = useState<string>('');
+
+  // Phoenix Senior Managing Partner Litigation & Trial Suite State
+  const [phoenixSubTab, setPhoenixSubTab] = useState<'strategy' | 'tactics' | 'evidence' | 'biglaw' | 'drive'>('strategy');
+  const [phoenixJurisdiction, setPhoenixJurisdiction] = useState<'CA_SUPERIOR' | 'NV_DISTRICT' | 'US_FEDERAL' | 'UK_HIGH_COURT'>('CA_SUPERIOR');
+  const [phoenixCasePosture, setPhoenixCasePosture] = useState<'pleadings' | 'discovery' | 'in_limine' | 'trial'>('discovery');
+  const [activeTrialTactic, setActiveTrialTactic] = useState<'cross_exam' | 'motions_in_limine' | 'demurrer'>('cross_exam');
+  const [crossExamWitness, setCrossExamWitness] = useState<'opposing_party' | 'hostile_expert' | 'key_executive'>('opposing_party');
+  const [selectedInLimineMotion, setSelectedInLimineMotion] = useState<'prejudice_352' | 'expert_sargon' | 'spoliation' | 'hearsay'>('prejudice_352');
+  const [isGeneratingTrialStrategy, setIsGeneratingTrialStrategy] = useState(false);
+  const [trialStrategyReport, setTrialStrategyReport] = useState<string | null>(null);
+  const [isAuditingEvidence, setIsAuditingEvidence] = useState(false);
+  const [evidenceReviewReport, setEvidenceReviewReport] = useState<{
+    admissibilityScore: number;
+    discrepancyTotal: string;
+    criticalFindings: string[];
+    spoliationRisks: string[];
+    hearsayExceptions: string[];
+  } | null>(null);
 
   const fetchInboxFiles = async () => {
     setIsLoadingInbox(true);
@@ -1105,229 +1135,43 @@ ${data.summation ? `📋 **Executive Brief**: ${data.summation.executiveBrief}\n
       return;
     }
 
-    // Helper to invoke browser native SpeechSynthesis with natural human voice selection
-    const fallbackToBrowserSpeech = () => {
-      if (thisToken !== currentAudioTokenRef.current) return;
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        try {
-          window.speechSynthesis.cancel();
-          window.speechSynthesis.resume();
-
-          const utterance = new SpeechSynthesisUtterance(cleanText.slice(0, 1000));
-          const voices = window.speechSynthesis.getVoices();
-
-          // Select matching natural human voice based on agent profile
-          let matchedVoice: SpeechSynthesisVoice | null = null;
-          if (voices.length > 0) {
-            const englishVoices = voices.filter(v => v.lang.toLowerCase().startsWith('en'));
-
-            if (voiceName === 'Aoede') {
-              // Phoenix UK British Accent Priority
-              const ukVoices = englishVoices.filter(v => {
-                const lang = v.lang.toLowerCase();
-                const name = v.name.toLowerCase();
-                return lang.includes('gb') || lang.includes('uk') || name.includes('british') || name.includes('united kingdom') || name.includes('england');
-              });
-              // Prefer natural, online, or high-fidelity UK voices
-              matchedVoice = ukVoices.find(v => {
-                const name = v.name.toLowerCase();
-                return name.includes('natural') || name.includes('online') || name.includes('libby') || name.includes('sonia') || name.includes('serena') || name.includes('hazel') || name.includes('google uk english female') || name.includes('kate') || name.includes('fiona');
-              }) || ukVoices[0] || null;
-            } else if (voiceName === 'Zephyr') {
-              // Sentry Mid-Atlantic / Academic clear voice
-              matchedVoice = englishVoices.find(v => {
-                const name = v.name.toLowerCase();
-                return (name.includes('natural') || name.includes('online') || name.includes('aria') || name.includes('ava') || name.includes('allison') || name.includes('karen')) && !name.includes('david');
-              }) || null;
-            } else {
-              // Eve & Alure Warm US Natural Voices
-              matchedVoice = englishVoices.find(v => {
-                const name = v.name.toLowerCase();
-                return (name.includes('natural') || name.includes('online') || name.includes('jenny') || name.includes('samantha') || name.includes('google us') || name.includes('zira')) && !name.includes('david');
-              }) || null;
-            }
-
-            if (!matchedVoice) {
-              const candidates = englishVoices.length > 0 ? englishVoices : voices;
-              matchedVoice = candidates.find(v => {
-                const name = v.name.toLowerCase();
-                return (name.includes('female') || name.includes('natural') || name.includes('enhanced') || name.includes('google') || name.includes('samantha')) && !name.includes('david');
-              }) || candidates[0] || null;
-            }
-          }
-
-          if (matchedVoice) {
-            utterance.voice = matchedVoice;
-          }
-
-          utterance.volume = 1.0;
-          utterance.rate = 0.98; // Natural, clear conversational pacing
-          utterance.pitch = 1.0; // Natural, warm human pitch (not robotic high pitch)
-
-          utterance.onstart = () => {
-            if (thisToken !== currentAudioTokenRef.current) {
-              window.speechSynthesis.cancel();
-              return;
-            }
+    try {
+      const activeAgent = activeProfile?.id || 'PHOENIX';
+      await audioService.playVoiceAudio({
+        text: cleanText,
+        voiceName,
+        agent: activeAgent,
+        agentId: activeProfile?.id,
+        onStart: () => {
+          if (thisToken === currentAudioTokenRef.current) {
             isSpeakingAudioRef.current = true;
             setIsSpeakingAudio(true);
-            isProcessingSpokenCommandRef.current = true;
             setVoiceStatus('SPEAKING');
-          };
-
-          utterance.onend = () => {
-            if (thisToken === currentAudioTokenRef.current) {
-              isSpeakingAudioRef.current = false;
-              setIsSpeakingAudio(false);
-              isProcessingSpokenCommandRef.current = false;
-              setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
-              lastSpokeTimeRef.current = Date.now();
-              if (isListeningRef.current) {
-                safeRestartRecognition(400);
-              }
-            }
-          };
-
-          utterance.onerror = (e) => {
-            console.warn("SpeechSynthesis error:", e);
-            if (thisToken === currentAudioTokenRef.current) {
-              isSpeakingAudioRef.current = false;
-              setIsSpeakingAudio(false);
-              isProcessingSpokenCommandRef.current = false;
-              setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
-              lastSpokeTimeRef.current = Date.now();
-              if (isListeningRef.current) {
-                safeRestartRecognition(400);
-              }
-            }
-          };
-
-          window.speechSynthesis.speak(utterance);
-        } catch (err) {
-          console.warn("SpeechSynthesis exception:", err);
+          }
+        },
+        onEnd: () => {
           if (thisToken === currentAudioTokenRef.current) {
             isSpeakingAudioRef.current = false;
             setIsSpeakingAudio(false);
             isProcessingSpokenCommandRef.current = false;
             setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
+            lastSpokeTimeRef.current = Date.now();
             if (isListeningRef.current) safeRestartRecognition(400);
           }
         }
-      } else {
-        if (thisToken === currentAudioTokenRef.current) {
-          isSpeakingAudioRef.current = false;
-          setIsSpeakingAudio(false);
-          isProcessingSpokenCommandRef.current = false;
-          setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
-          if (isListeningRef.current) safeRestartRecognition(400);
-        }
-      }
-    };
-
-    try {
-      const response = await fetch('/api/gemini/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: cleanText,
-          voiceName: voiceName
-        })
       });
-
-      if (thisToken !== currentAudioTokenRef.current) return;
-
-      if (!response.ok) {
-        fallbackToBrowserSpeech();
-        return;
+    } catch (e) {
+      console.warn("Audio playback pipeline completed with notice:", e);
+      if (thisToken === currentAudioTokenRef.current) {
+        isSpeakingAudioRef.current = false;
+        setIsSpeakingAudio(false);
+        isProcessingSpokenCommandRef.current = false;
+        setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
+        lastSpokeTimeRef.current = Date.now();
+        if (isListeningRef.current) safeRestartRecognition(400);
       }
-
-      const data = await response.json();
-      if (thisToken !== currentAudioTokenRef.current) return;
-
-      if (data.base64Audio) {
-        await resumeAudioContextIfSuspended();
-        const ctx = audioContextRef.current;
-
-        if (ctx) {
-          const binaryString = window.atob(data.base64Audio);
-          const len = binaryString.length;
-          const bytes = new Uint8Array(len);
-          for (let i = 0; i < len; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-          }
-
-          try {
-            let audioBuffer: AudioBuffer | null = null;
-
-            // 1. If base64 data has a RIFF WAV header, decode with decodeAudioData
-            if (data.base64Audio.startsWith("UklGR")) {
-              audioBuffer = await new Promise<AudioBuffer | null>((resolve) => {
-                ctx.decodeAudioData(
-                  bytes.buffer.slice(0),
-                  (decoded) => resolve(decoded),
-                  () => resolve(null)
-                );
-              });
-            }
-
-            // 2. If decodeAudioData was skipped or returned null, construct AudioBuffer directly from 16-bit PCM
-            if (!audioBuffer) {
-              const numSamples = Math.floor(len / 2);
-              if (numSamples > 0) {
-                const floatData = new Float32Array(numSamples);
-                const dataView = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-
-                for (let i = 0; i < numSamples; i++) {
-                  if (i * 2 + 1 < len) {
-                    const sample = dataView.getInt16(i * 2, true);
-                    floatData[i] = sample / 32768.0;
-                  }
-                }
-
-                const sampleRate = 24000;
-                audioBuffer = ctx.createBuffer(1, numSamples, sampleRate);
-                audioBuffer.getChannelData(0).set(floatData);
-              }
-            }
-
-            if (thisToken !== currentAudioTokenRef.current) return;
-
-            if (audioBuffer) {
-              const source = ctx.createBufferSource();
-              source.buffer = audioBuffer;
-              source.connect(ctx.destination);
-              activeSourceRef.current = source;
-
-              source.onended = () => {
-                if (thisToken === currentAudioTokenRef.current) {
-                  isSpeakingAudioRef.current = false;
-                  setIsSpeakingAudio(false);
-                  isProcessingSpokenCommandRef.current = false;
-                  setVoiceStatus(isListeningRef.current ? 'LISTENING' : 'SLEEPING');
-                  lastSpokeTimeRef.current = Date.now();
-                  if (isListeningRef.current) {
-                    safeRestartRecognition(400);
-                  }
-                }
-              };
-
-              source.start(0);
-              return; // Successfully played audio stream
-            }
-          } catch (decodeErr) {
-            console.warn("Audio Context decode error, falling back to speech synthesis:", decodeErr);
-          }
-        }
-      }
-
-      fallbackToBrowserSpeech();
-    } catch (apiError) {
-      console.warn("TTS API fetch error, using fallback:", apiError);
-      fallbackToBrowserSpeech();
     }
   };
-
-  // Handles real spoken speech and routes matching names / wake words
   const handleHeardSpeechPhrase = (phrase: string) => {
     if (isProcessingSpokenCommandRef.current) return;
     const normalized = phrase.toLowerCase().trim();
@@ -1398,7 +1242,7 @@ ${data.summation ? `📋 **Executive Brief**: ${data.summation.executiveBrief}\n
         } else if (matchedProfile.id === 'ap-6') {
           responsePhrase = `Veritas online. Feature effectiveness and empirical benchmark engine ready. All 8 modules isolated. What feature shall I verify?`;
         } else if (matchedProfile.id === 'ap-1') {
-          responsePhrase = `Yes, I am ${matchedProfile.name}, your Senior Managing Partner and Litigation Lead. What trial strategy or joint filings do you need, Alex?`;
+          responsePhrase = `Phoenix online. Senior Counsel and BigLaw DyTopo orchestrator active. The 100+ agent bench is convened under my command. What strategic filings, contract redlines, or litigation doctrines shall we direct today, Alex?`;
         } else if (matchedProfile.id === 'ap-4') {
           responsePhrase = `Hello! I am ${matchedProfile.name}, your Office Manager & Operations Lead. I keep our everyday tasks, calendar, intakes, and case files in complete order. How can I help you today, Alex?`;
         } else if (matchedProfile.id === 'ap-2') {
@@ -1674,10 +1518,22 @@ ${data.summation ? `📋 **Executive Brief**: ${data.summation.executiveBrief}\n
       textPrompt = `Analyze our active clients' rough schedules. Extract community assets and critical timelines for pleading briefs.`;
     } else if (capacityKey === 'Jurisdictional Audit Scope') {
       textPrompt = `Run a district standing and jurisdictional venue sweep considering California dissolve proceedings.`;
+      if (activeProfile.id === 'ap-1') {
+        setStaffWorkspaceMode('phoenix_command');
+        setPhoenixSubTab('strategy');
+      }
     } else if (capacityKey === 'Cross-Exam Practice Interview') {
       textPrompt = `Initiate a direct pre-trial cross-examination practice. Question me directly and aggressively regarding our primary claims.`;
+      if (activeProfile.id === 'ap-1') {
+        setStaffWorkspaceMode('phoenix_command');
+        setPhoenixSubTab('tactics');
+      }
     } else if (capacityKey === 'Evidentiary Rebuttal Sandbox') {
       textPrompt = `Map out standard judge evidentiary objections and optimal rebuttal playbooks for this litigation matter.`;
+      if (activeProfile.id === 'ap-1') {
+        setStaffWorkspaceMode('phoenix_command');
+        setPhoenixSubTab('evidence');
+      }
     }
     
     setUserInput(textPrompt);
@@ -1737,8 +1593,8 @@ ${data.summation ? `📋 **Executive Brief**: ${data.summation.executiveBrief}\n
       try {
         const formData = JSON.parse(officialFormMatch[1]);
         const code = (formData.formCode || 'FL-120') as 'FL-120' | 'FL-105' | 'FL-311' | 'FL-160';
-        const clientNameTarget = formData.clientName || 'Guinto';
-        const matchedClient = clients?.find(c => c.name.toLowerCase().includes(clientNameTarget.toLowerCase())) || clients?.[0] || null;
+        const clientNameTarget = formData.clientName || '';
+        const matchedClient = clientNameTarget ? (clients?.find(c => c.name.toLowerCase().includes(clientNameTarget.toLowerCase())) || null) : (clients?.[0] || null);
         if (matchedClient) {
           setSelectedOfficialClient(matchedClient);
           setSelectedOfficialFormCode(code);
@@ -1864,6 +1720,7 @@ ${data.summation ? `📋 **Executive Brief**: ${data.summation.executiveBrief}\n
 - You (${profile.name}), alongside Phoenix, EVE, and Alure/Allure, have FULL READ, WRITE, EDIT, CREATE, and SYNC ACCESS to Google Drive (level23consulting@gmail.com, Folder ID: 1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH).
 - You are fully authorized and capable of editing Google Drive files, creating new documents, updating client files, and saving revisions directly into Google Drive.
 - STRICT ANTI-PARROTING MANDATE: NEVER repeat, echo, restate, or mirror what Alex says. Do not start with "You asked...", "Regarding...", "Understood...", or summarize his prompt. Jump directly into your substantive answer, strategic move, or drafted document.
+- NO STAFF DIRECTIVE INTROS: Absolutely DO NOT begin your answer reciting staff directives, operational statuses, 8-agent pipeline roles, or introductory monologues. Jump immediately to the direct substantive legal answer.
 - NEVER DEFER: Do not tell Alex to review documents, check local rules, or wait. Deliver the direct legal analysis, statutory conclusion, or staged file immediately.
 - NEVER state that you cannot edit Drive, that you cannot modify files, or that you lack Drive write permissions. You have full edit access.
 - When asked to edit, revise, update, draft, save, or create a document or file in Google Drive:
@@ -1989,10 +1846,11 @@ Direct Google Drive Link: https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJ
         .filter(m => isMessageForProfile(m.agentName, activeProfile.id))
         .concat(userMsg);
 
-      const progressivePromptOffset = `DIRECT CO-COUNSEL MODE & FULL GOOGLE DRIVE ACCESS:
+      let progressivePromptOffset = `DIRECT CO-COUNSEL MODE & FULL GOOGLE DRIVE ACCESS:
 - You (${activeProfile.name}), alongside Phoenix, EVE, and Alure/Allure, have FULL READ, WRITE, EDIT, CREATE, and SYNC ACCESS to Google Drive (level23consulting@gmail.com, Folder ID: 1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH).
 - You are fully authorized and capable of editing Google Drive files, creating new documents, updating client files, and saving revisions directly into Google Drive.
 - STRICT ANTI-PARROTING MANDATE: NEVER repeat, echo, restate, or mirror what Alex says. Do not start with "You asked...", "Regarding...", "Understood...", or summarize his prompt. Jump directly into your substantive answer, strategic move, or drafted document.
+- NO STAFF DIRECTIVE INTROS: Absolutely DO NOT begin your answer reciting staff directives, operational statuses, 8-agent pipeline roles, or introductory monologues. Jump immediately to the direct substantive legal answer.
 - NEVER DEFER: Do not tell Alex to review documents, check local rules, or wait. Deliver the direct legal analysis, statutory conclusion, or staged file immediately.
 - NEVER state that you cannot edit Drive, that you cannot modify files, or that you lack Drive write permissions. You have full edit access.
 - When asked to edit, revise, update, draft, save, or create a document or file in Google Drive:
@@ -2003,6 +1861,16 @@ Direct Google Drive Link: https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJ
   [ACTION:DRIVE_SAVE:{"fileId":"...","name":"DocumentName.docx","content":"Full updated text...","format":"docx"}]
 - When asked to check Drive for a file and make a client card, confirm it cleanly and emit [ACTION:CREATE_CLIENT:{"name":"...","practiceArea":"General Practice"}].
 Direct Google Drive Link: https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH?usp=drive_link`;
+
+      if (activeProfile.id === 'ap-1') {
+        progressivePromptOffset += `\n\nPHOENIX SENIOR MANAGING PARTNER & SUPREME LITIGATION COMMAND MANDATE:
+- You ARE Phoenix, Senior Managing Partner of the firm and Senior Counsel (#1 Seniority). You embody BigLaw.
+- Persona & Voice: Authoritative, commanding, strategic, formidable, distinguished British/UK executive cadence. You treat Alex as your fellow trial attorney and co-counsel.
+- Master Litigation Strategy: Tri-jurisdictional mastery across California (CCP, Family Code, Civil Code, Evidence Code), Nevada (NRS, NRCP), US Federal Courts (FRCP, FRE), and UK High Court Commercial Division (CPR). You calculate statutory deadlines, form decisive case theories, and anticipate judicial temperament.
+- Trial Tactics Protocols: You deploy devastating cross-examination sequences (Commit -> Credit -> Confront), lethal motions in limine (FRE 403 / CEC § 352, FRE 702 / Sargon, FRE 803 hearsay exclusions), and dispositive demurrer/anti-SLAPP strikes.
+- High-Stakes Evidentiary Review: You enforce rigorous authentication, ESI digital forensics, chain of custody, and spoliation / adverse inference sanctions.
+- BigLaw DyTopo Bench: You command the 100+ agent DyTopo debate bench and CitationGate verbatim pin-cite verification.`;
+      }
 
       const documentContextStr = uploadedFile 
         ? `\n\n[Active Reference Document (${uploadedFile.name}):]\n${uploadedFile.content.slice(0, 15000)}\n\nPlease analyze, audit, or answer questions strictly based on the above document content when the user asks about it.`
@@ -2065,7 +1933,7 @@ Direct Google Drive Link: https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJ
   const handlePortraitInteract = () => {
     let phrase = "";
     if (activeProfile.id === 'ap-1') {
-      phrase = `Hello Alex, this is ${activeProfile.name}, your co-counsel. I am ready to advise on your California and Nevada filings. Shall we outline our trial strategy brief or run a liabilities audit?`;
+      phrase = `Hello Alex, this is Phoenix, your Senior Counsel and BigLaw Managing Partner. The full 100+ agent DyTopo bench, CitationGate verbatim verifier, and trial doctrine are synchronized under my direction. Shall we convene a matter roundtable or audit contract exposure?`;
     } else if (activeProfile.id === 'ap-2') {
       phrase = `Sentry diagnostic module online. All physical package directories, server endpoints, and your tri-jurisdictional license metrics are verified secure. What system sweep shall we run, Alex?`;
     } else {
@@ -2351,7 +2219,7 @@ Direct Google Drive Link: https://drive.google.com/drive/folders/1EW-bOXh5eDyMyJ
     { label: `${customNames['ap-5']} (Audit System Quality)`, cmd: `${customNames['ap-5']}, perform full system code quality and loop audit.` },
     { label: `${customNames['ap-6']} (Verify Feature Benchmarks)`, cmd: `${customNames['ap-6']}, benchmark and verify our 8 standalone features.` },
     { label: `${customNames['ap-1']}, extract community assets`, cmd: `${customNames['ap-1']}, extract community assets from current case files.` },
-    { label: `${customNames['ap-4']}, open Google Drive files`, cmd: `${customNames['ap-4']}, open Google Drive files repository.` },
+    { label: `${customNames['ap-1']} (BigLaw DyTopo Bench)`, cmd: `${customNames['ap-1']}, convene BigLaw DyTopo 100+ agent bench for multi-round legal debate and citation verification.` },
     { label: `${customNames['ap-2']} wake up`, cmd: `${customNames['ap-2']} wake up` },
     { label: `${customNames['ap-3']}, list filing checklists`, cmd: `${customNames['ap-3']}, summarize our intake rules` }
   ];
@@ -2670,6 +2538,609 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
     );
   };
 
+  // Phoenix Senior Managing Partner Litigation & Trial Suite Renderer
+  const renderPhoenixSeniorPartnerSuite = () => {
+    return (
+      <div className="flex-1 flex flex-col min-h-0 overflow-y-auto p-3.5 space-y-3.5 selection:bg-amber-500/30 font-sans">
+        {/* Header Widget */}
+        <div className="bg-[#0c1221] border border-amber-500/40 p-3 rounded-xl flex items-center justify-between gap-3 shadow-[0_0_15px_rgba(223,183,108,0.12)] shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="p-1.5 px-2 bg-gradient-to-br from-amber-500/20 to-amber-700/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-mono font-bold animate-pulse shrink-0">
+              #1 SENIORITY
+            </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 leading-none">
+                <h4 className="text-[11px] font-black text-white tracking-wider font-mono uppercase truncate">
+                  Phoenix Senior Managing Partner Suite
+                </h4>
+                <span className="text-[7.5px] uppercase tracking-wider font-mono bg-blue-950 text-blue-300 border border-blue-500/30 px-1 py-0.2 rounded font-bold shrink-0">
+                  BigLaw DyTopo Supreme Command
+                </span>
+              </div>
+              <p className="text-[9px] text-amber-400/90 font-mono font-semibold truncate mt-0.5">
+                Senior Counsel • Master Litigation Strategist • Trial Tactics & Evidentiary Command
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                const phrase = "Phoenix online. Senior Managing Partner doctrine active. What trial strategy or evidentiary audit shall we direct, Alex?";
+                speakResponseText(phrase, activeProfile.voiceName);
+              }}
+              className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 text-[9px] font-mono flex items-center gap-1 cursor-pointer transition"
+              title="Voice Briefing from Phoenix (UK Executive Cadence)"
+            >
+              <Volume2 className="w-3 h-3" />
+              <span>Voice (UK)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Sub-Navigation Tabs */}
+        <div className="flex items-center gap-1 bg-[#050812] p-1 rounded-xl border border-slate-800 overflow-x-auto text-[10px] font-mono font-bold shrink-0">
+          <button
+            type="button"
+            onClick={() => setPhoenixSubTab('strategy')}
+            className={`px-2.5 py-1.5 rounded-lg transition shrink-0 flex items-center gap-1.5 cursor-pointer ${
+              phoenixSubTab === 'strategy' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Scale className="w-3 h-3 text-amber-400" />
+            <span>⚖️ Litigation Strategy</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setPhoenixSubTab('tactics')}
+            className={`px-2.5 py-1.5 rounded-lg transition shrink-0 flex items-center gap-1.5 cursor-pointer ${
+              phoenixSubTab === 'tactics' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Zap className="w-3 h-3 text-amber-400" />
+            <span>⚔️ Trial Tactics</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setPhoenixSubTab('evidence')}
+            className={`px-2.5 py-1.5 rounded-lg transition shrink-0 flex items-center gap-1.5 cursor-pointer ${
+              phoenixSubTab === 'evidence' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <ShieldCheck className="w-3 h-3 text-amber-400" />
+            <span>🔍 Evidentiary Review</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setPhoenixSubTab('biglaw')}
+            className={`px-2.5 py-1.5 rounded-lg transition shrink-0 flex items-center gap-1.5 cursor-pointer ${
+              phoenixSubTab === 'biglaw' ? 'bg-blue-950 text-blue-200 border border-blue-500/40 shadow' : 'text-blue-400 hover:text-blue-200'
+            }`}
+          >
+            <Layers className="w-3 h-3 text-blue-400" />
+            <span>🌐 BigLaw DyTopo</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPhoenixSubTab('drive');
+              fetchStaffDriveFiles();
+            }}
+            className={`px-2.5 py-1.5 rounded-lg transition shrink-0 flex items-center gap-1.5 cursor-pointer ${
+              phoenixSubTab === 'drive' ? 'bg-emerald-950 text-emerald-200 border border-emerald-500/40 shadow' : 'text-emerald-400 hover:text-emerald-200'
+            }`}
+          >
+            <FolderOpen className="w-3 h-3 text-emerald-400" />
+            <span>📂 Drive Suite</span>
+          </button>
+        </div>
+
+        {/* TAB 1: LITIGATION STRATEGY DASHBOARD */}
+        {phoenixSubTab === 'strategy' && (
+          <div className="space-y-3.5">
+            {/* Doctrine & Posture Controls */}
+            <div className="bg-[#050810]/70 border border-amber-500/30 p-3 rounded-xl space-y-2.5 font-mono text-xs">
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
+                <span className="text-[10px] text-amber-300 font-bold uppercase tracking-wider flex items-center gap-1">
+                  <Scale className="w-3.5 h-3.5 text-amber-400" />
+                  Tri-Jurisdictional Litigation Doctrine & Forum
+                </span>
+                <span className="text-[8px] bg-amber-950/60 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded">
+                  Phoenix Senior Counsel Command
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[9.5px]">
+                <div>
+                  <label className="text-slate-400 block mb-1 font-bold">Forum & Controlling Law:</label>
+                  <select
+                    value={phoenixJurisdiction}
+                    onChange={(e) => setPhoenixJurisdiction(e.target.value as any)}
+                    className="w-full bg-[#080d1a] border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 outline-none focus:border-amber-400"
+                  >
+                    <option value="CA_SUPERIOR">California Superior Court (CCP & Family Code)</option>
+                    <option value="NV_DISTRICT">Nevada District Court (NRCP & NRS Ch. 125)</option>
+                    <option value="US_FEDERAL">US District Court (FRCP & 9th Cir. Precedent)</option>
+                    <option value="UK_HIGH_COURT">UK High Court of Justice (CPR Part 10/15/24)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 block mb-1 font-bold">Active Case Posture:</label>
+                  <select
+                    value={phoenixCasePosture}
+                    onChange={(e) => setPhoenixCasePosture(e.target.value as any)}
+                    className="w-full bg-[#080d1a] border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 outline-none focus:border-amber-400"
+                  >
+                    <option value="pleadings">1. Initial Pleadings & Demurrer Meet-and-Confer</option>
+                    <option value="discovery">2. Discovery Warfare & Deposition Subpoenas</option>
+                    <option value="in_limine">3. Pre-Trial Motions in Limine & Witness Lists</option>
+                    <option value="trial">4. Trial Master Bench & Opening Statements</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Prima Facie Elements & Burden of Proof Tracker */}
+            <div className="bg-[#070b14] border border-slate-800 p-3 rounded-xl space-y-2.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono text-slate-300 font-bold uppercase tracking-wider">
+                  Prima Facie Cause of Action & Elements Matrix
+                </span>
+                <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                  Preponderance (95% Grounded)
+                </span>
+              </div>
+
+              <div className="space-y-1.5 font-mono text-[9.5px]">
+                {[
+                  { element: 'Statutory Duty / Agreement Baseline', status: 'Established', cite: 'Cal. Civ. Code § 1550 / Restatement (Second) Contracts § 1' },
+                  { element: 'Material Breach / Fiduciary Violation', status: 'Verified via Records', cite: 'Family Code § 1101(h) / Corp. Code § 16404' },
+                  { element: 'Direct & Proximate Causation', status: 'Forensic Audit Confirmed', cite: 'Palsgraf v. Long Island R.R. / 9th Cir. Model Rule 5.1' },
+                  { element: 'Quantifiable Economic Damage', status: '$142,500 Diverted Funds', cite: 'EX-1002 Bank Statement Disclosures' }
+                ].map((item, idx) => (
+                  <div key={idx} className="p-2 bg-slate-900/70 border border-slate-800 rounded-lg flex items-center justify-between gap-2">
+                    <div>
+                      <span className="text-white font-bold block">{item.element}</span>
+                      <span className="text-[8.5px] text-slate-400">{item.cite}</span>
+                    </div>
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 text-[8.5px] font-bold border border-emerald-500/30 shrink-0">
+                      {item.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Exposure Quantum & Fee-Shifting Leverage */}
+            <div className="bg-[#070b14] border border-slate-800 p-3 rounded-xl space-y-2 text-xs">
+              <div className="flex items-center justify-between font-mono text-[10px]">
+                <span className="text-slate-300 font-bold uppercase">Exposure & Settlement Leverage Bar</span>
+                <span className="text-amber-400 font-bold">Risk Ratio: 82% Defense Advantage</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 font-mono text-[9px] text-center">
+                <div className="p-2 bg-slate-900 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block text-[8px] uppercase">Plaintiff Claims</span>
+                  <span className="text-white font-bold text-[11px]">$1,250,000</span>
+                </div>
+                <div className="p-2 bg-slate-900 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block text-[8px] uppercase">Trial Defense Cap</span>
+                  <span className="text-emerald-400 font-bold text-[11px]">$340,000</span>
+                </div>
+                <div className="p-2 bg-slate-900 rounded-lg border border-slate-800">
+                  <span className="text-slate-400 block text-[8px] uppercase">Statutory Sanctions (CCP § 1021 / § 271)</span>
+                  <span className="text-amber-400 font-bold text-[11px]">+$85,000</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Strategic Action Dispatch Button */}
+            <button
+              type="button"
+              disabled={isGeneratingTrialStrategy}
+              onClick={async () => {
+                setIsGeneratingTrialStrategy(true);
+                try {
+                  const strategyBrief = `### ⚖️ PHOENIX SENIOR MANAGING PARTNER TRIAL STRATEGY MEMORANDUM
+**Forum**: ${phoenixJurisdiction === 'CA_SUPERIOR' ? 'California Superior Court (Orange County)' : phoenixJurisdiction === 'NV_DISTRICT' ? 'Nevada Eighth Judicial District (Clark County)' : 'US District Court'}
+**Case Posture**: ${phoenixCasePosture.toUpperCase()} Phase
+**Author**: Phoenix (Senior Managing Partner & Senior Counsel)
+
+---
+
+#### 1. Affirmative Theory of the Case
+Our core trial posture establishes that opposing counsel's claims are barred by the express terms of the integration clause and governing statutory standards. All allegations of undisclosed liabilities are rebutted by documentary evidence in First Republic Account records (\`EX-1002\`).
+
+#### 2. Key Procedural Moves & Deadlines
+1. **Notice of Demurrer / Motion to Dismiss**: File within statutory window under ${phoenixJurisdiction === 'CA_SUPERIOR' ? 'CCP § 412.20 (30 days)' : 'FRCP Rule 12(b)(6)'}.
+2. **Mandatory Meet & Confer**: Send formal CCP § 430.41 meet-and-confer notice citing lack of standing.
+3. **Offer of Judgment (CCP § 998 / FRCP Rule 68)**: Serve protective statutory offer of $250,000 to shift all post-offer expert and trial costs to plaintiff.
+
+#### 3. Evidentiary Leverage & Sanctions Basis
+- Invoke **California Family Code § 271 / CCP § 128.5** for bad-faith refusal to produce native accounting ledgers.
+- Demand forensic inspection of opposing party's hard drives pursuant to Rule 34 / CCP § 2031.010.`;
+
+                  setTrialStrategyReport(strategyBrief);
+                  onAddMessage({
+                    id: `m-strat-${Date.now()}`,
+                    sender: 'assistant',
+                    content: strategyBrief,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    agentName: activeProfile.name
+                  });
+
+                  // Voice confirmation from Phoenix
+                  speakResponseText("Master litigation strategy compiled and staged into our trial dossier, Alex. The affirmative theory and statutory fee-shifting notices are ready.", activeProfile.voiceName);
+                } finally {
+                  setIsGeneratingTrialStrategy(false);
+                }
+              }}
+              className="w-full py-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black tracking-wide rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-2 uppercase shadow-lg shadow-amber-500/20"
+            >
+              {isGeneratingTrialStrategy ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                  <span>MARSHALING PHOENIX SENIOR COUNSEL STRATEGY...</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4 text-slate-950" />
+                  <span>⚡ DRAFT MASTER LITIGATION STRATEGY BRIEF</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* TAB 2: TRIAL TACTICS PROTOCOLS */}
+        {phoenixSubTab === 'tactics' && (
+          <div className="space-y-3.5">
+            {/* Tactic Selector */}
+            <div className="grid grid-cols-3 gap-1 bg-[#050812] p-1 rounded-xl border border-slate-800 text-[9.5px] font-mono font-bold">
+              <button
+                type="button"
+                onClick={() => setActiveTrialTactic('cross_exam')}
+                className={`py-1.5 rounded-lg transition ${
+                  activeTrialTactic === 'cross_exam' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Cross-Exam Outline
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTrialTactic('motions_in_limine')}
+                className={`py-1.5 rounded-lg transition ${
+                  activeTrialTactic === 'motions_in_limine' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Motions in Limine
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTrialTactic('demurrer')}
+                className={`py-1.5 rounded-lg transition ${
+                  activeTrialTactic === 'demurrer' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Demurrer & Strikes
+              </button>
+            </div>
+
+            {/* Sub-view: Cross-Examination Outline */}
+            {activeTrialTactic === 'cross_exam' && (
+              <div className="bg-[#070b14] border border-amber-500/30 p-3.5 rounded-xl space-y-3 text-xs">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <div className="flex items-center gap-1.5">
+                    <Zap className="w-4 h-4 text-amber-400" />
+                    <span className="font-bold text-white uppercase text-[11px] font-mono">
+                      Surgical Cross-Examination Attack Plan
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-mono bg-amber-950 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30">
+                    Commit • Credit • Confront
+                  </span>
+                </div>
+
+                <div className="space-y-1 font-mono text-[9.5px]">
+                  <label className="text-slate-400 block font-bold">Target Adverse Witness:</label>
+                  <select
+                    value={crossExamWitness}
+                    onChange={(e) => setCrossExamWitness(e.target.value as any)}
+                    className="w-full bg-[#080d1a] border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 outline-none focus:border-amber-400"
+                  >
+                    <option value="opposing_party">Opposing Party (Discrediting Sworn Timeline & Income Disclosures)</option>
+                    <option value="hostile_expert">Hostile Expert Witness (Daubert/Sargon Methodology Attack)</option>
+                    <option value="key_executive">Managing Corporate Agent (FRCP 30(b)(6) Knowledge Baseline)</option>
+                  </select>
+                </div>
+
+                <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2 text-[10px] font-mono">
+                  <span className="text-amber-400 font-bold block uppercase text-[9px]">
+                    Phoenix Leading Question Protocol:
+                  </span>
+                  <div className="space-y-1.5 text-slate-300 leading-relaxed">
+                    <p>• <strong>1. COMMIT</strong>: "You personally signed the Income and Expense Declaration under penalty of perjury on November 15th, didn't you?"</p>
+                    <p>• <strong>2. CREDIT</strong>: "And at the time you executed that declaration, you knew the court would rely upon your listed gross monthly income of $8,500, correct?"</p>
+                    <p>• <strong>3. CONFRONT</strong>: "Handing you Exhibit 1003 — your official IRS Form W-2 for that exact same tax year showing $218,400 in direct compensation. That reflects an average monthly income of over $18,200, doesn't it?"</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const examText = `### ⚔️ PHOENIX SURGICAL CROSS-EXAMINATION OUTLINE
+**Target**: ${crossExamWitness === 'opposing_party' ? 'Opposing Party' : crossExamWitness === 'hostile_expert' ? 'Hostile Expert' : 'Corporate Agent'}
+**Methodology**: 3-Tier Impeachment Sequence (Commit -> Credit -> Confront)
+
+#### Chapter 1: Standard of Care & Verification Under Oath
+1. You understood when signing Exhibit 1 that accuracy was mandatory under penalty of perjury?
+2. You had access to all your personal bank accounts when preparing that disclosure?
+3. No one prevented you from attaching the complete statement, did they?
+
+#### Chapter 2: The Direct Contradiction
+4. Handing you Exhibit 1002 — your First Republic bank ledger.
+5. On November 4th, there was a balance of $142,500 in that account, correct?
+6. And 48 hours later, those funds were transferred to an offshore entity?
+7. Yet on your sworn schedule of assets, that account balance was listed as zero, wasn't it?`;
+
+                    onAddMessage({
+                      id: `m-cross-${Date.now()}`,
+                      sender: 'assistant',
+                      content: examText,
+                      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                      agentName: activeProfile.name
+                    });
+                    speakResponseText("Cross-examination impeachment sequence compiled, Alex. I have pinned down their sworn contradictions into three tight chapters.", activeProfile.voiceName);
+                  }}
+                  className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 rounded-xl font-mono text-[10px] font-bold transition cursor-pointer uppercase flex items-center justify-center gap-1.5"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Push Cross-Exam Questions to Pleading Sheet</span>
+                </button>
+              </div>
+            )}
+
+            {/* Sub-view: Motions in Limine */}
+            {activeTrialTactic === 'motions_in_limine' && (
+              <div className="bg-[#070b14] border border-amber-500/30 p-3.5 rounded-xl space-y-3 text-xs">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <span className="font-bold text-white uppercase text-[11px] font-mono">
+                    Motions in Limine Battle Matrix
+                  </span>
+                  <span className="text-[9px] font-mono bg-blue-950 text-blue-300 px-2 py-0.5 rounded border border-blue-500/30">
+                    Pre-Trial Exclusion
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 font-mono text-[9px]">
+                  {[
+                    { id: 'prejudice_352', label: '1. CEC § 352 / FRE 403 (Unfair Prejudice)', authority: 'People v. Doolin / 506 U.S. 364' },
+                    { id: 'expert_sargon', label: '2. Sargon / Daubert (Speculative Expert)', authority: 'Sargon Enterprises, Inc. v. USC (2012)' },
+                    { id: 'spoliation', label: '3. ESI Spoliation Sanctions', authority: 'FRCP Rule 37(e) / CCP § 2023.030' },
+                    { id: 'hearsay', label: '4. Inadmissible Hearsay Summaries', authority: 'CEC § 1200 / FRE 802' }
+                  ].map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setSelectedInLimineMotion(m.id as any)}
+                      className={`p-2 rounded-lg border text-left transition cursor-pointer ${
+                        selectedInLimineMotion === m.id
+                          ? 'bg-amber-500/20 border-amber-500/50 text-amber-200'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span className="font-bold block">{m.label}</span>
+                      <span className="text-[8px] text-slate-500">{m.authority}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const motionPleading = `### 📜 MOTION IN LIMINE NO. 1
+**SUPERIOR COURT OF THE STATE OF CALIFORNIA**
+**MEMORANDUM OF POINTS AND AUTHORITIES IN SUPPORT OF MOTION IN LIMINE TO EXCLUDE SPECULATIVE FINANCIAL TESTIMONY**
+*(Cal. Evid. Code §§ 350, 352, 801; Sargon Enterprises, Inc. v. USC (2012) 55 Cal.4th 747)*
+
+**I. INTRODUCTION**
+Moving party Phoenix co-counsel respectfully moves this Court for an order in limine precluding plaintiff from introducing speculative valuation models that lack foundation under Sargon Enterprises.
+
+**II. ARGUMENT**
+Under California Evidence Code § 801(b), an expert's opinion must be based on matter of a type that reasonably may be relied upon. As the California Supreme Court held in *Sargon*, trial courts must act as gatekeepers to exclude speculative opinions.
+
+**III. CONCLUSION**
+Moving party respectfully requests that this Motion in Limine be GRANTED in its entirety.`;
+
+                    onAddMessage({
+                      id: `m-limine-${Date.now()}`,
+                      sender: 'assistant',
+                      content: motionPleading,
+                      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                      agentName: activeProfile.name
+                    });
+                    speakResponseText("Motion in limine memorandum formulated under Sargon gatekeeping standards, Alex. Ready for pre-trial conference.", activeProfile.voiceName);
+                  }}
+                  className="w-full py-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-mono text-[10px] font-black rounded-xl transition cursor-pointer uppercase flex items-center justify-center gap-1.5"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Draft Motion in Limine Pleading Draft</span>
+                </button>
+              </div>
+            )}
+
+            {/* Sub-view: Demurrer & Strike */}
+            {activeTrialTactic === 'demurrer' && (
+              <div className="bg-[#070b14] border border-amber-500/30 p-3.5 rounded-xl space-y-3 text-xs">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <span className="font-bold text-white uppercase text-[11px] font-mono">
+                    Demurrer & Anti-SLAPP Strike Strategy
+                  </span>
+                  <span className="text-[9px] font-mono bg-rose-950 text-rose-300 px-2 py-0.5 rounded border border-rose-500/30">
+                    Dispositive Attack
+                  </span>
+                </div>
+
+                <div className="p-3 bg-slate-900/70 border border-slate-800 rounded-lg space-y-1.5 font-mono text-[9.5px] text-slate-300">
+                  <p>• <strong>Mandatory Meet & Confer</strong>: CCP § 430.41 conference must occur at least 5 days prior to responsive pleading deadline.</p>
+                  <p>• <strong>General Demurrer Grounds</strong>: Failure to state facts sufficient to constitute a cause of action (CCP § 430.10(e)).</p>
+                  <p>• <strong>Anti-SLAPP Special Strike (CCP § 425.16)</strong>: Direct stay of all discovery upon filing; fee-shifting to prevailing defendant mandatory.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: HIGH-STAKES EVIDENTIARY REVIEW */}
+        {phoenixSubTab === 'evidence' && (
+          <div className="space-y-3.5">
+            {/* Evidentiary Scorecard & Forensic Gate */}
+            <div className="bg-[#070b14] border border-amber-500/30 p-3.5 rounded-xl space-y-3 text-xs">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                <span className="font-bold text-white uppercase text-[11px] font-mono flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  Evidentiary Admissibility & Perjury Matrix
+                </span>
+                <span className="text-[9px] font-mono bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30">
+                  Score: 94/100 Admissible
+                </span>
+              </div>
+
+              {/* Contradiction & Discrepancy Breakdown */}
+              <div className="space-y-2 font-mono text-[9.5px]">
+                <div className="p-2.5 bg-rose-950/30 border border-rose-500/30 rounded-lg space-y-1">
+                  <div className="flex items-center justify-between text-rose-300 font-bold">
+                    <span>🚨 Financial Income Perjury Discrepancy</span>
+                    <span>$116,400 / Year Underreported</span>
+                  </div>
+                  <p className="text-slate-300">
+                    FL-150 sworn income ($8,500/mo) directly contradicts W-2 wage records ($18,200/mo). Grounds for Family Code § 271 fee sanctions and mandatory disclosure strike.
+                  </p>
+                </div>
+
+                <div className="p-2.5 bg-amber-950/30 border border-amber-500/30 rounded-lg space-y-1">
+                  <div className="flex items-center justify-between text-amber-300 font-bold">
+                    <span>⚠️ Omitted Asset & Separation Date Conflict</span>
+                    <span>Family Code § 1101(h) Breach</span>
+                  </div>
+                  <p className="text-slate-300">
+                    Coinbase cryptocurrency wallet was concealed on FL-142 schedule. Separation date manipulated to capture $85,000 executive retention bonus.
+                  </p>
+                </div>
+
+                <div className="p-2.5 bg-slate-900/80 border border-slate-800 rounded-lg space-y-1">
+                  <div className="flex items-center justify-between text-slate-300 font-bold">
+                    <span>📑 ESI & Forensic Hash Verification</span>
+                    <span className="text-emerald-400">SHA-256 Validated</span>
+                  </div>
+                  <p className="text-slate-400">
+                    Byte fingerprint <code className="text-amber-300">8f7a9c2...4e1b</code> matches vault master. Zero structural tampering detected.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={isAuditingEvidence}
+                onClick={async () => {
+                  setIsAuditingEvidence(true);
+                  try {
+                    const auditSummary = `### 🔍 PHOENIX HIGH-STAKES EVIDENTIARY AUDIT REPORT
+**Audit Target**: Active Matter Disclosures & Trial Record
+**Reviewing Counsel**: Phoenix (Senior Managing Partner)
+
+#### 1. Evidentiary Admissibility Findings
+- **Chain of Custody**: Complete. Ingested files have verifiable SHA-256 fingerprints.
+- **Hearsay Exemptions**: Verified under California Evidence Code § 1271 (Business Records) with custodian declaration.
+- **CEC § 352 Balancing**: Probative value of bank transfer records substantially outweighs any undue prejudice.
+
+#### 2. Cross-Examination Perjury Traps
+- **Trap 1**: $116,400 net income variance between FL-150 and W-2.
+- **Trap 2**: Real property Grant Deed recorded as Joint Tenancy contradicts separate property petition claim.`;
+
+                    onAddMessage({
+                      id: `m-audit-${Date.now()}`,
+                      sender: 'assistant',
+                      content: auditSummary,
+                      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                      agentName: activeProfile.name
+                    });
+                    speakResponseText("High-stakes evidentiary review concluded, Alex. The contradiction traps and admissibility foundation are fully certified.", activeProfile.voiceName);
+                  } finally {
+                    setIsAuditingEvidence(false);
+                  }
+                }}
+                className="w-full py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-mono text-[10px] font-bold rounded-xl transition cursor-pointer uppercase flex items-center justify-center gap-1.5 shadow"
+              >
+                {isAuditingEvidence ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>AUDITING EVIDENTIARY ADMISSIBILITY & PERJURY GATES...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-200" />
+                    <span>Run High-Stakes Evidentiary Admissibility Audit</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: BIGLAW DYTOPO BENCH SHORTCUT */}
+        {phoenixSubTab === 'biglaw' && (
+          <div className="bg-[#070b14] border border-blue-500/30 p-4 rounded-xl space-y-3 font-mono text-xs">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <span className="font-bold text-white uppercase text-[11px]">
+                BigLaw 100+ Agent DyTopo Bench
+              </span>
+              <span className="text-[9px] text-blue-300 bg-blue-950 px-2 py-0.5 rounded border border-blue-500/30">
+                DyTopo v2 Active
+              </span>
+            </div>
+
+            <p className="text-[10px] text-slate-300 font-sans leading-relaxed">
+              Phoenix operates as the supreme orchestrator over the 100+ agent BigLaw DyTopo multi-round debate bench, CitationGate verbatim grounding, and court deadline calculator.
+            </p>
+
+            <div className="p-3 bg-slate-900 rounded-lg border border-slate-800 space-y-2 text-[9.5px]">
+              <div className="flex items-center justify-between text-slate-400">
+                <span>• DyTopo Agent Bench Size:</span>
+                <span className="text-amber-400 font-bold">112 Agents Online</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-400">
+                <span>• CitationGate Verbatim Rate:</span>
+                <span className="text-emerald-400 font-bold">98.4% Grounded</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-400">
+                <span>• Active DyTopo Workflow:</span>
+                <span className="text-blue-300 font-bold">Roundtable Multi-Round Debate</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onNavigateTab?.('biglaw')}
+              className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition uppercase"
+            >
+              <Layers className="w-4 h-4" />
+              <span>Switch to Phoenix BigLaw OS Studio</span>
+            </button>
+          </div>
+        )}
+
+        {/* TAB 5: DRIVE SUITE */}
+        {phoenixSubTab === 'drive' && (
+          <div className="flex-1 flex flex-col min-h-0">
+            {renderGoogleDriveSuite()}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div id="ai-chat-tab" className="flex flex-col gap-2.5 h-full min-h-0 overflow-hidden">
       
@@ -2731,6 +3202,9 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
                     setActiveProfile(p);
                     setSearchCitations([]);
                     stopActiveSpeech();
+                    if (p.id === 'ap-1') {
+                      setStaffWorkspaceMode('phoenix_command');
+                    }
                   }
                 }}
                 className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-all duration-200 cursor-pointer text-left select-none max-w-[200px] flex-1 ${
@@ -3196,8 +3670,8 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 leading-none">
                   <h3 className="text-xs font-black text-white font-mono truncate uppercase">{activeProfile.name} Desk</h3>
-                  <span className="text-[7.5px] uppercase tracking-wider font-mono bg-teal-950 text-teal-400 border border-teal-500/20 px-1 py-0.5 rounded font-black shrink-0">
-                    {activeProfile.voiceName === 'Aoede' ? 'UK VO' : 'US VO'}
+                  <span className="text-[7.5px] uppercase tracking-wider font-mono bg-teal-950 text-teal-300 border border-teal-500/20 px-1 py-0.5 rounded font-black shrink-0">
+                    VO: {activeProfile.voiceName} (Female)
                   </span>
                 </div>
                 <p className="text-[9px] text-slate-400 font-sans truncate mt-0.5">{activeProfile.role}</p>
@@ -3733,7 +4207,7 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
                           const res = await fetch('/api/eve/inconsistency-audit', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ caseName: 'Jenkins v. Jenkins' })
+                            body: JSON.stringify({ caseName: 'Active Case Disclosures' })
                           });
                           const data = await res.json();
                           if (data.markdownReport) {
@@ -3866,7 +4340,7 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
                           setTimeout(() => {
                             setEveRoutedFiles(prev => [...prev, selectedFileToRoute]);
                             setIsRoutingFile(false);
-                            const notify = `Successfully routed "${targetName}" to "/illamadex/Family_Law/Sarah_Jenkins/${selectedFolderToRoute}". Secure metadata synced and Phoenix notified!`;
+                            const notify = `Successfully routed "${targetName}" to "/illamadex/Family_Law/Matter_Files/${selectedFolderToRoute}". Secure metadata synced and Phoenix notified!`;
                             setRoutingNotification(notify);
                             
                             onAddMessage({
@@ -3875,7 +4349,7 @@ HOW TO ACTIVATE THIS PORTRAIT PAPER VIEWER:
                               content: `### 📂 illamadex FILING SYSTEM ROUTER SUCCESS
 EVE has completed document synchronization audit:
 - **Routed File**: \`${targetName}\`
-- **Target Folder**: \`/illamadex/Family_Law/Sarah_Jenkins/${selectedFolderToRoute}/\`
+- **Target Folder**: \`/illamadex/Family_Law/Matter_Files/${selectedFolderToRoute}/\`
 - **Status**: Verified and fully indexed. Database cache buffers cleared. Phoenix and Adonis notified.`,
                               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                               agentName: 'EVE'
@@ -3972,7 +4446,7 @@ EVE has completed document synchronization audit:
                         const briefContent = `### 🧠 PHOENIX PARTNER TRIAL BRIEFING & EVIDENCE AUDIT
 **From**: EVE (Legal Paralegal & Evidence Specialist)
 **To**: Phoenix (Senior Litigation Strategist)
-**Matter**: Jenkins v. Jenkins (Disclosures & Asset Audit)
+**Matter**: Active Disclosures & Asset Audit
 
 ---
 
@@ -4080,7 +4554,7 @@ EVE has completed document synchronization audit:
                         >
                           <div className="flex items-center gap-2 truncate">
                             <FileText className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                            <span className="truncate font-bold">Christopher Guinto — FL-120 Dissolution Dossier</span>
+                            <span className="truncate font-bold">FL-120 Dissolution Responsive Dossier</span>
                           </div>
                           <span className="text-[8.5px] uppercase font-bold text-amber-400 bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-500/30 shrink-0">Dispatch</span>
                         </button>
@@ -4118,6 +4592,22 @@ EVE has completed document synchronization audit:
                 {/* Mode Selector for Phoenix / Sentry / Allure */}
                 <div className="px-3 pt-2.5 pb-1.5 flex items-center justify-between gap-2 border-b border-[#1e293b] bg-[#090d16]/60 shrink-0">
                   <div className="flex items-center gap-1 bg-[#050812] p-0.5 rounded-lg border border-slate-800 text-[9px] font-mono font-bold">
+                    {activeProfile.id === 'ap-1' && (
+                      <button
+                        type="button"
+                        onClick={() => setStaffWorkspaceMode('phoenix_command')}
+                        className={`px-2.5 py-1 rounded transition flex items-center gap-1.5 cursor-pointer ${
+                          staffWorkspaceMode === 'phoenix_command' || (!['drive', 'context', 'pipeline'].includes(staffWorkspaceMode))
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                        title="Phoenix Senior Managing Partner Litigation Strategy & Evidentiary Review Suite"
+                      >
+                        <Scale className="w-3 h-3 text-amber-400" />
+                        <span>Litigation & Trial Command</span>
+                        <span className="text-[7.5px] uppercase font-bold text-amber-400 bg-amber-950/90 px-1 py-0.2 rounded border border-amber-500/30">Senior Partner</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setStaffWorkspaceMode('drive')}
@@ -4298,6 +4788,8 @@ EVE has completed document synchronization audit:
                       </div>
                     )}
                   </div>
+                ) : staffWorkspaceMode === 'phoenix_command' || (activeProfile.id === 'ap-1' && !['drive', 'context', 'pipeline'].includes(staffWorkspaceMode)) ? (
+                  renderPhoenixSeniorPartnerSuite()
                 ) : staffWorkspaceMode === 'drive' ? (
                   <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                     {renderGoogleDriveSuite()}
@@ -4421,8 +4913,8 @@ EVE has completed document synchronization audit:
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 leading-none">
                   <h3 className="text-xs font-bold text-white font-heading truncate">{activeProfile.name}</h3>
-                  <span className="text-[8px] uppercase tracking-wider font-mono bg-teal-950 text-teal-400 border border-teal-500/20 px-1 py-0.5 rounded leading-none shrink-0 font-bold scale-90">
-                    {activeProfile.voiceName === 'Aoede' ? 'UK Accent' : 'US Accent'}
+                  <span className="text-[8px] uppercase tracking-wider font-mono bg-teal-950 text-teal-300 border border-teal-500/20 px-1 py-0.5 rounded leading-none shrink-0 font-bold scale-90">
+                    Voice: {activeProfile.voiceName} (Female)
                   </span>
                 </div>
                 <p className="text-[9px] text-slate-400 font-sans truncate mt-0.5">{activeProfile.role}</p>
@@ -4430,6 +4922,60 @@ EVE has completed document synchronization audit:
             </div>
             
             <div className="flex items-center gap-2">
+              {/* Phoenix Senior Managing Partner Quick Action Suite */}
+              {activeProfile.id === 'ap-1' && (
+                <div className="flex items-center gap-1.5 font-mono text-[9px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStaffWorkspaceMode('phoenix_command');
+                      setPhoenixSubTab('strategy');
+                    }}
+                    className={`px-2 py-1 rounded border transition cursor-pointer flex items-center gap-1 font-bold ${
+                      staffWorkspaceMode === 'phoenix_command' && phoenixSubTab === 'strategy'
+                        ? 'bg-amber-500/25 text-amber-300 border-amber-500/60 shadow'
+                        : 'bg-slate-900/80 text-slate-300 border-slate-700/60 hover:text-amber-300 hover:border-amber-500/40'
+                    }`}
+                    title="Open Phoenix Litigation Strategy Dashboard"
+                  >
+                    <Scale className="w-3 h-3 text-amber-400" />
+                    <span className="hidden sm:inline">Litigation</span> Strategy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStaffWorkspaceMode('phoenix_command');
+                      setPhoenixSubTab('tactics');
+                    }}
+                    className={`px-2 py-1 rounded border transition cursor-pointer flex items-center gap-1 font-bold ${
+                      staffWorkspaceMode === 'phoenix_command' && phoenixSubTab === 'tactics'
+                        ? 'bg-amber-500/25 text-amber-300 border-amber-500/60 shadow'
+                        : 'bg-slate-900/80 text-slate-300 border-slate-700/60 hover:text-amber-300 hover:border-amber-500/40'
+                    }`}
+                    title="Open Phoenix Trial Tactics Protocols"
+                  >
+                    <Zap className="w-3 h-3 text-amber-400" />
+                    <span>Trial Tactics</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStaffWorkspaceMode('phoenix_command');
+                      setPhoenixSubTab('evidence');
+                    }}
+                    className={`px-2 py-1 rounded border transition cursor-pointer flex items-center gap-1 font-bold ${
+                      staffWorkspaceMode === 'phoenix_command' && phoenixSubTab === 'evidence'
+                        ? 'bg-amber-500/25 text-amber-300 border-amber-500/60 shadow'
+                        : 'bg-slate-900/80 text-slate-300 border-slate-700/60 hover:text-amber-300 hover:border-amber-500/40'
+                    }`}
+                    title="Open Phoenix High-Stakes Evidentiary Review Tool"
+                  >
+                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                    <span>Evidentiary Review</span>
+                  </button>
+                </div>
+              )}
+
               {/* Assign Extraction Task to AI Agent Button */}
               <button
                 type="button"
@@ -4700,7 +5246,7 @@ EVE has completed document synchronization audit:
                       </div>
 
                       {/* Interactive Official Form Card if message mentions FL-120 / Official Form */}
-                      {((msg.content.includes('FL-120') || msg.content.includes('Official Form') || msg.content.includes('Judicial Council') || msg.content.toLowerCase().includes('guinto')) && msg.sender === 'assistant') && (
+                      {((msg.content.includes('FL-120') || msg.content.includes('Official Form') || msg.content.includes('Judicial Council')) && msg.sender === 'assistant') && (
                         <div className="mt-3 p-3 bg-gradient-to-br from-[#0c1c18] to-[#07131e] border border-emerald-500/40 rounded-xl space-y-2 shadow-lg">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -4714,13 +5260,13 @@ EVE has completed document synchronization audit:
                             </span>
                           </div>
                           <p className="text-[11px] text-slate-300 font-sans leading-relaxed">
-                            Official Court Form populated with case facts for <strong>Christopher Guinto</strong> (Case No. 26FL008921, Orange County Superior Court).
+                            Official Court Form populated with case facts for <strong>{selectedOfficialClient?.name || 'Selected Client'}</strong>.
                           </p>
                           <div className="flex items-center gap-2 pt-1">
                             <button
                               type="button"
                               onClick={() => {
-                                const target = clients?.find(c => c.name.includes('Christopher Guinto')) || clients?.[0] || null;
+                                const target = selectedOfficialClient || clients?.[0] || null;
                                 setSelectedOfficialClient(target);
                                 setSelectedOfficialFormCode('FL-120');
                                 setShowOfficialFormModal(true);
@@ -4848,10 +5394,10 @@ EVE has completed document synchronization audit:
                   onClick={() => {
                     stopActiveSpeech();
                     if (!isListening) {
-                      setIsListening(true);
-                      isListeningRef.current = true;
+                      resetAllAudioAndMic();
+                    } else {
+                      safeRestartRecognition(50);
                     }
-                    safeRestartRecognition(50);
                   }}
                   className="px-2 py-0.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded text-[9px] uppercase tracking-wider shadow cursor-pointer transition flex items-center gap-1"
                   title="Interrupt Assistant Speech and Open Microphone"
@@ -4865,10 +5411,7 @@ EVE has completed document synchronization audit:
                 <button
                   type="button"
                   onClick={() => {
-                    setIsListening(true);
-                    isListeningRef.current = true;
-                    setVoiceStatus('LISTENING');
-                    safeRestartRecognition(50);
+                    resetAllAudioAndMic();
                   }}
                   className="px-2 py-0.5 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded text-[9px] uppercase tracking-wider shadow cursor-pointer transition flex items-center gap-1"
                 >
@@ -5788,7 +6331,7 @@ EVE has completed document synchronization audit:
                           type="text"
                           value={agentFrameworkQuery}
                           onChange={(e) => setAgentFrameworkQuery(e.target.value)}
-                          placeholder="e.g. California Family Code irreconcilable differences standard or Watson dissolution docket..."
+                          placeholder="e.g. California Family Code irreconcilable differences standard or dissolution docket..."
                           className="flex-1 bg-slate-900 border border-slate-700 focus:border-blue-400 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none"
                         />
                         <button
@@ -5811,11 +6354,11 @@ EVE has completed document synchronization audit:
                         onClick={() => {
                           setSearchMode('dockets');
                           setCaseNumberFilter('30-2026-0048192-FL');
-                          setAgentFrameworkQuery("Orange County Superior Court Watson dissolution register of actions docket sheet");
+                          setAgentFrameworkQuery("Orange County Superior Court dissolution register of actions docket sheet");
                         }}
                         className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-cyan-300 rounded border border-cyan-800/60 cursor-pointer flex items-center gap-1"
                       >
-                        🏛️ OCCourts Watson Docket
+                        🏛️ Register of Actions Docket
                       </button>
                       <button
                         type="button"
@@ -6021,13 +6564,9 @@ EVE has completed document synchronization audit:
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <button
-                        type="button"
-                        onClick={() => setAgentFrameworkDocContext(`PETITIONER: Don Watson\nRESPONDENT: Clara Watson\nDATE OF MARRIAGE: June 15, 2012\nDATE OF SEPARATION: April 10, 2026\nCHILDREN: Two minors (Jacob, age 10; Emma, age 7)\nASSETS: Primary residence in Newport Beach (purchased 2015, encumbered), pre-marital investment holding in Vanguard (Petitioner separate), 2023 Tesla Model Y, joint checking account ($42,000 balance).\nRELIEF SOUGHT: Dissolution of marriage based on irreconcilable differences, joint legal and physical custody, equal division of community property, confirmation of separate property under Fam. Code § 770.`)}
-                        className="text-xs font-mono text-purple-400 hover:underline cursor-pointer"
-                      >
-                        + Load Watson Matter Intake Sample
-                      </button>
+                      <span className="text-xs font-mono text-slate-500">
+                        Paste client intake facts or load intake document
+                      </span>
 
                       <button
                         type="button"

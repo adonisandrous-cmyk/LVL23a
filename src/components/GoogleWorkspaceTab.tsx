@@ -26,9 +26,11 @@ import {
   ShieldCheck,
   FileText,
   MessageSquare,
-  FolderSync
+  FolderSync,
+  HardDrive
 } from 'lucide-react';
 import PhoenixIngestionBridgeView from './PhoenixIngestionBridgeView';
+import { uploadToPhoenixReview } from '../services/driveSyncService';
 import {
   listGmailMessages,
   getGmailMessage,
@@ -214,9 +216,9 @@ export default function GoogleWorkspaceTab({ onNotify, defaultSubTab = 'gmail' }
           {
             id: 'gm-2',
             threadId: 'th-2',
-            snippet: 'Jane Doe returned the executed FL-110 summons acknowledgment and preliminary disclosure documents.',
-            subject: 'Doe v. Doe - Executed FL-110 & Property Disclosure',
-            from: 'Jane Doe <jane.doe@example.com>',
+            snippet: 'Executed FL-110 summons acknowledgment and preliminary disclosure documents received.',
+            subject: 'Matter Filing - Executed FL-110 & Property Disclosure',
+            from: 'Client Portal <portal-notification@legalforms.internal>',
             to: 'counsel@level23legal.com',
             date: 'Yesterday, 4:45 PM',
             labelIds: ['INBOX']
@@ -318,9 +320,9 @@ export default function GoogleWorkspaceTab({ onNotify, defaultSubTab = 'gmail' }
         setCalendarEvents([
           {
             id: 'cal-1',
-            summary: 'Watson v. Watson - Case Management Conference',
-            description: 'Orange County Superior Court - Dept C12 status conference regarding preliminary property disclosures.',
-            location: '341 The City Dr S, Orange, CA 92868',
+            summary: 'Case Management Status Conference',
+            description: 'Department status conference regarding preliminary property disclosures.',
+            location: 'Lamoreaux Justice Center, 341 The City Dr S, Orange, CA 92868',
             start: { dateTime: new Date(Date.now() + 24 * 3600 * 1000).toISOString() },
             end: { dateTime: new Date(Date.now() + 25 * 3600 * 1000).toISOString() },
             hangoutLink: 'https://meet.google.com/abc-wxyz-qrs'
@@ -400,8 +402,8 @@ export default function GoogleWorkspaceTab({ onNotify, defaultSubTab = 'gmail' }
         setTasks([
           {
             id: 'tsk-1',
-            title: 'File FL-110 Summons & FL-100 Petition (Watson)',
-            notes: 'Submit via Orange County Superior Court e-filing portal before 4:00 PM PST',
+            title: 'File FL-110 Summons & FL-100 Petition',
+            notes: 'Submit via Court e-filing portal before 4:00 PM PST',
             status: 'needsAction',
             due: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString()
           },
@@ -535,18 +537,33 @@ export default function GoogleWorkspaceTab({ onNotify, defaultSubTab = 'gmail' }
   };
 
   // ----------------------------------------------------
-  // Meet Handlers
+  // Meet Handlers (Attached to level23consulting@gmail.com & Google Drive)
   // ----------------------------------------------------
   const handleCreateInstantMeet = async () => {
     setIsCreatingMeet(true);
     try {
-      const space = await createGoogleMeetSpace(token);
+      const space = await createGoogleMeetSpace(token, 'level23consulting@gmail.com');
       setMeetSpaces(prev => [space, ...prev]);
-      onNotify?.('success', 'Google Meet Room created!');
+      
+      // Auto-archive Meet room details to Google Drive repository for level23consulting@gmail.com
+      const recordDoc = `Google Meet Room: ${space.meetingCode}\nHost Account: level23consulting@gmail.com\nMeeting Link: ${space.meetingUri}\nGoogle Drive Repository: level23consulting@gmail.com / phoenix_review\nGenerated: ${new Date().toLocaleString()}`;
+      await uploadToPhoenixReview(`GoogleMeet_${space.meetingCode}_Record.txt`, recordDoc, 'Legal Consultation');
+      
+      onNotify?.('success', 'Google Meet Room created & synced to Google Drive (level23consulting@gmail.com)!');
     } catch (err: any) {
       onNotify?.('error', `Failed to create Meet room: ${err.message}`);
     } finally {
       setIsCreatingMeet(false);
+    }
+  };
+
+  const handleSyncMeetToDrive = async (space: MeetSpace) => {
+    try {
+      const recordDoc = `Google Meet Room: ${space.meetingCode}\nHost Account: level23consulting@gmail.com\nMeeting Link: ${space.meetingUri}\nGoogle Drive Repository: level23consulting@gmail.com / phoenix_review\nArchived: ${new Date().toLocaleString()}`;
+      await uploadToPhoenixReview(`GoogleMeet_${space.meetingCode}_Invite.txt`, recordDoc, 'Legal Consultation');
+      onNotify?.('success', `Saved Meet space to Google Drive (level23consulting@gmail.com / phoenix_review)!`);
+    } catch (err: any) {
+      onNotify?.('error', `Drive sync error: ${err.message}`);
     }
   };
 
@@ -620,8 +637,13 @@ export default function GoogleWorkspaceTab({ onNotify, defaultSubTab = 'gmail' }
           </div>
         </div>
 
-        {/* Google OAuth Status / Sign In Button */}
+        {/* Google OAuth Status / Sign In Button & Attached Account Badge */}
         <div className="flex items-center gap-2.5">
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-teal-950/60 border border-teal-500/40 rounded-xl text-xs font-mono text-teal-300">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Attached: <strong className="text-white">level23consulting@gmail.com</strong></span>
+          </div>
+
           <button
             type="button"
             onClick={handleGoogleSignIn}
@@ -952,7 +974,7 @@ export default function GoogleWorkspaceTab({ onNotify, defaultSubTab = 'gmail' }
                         type="text"
                         value={eventSummary}
                         onChange={(e) => setEventSummary(e.target.value)}
-                        placeholder="e.g. Watson v. Watson Status Conference"
+                        placeholder="e.g. Case Management Status Conference"
                         required
                         className="w-full p-2 bg-[#050b14] border border-slate-700 rounded-lg text-xs text-white"
                       />
@@ -1373,8 +1395,20 @@ export default function GoogleWorkspaceTab({ onNotify, defaultSubTab = 'gmail' }
                 Google Meet Video Conference Studio
               </h2>
               <p className="text-xs text-slate-400 leading-relaxed max-w-md mx-auto font-sans">
-                Instantly launch secure, enterprise-grade Google Meet spaces for depositions, witness preparation, and confidential client intakes.
+                Instantly launch secure, enterprise-grade Google Meet spaces for depositions, witness preparation, and confidential client intakes attached to <strong className="text-teal-300">level23consulting@gmail.com</strong>.
               </p>
+            </div>
+
+            {/* Attached Account & Google Drive Status Indicator */}
+            <div className="w-full max-w-md bg-[#08101d] border border-teal-500/30 rounded-2xl p-3 flex items-center justify-between text-xs font-mono text-slate-300">
+              <div className="flex items-center gap-1.5">
+                <Video className="w-4 h-4 text-sky-400" />
+                <span>Host: <strong className="text-teal-300">level23consulting@gmail.com</strong></span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <HardDrive className="w-4 h-4 text-amber-400" />
+                <span>Drive: <strong className="text-amber-300">phoenix_review</strong></span>
+              </div>
             </div>
 
             <button
@@ -1399,10 +1433,15 @@ export default function GoogleWorkspaceTab({ onNotify, defaultSubTab = 'gmail' }
                       className="p-3.5 bg-[#08101d] border border-teal-500/30 rounded-2xl flex items-center justify-between gap-3 shadow"
                     >
                       <div className="min-w-0">
-                        <span className="font-bold text-xs text-slate-200 block truncate">
-                          Room: {s.meetingCode || s.name}
-                        </span>
-                        <span className="text-[11px] font-mono text-teal-400 block truncate">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs text-slate-200 block truncate">
+                            Room: {s.meetingCode || s.name}
+                          </span>
+                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-teal-950 border border-teal-500/40 text-teal-300">
+                            level23consulting@gmail.com
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-mono text-teal-400 block truncate mt-0.5">
                           {s.meetingUri}
                         </span>
                       </div>
@@ -1414,6 +1453,14 @@ export default function GoogleWorkspaceTab({ onNotify, defaultSubTab = 'gmail' }
                           title="Copy Invite Link"
                         >
                           {copiedId === s.name ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSyncMeetToDrive(s)}
+                          className="p-2 bg-[#0e172a] hover:bg-slate-800 border border-slate-700 rounded-lg text-amber-300"
+                          title="Archive Invite to Google Drive (level23consulting@gmail.com)"
+                        >
+                          <HardDrive className="w-3.5 h-3.5 text-amber-400" />
                         </button>
                         <a
                           href={s.meetingUri}

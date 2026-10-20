@@ -1,34 +1,113 @@
 {
-  "form_id": "FL-120",
+  "form_id": "FL-100",
   "jurisdiction": "California Judicial Council",
-  "title": "Response—Marriage / Domestic Partnership",
+  "title": "Petition—Marriage/Domestic Partnership",
   "revision": "Rev. January 1, 2020",
-  "description": "Declarative mapping dictionary linking Master Standardized JSON schema to California Judicial Council FL-120 AcroForm targets.",
+  "description": "Declarative mapping dictionary linking 4-Part Intake / Master Standardized JSON schema to California Judicial Council FL-100 AcroForm targets.",
   "fields": {
-    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].AttyName_ft[0]": "attorney.name",
-    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].BarNo_ft[0]": "attorney.bar_number",
-    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].AttyFirm_ft[0]": "attorney.firm_name",
-    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].AttyStreet_ft[0]": "attorney.street",
-    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].AttyCity_ft[0]": "attorney.city",
-    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].AttyState_ft[0]": "attorney.state",
-    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].AttyZip_ft[0]": "attorney.zip",
-    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].Phone_ft[0]": "attorney.phone",
-    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].Fax_ft[0]": "attorney.fax",
-    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].Email_ft[0]": "attorney.email",
-    "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].AttyFor_ft[0]": "attorney.representing",
+    "FL-100[0].Page1[0].AttyInfo[0].AttyName_ft[0]": "attorney.name",
+    "FL-100[0].Page1[0].AttyInfo[0].BarNo_ft[0]": "attorney.bar_number",
+    "FL-100[0].Page1[0].AttyInfo[0].AttyFirm_ft[0]": "attorney.firm_name",
+    "FL-100[0].Page1[0].AttyInfo[0].AttyStreet_ft[0]": "attorney.street",
+    "FL-100[0].Page1[0].AttyInfo[0].AttyCity_ft[0]": "attorney.city",
+    "FL-100[0].Page1[0].AttyInfo[0].AttyState_ft[0]": "attorney.state",
+    "FL-100[0].Page1[0].AttyInfo[0].AttyZip_ft[0]": "attorney.zip",
+    "FL-100[0].Page1[0].AttyInfo[0].Phone_ft[0]": "attorney.phone",
+    "FL-100[0].Page1[0].AttyInfo[0].Fax_ft[0]": "attorney.fax",
+    "FL-100[0].Page1[0].AttyInfo[0].Email_ft[0]": "attorney.email",
+    "FL-100[0].Page1[0].AttyInfo[0].AttyFor_ft[0]": "attorney.representing",
 
-    "FL-120[0].Page1[0].Caption_sf[0].CourtInfo[0].CrtCounty_ft[0]": {
+    "FL-100[0].Page1[0].CourtInfo[0].CrtCounty_ft[0]": {
       "type": "format_string",
       "source": "case.county",
       "case": "upper"
     },
-    "FL-120[0].Page1[0].Caption_sf[0].CourtInfo[0].Street_ft[0]": "case.court_street",
-    "FL-120[0].Page1[0].Caption_sf[0].CourtInfo[0].MailingAdd_ft[0]": "case.court_mailing",
-    "FL-120[0].Page1[0].Caption_sf[0].CourtInfo[0].CityZip_ft[0]": "case.court_city_zip",
-    "FL-120[0].Page1[0].Caption_sf[0].CourtInfo[0].Branch_ft[0]": "case.branch_name",
+    "FL-100[0].Page1[0].CourtInfo[0].Street_ft[0]": "case.court_street",
+    "FL-100[0].Page1[0].CourtInfo[0].MailingAdd_ft[0]": "case.court_mailing",
+    "FL-100[0].Page1[0].CourtInfo[0].CityZip_ft[0]": "case.court_city_zip",
+    "FL-100[0].Page1[0].CourtInfo[0].Branch_ft[0]": "case.branch_name",
 
-    "FL-120[0].Page1[0].Caption_sf[0].CaseNumber[0].CaseNumber_ft[0]": "case.number",
-    "FL-120[0].Page1[0].Caption_sf[0].TitlePartyName[0].Petitioner_1_ft[0]": "case.title_petitioner",
-    "FL-120[0].Page1[0].Caption_sf[0].TitlePartyName[0].Respondent_ft[0]": "case.title_respondent"
+    "FL-100[0].Page1[0].TitlePartyName[0].Petitioner_1_ft[0]": "client.full_name",
+    "FL-100[0].Page1[0].TitlePartyName[0].Respondent_ft[0]": "opposing_party.full_name",
+    "FL-100[0].Page1[0].CaseNumber[0].CaseNumber_ft[0]": "case.case_number",
+
+    "FL-100[0].Page1[0].LegalRelationship[0].Marriage_cb[0]": {
+      "type": "checkbox",
+      "source": "proceeding.legal_relationship",
+      "equals": "Marriage"
+    },
+    "FL-100[0].Page1[0].Status[0].Dissolution_cb[0]": {
+      "type": "checkbox",
+      "source": "proceeding.type",
+      "equals": "Dissolution"
+    },
+    "FL-100[0].Page1[0].Status[0].LegalSeparation_cb[0]": {
+      "type": "checkbox",
+      "source": "proceeding.type",
+      "equals": "Legal Separation"
+    },
+
+    "FL-100[0].Page1[0].Residence[0].Petitioner_cb[0]": {
+      "type": "checkbox",
+      "source": "proceeding.residence_met_petitioner",
+      "checked_value": "/Yes"
+    },
+    "FL-100[0].Page1[0].Residence[0].Respondent_cb[0]": {
+      "type": "checkbox",
+      "source": "proceeding.residence_met_respondent",
+      "checked_value": "/Yes"
+    },
+
+    "FL-100[0].Page1[0].StatFacts[0].DOM_dt[0]": "proceeding.date_of_marriage",
+    "FL-100[0].Page1[0].StatFacts[0].DOS_dt[0]": "proceeding.date_of_separation",
+    "FL-100[0].Page1[0].StatFacts[0].Years_ft[0]": "proceeding.duration_years",
+    "FL-100[0].Page1[0].StatFacts[0].Months_ft[0]": "proceeding.duration_months",
+
+    "FL-100[0].Page1[0].MinorChildren[0].NoMinorChildren_cb[0]": {
+      "type": "checkbox",
+      "source": "proceeding.has_minor_children",
+      "equals": false
+    },
+    "FL-100[0].Page1[0].MinorChildren[0].HaveMinorChildren_cb[0]": {
+      "type": "checkbox",
+      "source": "proceeding.has_minor_children",
+      "equals": true
+    },
+    "FL-100[0].Page1[0].MinorChildren[0].Child1Name_ft[0]": "children.0.full_name",
+    "FL-100[0].Page1[0].MinorChildren[0].Child1DOB_dt[0]": "children.0.birthdate",
+    "FL-100[0].Page1[0].MinorChildren[0].Child1Age_ft[0]": "children.0.age",
+    "FL-100[0].Page1[0].MinorChildren[0].Child2Name_ft[0]": "children.1.full_name",
+    "FL-100[0].Page1[0].MinorChildren[0].Child2DOB_dt[0]": "children.1.birthdate",
+    "FL-100[0].Page1[0].MinorChildren[0].Child2Age_ft[0]": "children.1.age",
+
+    "FL-100[0].Page2[0].CaseNumber[0].CaseNumber_ft[0]": "case.case_number",
+    "FL-100[0].Page2[0].LegalGrounds[0].IrreconcilableDifferences_cb[0]": {
+      "type": "checkbox",
+      "source": "proceeding.grounds",
+      "equals": "Irreconcilable Differences"
+    },
+    "FL-100[0].Page2[0].Custody[0].LegalCustodyJoint_cb[0]": {
+      "type": "checkbox",
+      "source": "proceeding.custody_legal",
+      "equals": "Joint"
+    },
+    "FL-100[0].Page2[0].Custody[0].PhysicalCustodyJoint_cb[0]": {
+      "type": "checkbox",
+      "source": "proceeding.custody_physical",
+      "equals": "Joint"
+    },
+    "FL-100[0].Page2[0].Support[0].ChildSupport_cb[0]": {
+      "type": "checkbox",
+      "source": "proceeding.child_support_requested",
+      "checked_value": "/Yes"
+    },
+    "FL-100[0].Page2[0].Support[0].SpousalSupportPetitioner_cb[0]": {
+      "type": "checkbox",
+      "source": "proceeding.spousal_support_to_petitioner",
+      "checked_value": "/Yes"
+    },
+    "FL-100[0].Page3[0].CaseNumber[0].CaseNumber_ft[0]": "case.case_number",
+    "FL-100[0].Page3[0].Date_dt[0]": "proceeding.filing_date",
+    "FL-100[0].Page3[0].Signature_ft[0]": "client.full_name"
   }
 }

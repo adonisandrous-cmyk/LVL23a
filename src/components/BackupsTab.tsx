@@ -1033,14 +1033,32 @@ app.listen(PORT, '0.0.0.0', () => {
                     </button>
 
                     {/* 1-Click Batch File Download Button */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-1">
                       <a
-                        href="/api/download/script/deep-laptop-cleaner.bat"
-                        download="deep-laptop-cleaner.bat"
-                        className="py-2 px-2.5 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold font-mono text-[9.5px] uppercase rounded-xl flex items-center justify-center gap-1.5 shadow transition-all cursor-pointer no-underline text-center"
+                        href="/api/download/script/launch-windows-desktop.bat"
+                        download="launch-windows-desktop.bat"
+                        className="py-2 px-2.5 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-slate-950 font-black font-mono text-[9.5px] uppercase rounded-xl flex items-center justify-center gap-1.5 shadow transition-all cursor-pointer no-underline text-center"
+                      >
+                        <ArrowDownToLine className="w-3 h-3 text-slate-950" />
+                        <span>launch-windows-desktop.bat</span>
+                      </a>
+
+                      <a
+                        href="/api/download/script/create-windows-shortcut.bat"
+                        download="create-windows-shortcut.bat"
+                        className="py-2 px-2.5 bg-gradient-to-r from-teal-600 to-emerald-500 hover:from-teal-500 hover:to-emerald-400 text-white font-bold font-mono text-[9.5px] uppercase rounded-xl flex items-center justify-center gap-1.5 shadow transition-all cursor-pointer no-underline text-center"
                       >
                         <ArrowDownToLine className="w-3 h-3" />
-                        <span>Laptop Deep Cleaner (.bat)</span>
+                        <span>create-windows-shortcut.bat</span>
+                      </a>
+
+                      <a
+                        href="/api/download/script/build-windows-package.bat"
+                        download="build-windows-package.bat"
+                        className="py-2 px-2.5 bg-gradient-to-r from-indigo-600 to-sky-500 hover:from-indigo-500 hover:to-sky-400 text-white font-bold font-mono text-[9.5px] uppercase rounded-xl flex items-center justify-center gap-1.5 shadow transition-all cursor-pointer no-underline text-center"
+                      >
+                        <ArrowDownToLine className="w-3 h-3" />
+                        <span>build-windows-package.bat</span>
                       </a>
 
                       <a
@@ -1050,6 +1068,15 @@ app.listen(PORT, '0.0.0.0', () => {
                       >
                         <ArrowDownToLine className="w-3 h-3" />
                         <span>install-desktop.bat</span>
+                      </a>
+
+                      <a
+                        href="/api/download/script/deep-laptop-cleaner.bat"
+                        download="deep-laptop-cleaner.bat"
+                        className="py-2 px-2.5 bg-[#0e1a2f] hover:bg-sky-900/40 border border-sky-500/30 text-sky-300 font-bold font-mono text-[9.5px] uppercase rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer no-underline text-center"
+                      >
+                        <ArrowDownToLine className="w-3 h-3 text-teal-400" />
+                        <span>Laptop Deep Cleaner (.bat)</span>
                       </a>
 
                       <a

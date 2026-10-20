@@ -29,6 +29,7 @@ import {
   HardDrive,
   Languages,
   FileCheck,
+  FileCheck2,
   Upload,
   UploadCloud,
   Paperclip,
@@ -36,6 +37,7 @@ import {
 } from 'lucide-react';
 import { Client, Matter, GeneratedDocument, FL120IntakeData } from '../types';
 import { getAccessToken } from '../lib/driveAuth';
+import { ClearIntakeButton } from './ClearIntakeButton';
 
 interface ClientIntakeGeneratorModalProps {
   isOpen: boolean;
@@ -70,10 +72,60 @@ export interface IntakeFormSchema {
   sections: IntakeSectionSchema[];
 }
 
-export type IntakeCategory = 'Civil Litigation' | 'Family Law' | 'Bankruptcy' | 'Immigration';
+export type IntakeCategory = 'Comprehensive (4-Part)' | 'Civil Litigation' | 'Family Law' | 'Bankruptcy' | 'Immigration';
 
 // Default Fallback Schemas for instant 100% reliable load
 const DEFAULT_SCHEMAS: Record<string, IntakeFormSchema> = {
+  'Comprehensive (4-Part)': {
+    formTitle: 'Comprehensive 4-Part Client Legal Intake Form',
+    category: 'Comprehensive (4-Part)',
+    description: 'Four-part universal intake form: Part 1 Personal Info, Part 2 Information About Other, Part 3 Court Info, and Part 4 Legal Assistance & What Happened.',
+    aiPromptMessage: 'Form structured into four canonical parts for automated detection and court form mapping (FL-100, FL-200, FL-300, FW-001, FW-003, POS).',
+    sections: [
+      {
+        sectionTitle: 'Part 1. Personal (Self Information)',
+        fields: [
+          { id: 'Client_FirstName', label: 'First Name', type: 'text', required: true, placeholder: 'e.g., Eleanor' },
+          { id: 'Client_LastName', label: 'Last Name', type: 'text', required: true, placeholder: 'e.g., Vance' },
+          { id: 'Client_DOB', label: 'Date of Birth (YYYY-MM-DD)', type: 'date', required: true },
+          { id: 'Client_Address_Street', label: 'Street Address', type: 'text', required: true, placeholder: '120 Ocean Avenue, Apt 4B' },
+          { id: 'Client_Address_CityStateZip', label: 'City, State, Zip', type: 'text', required: true, placeholder: 'Newport Beach, CA 92660' },
+          { id: 'Client_Phone', label: 'Phone Number', type: 'text', required: true, placeholder: '(949) 555-0144' },
+          { id: 'Client_Email', label: 'Email Address', type: 'text', required: true, placeholder: 'eleanor.vance@example.com' }
+        ]
+      },
+      {
+        sectionTitle: 'Part 2. Information About Other (Opposing Party / Co-parent)',
+        fields: [
+          { id: 'Other_FirstName', label: 'First Name', type: 'text', required: true, placeholder: 'e.g., Jonathan' },
+          { id: 'Other_LastName', label: 'Last Name', type: 'text', required: true, placeholder: 'e.g., Vance' },
+          { id: 'Other_Address_Street', label: 'Street Address', type: 'text', required: false, placeholder: '450 Harbor Blvd' },
+          { id: 'Other_Address_CityStateZip', label: 'City, State, Zip', type: 'text', required: false, placeholder: 'Costa Mesa, CA 92627' },
+          { id: 'Other_Phone', label: 'Phone Number', type: 'text', required: false, placeholder: '(949) 555-0988' },
+          { id: 'Other_Email', label: 'Email Address', type: 'text', required: false, placeholder: 'jonathan.vance@example.com' }
+        ]
+      },
+      {
+        sectionTitle: 'Part 3. Court Info',
+        fields: [
+          { id: 'Court_Name', label: 'Court Name', type: 'text', required: true, placeholder: 'e.g., Superior Court of California' },
+          { id: 'Court_County', label: 'Court Location / County', type: 'text', required: true, placeholder: 'e.g., Orange County — Lamoreaux Justice Center' },
+          { id: 'Court_CaseNumber', label: 'Case Number', type: 'text', required: true, placeholder: 'e.g., 24FL-009412 (alphanumeric only)' },
+          { id: 'Court_OpposingParty_FullName', label: 'Opposing Party Full Legal Name', type: 'text', required: true, placeholder: 'e.g., Jonathan Vance' },
+          { id: 'Court_HearingDates', label: 'Date Info / Hearings', type: 'text', required: false, placeholder: 'e.g., 2026-10-15 (Hearing date / Case conference)' },
+          { id: 'Court_JudgeName', label: "Judge's Name", type: 'text', required: false, placeholder: 'e.g., Hon. Claudia R. Howard' }
+        ]
+      },
+      {
+        sectionTitle: 'Part 4. Assistance Seeking & Incident Details',
+        fields: [
+          { id: 'Case_AssistanceType', label: 'Type of Assistance', type: 'select', required: true, options: ['Family Law', 'Civil Litigation', 'Bankruptcy', 'Immigration', 'Fee Waiver Application', 'Proof of Service Execution'] },
+          { id: 'Case_IncidentDescription', label: 'What Happened?', type: 'textarea', required: true, placeholder: 'Explain what happened in detail: chronological timeline of events, dispute background, actions taken, and specific relief requested...' },
+          { id: 'Case_FileUpload', label: 'Supporting Documents (.pdf/.docx)', type: 'text', required: false, placeholder: 'Attach supporting evidence, filings, contracts, or tax records' }
+        ]
+      }
+    ]
+  },
   'Civil Litigation': {
     formTitle: 'Civil Litigation Case Assessment & Intake Form',
     category: 'Civil Litigation',
@@ -219,6 +271,7 @@ const DEFAULT_SCHEMAS: Record<string, IntakeFormSchema> = {
 };
 
 // Aliases for backward compatibility
+DEFAULT_SCHEMAS['Comprehensive'] = DEFAULT_SCHEMAS['Comprehensive (4-Part)'];
 DEFAULT_SCHEMAS['General'] = DEFAULT_SCHEMAS['Civil Litigation'];
 DEFAULT_SCHEMAS['Custom'] = DEFAULT_SCHEMAS['Bankruptcy'];
 
@@ -231,9 +284,9 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
   clients,
   onNavigateToTab
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState<IntakeCategory>('Civil Litigation');
-  const [activeFormSchema, setActiveFormSchema] = useState<IntakeFormSchema>(DEFAULT_SCHEMAS['Civil Litigation']);
-  const [englishSchemaCache, setEnglishSchemaCache] = useState<IntakeFormSchema>(DEFAULT_SCHEMAS['Civil Litigation']);
+  const [selectedCategory, setSelectedCategory] = useState<IntakeCategory>('Comprehensive (4-Part)');
+  const [activeFormSchema, setActiveFormSchema] = useState<IntakeFormSchema>(DEFAULT_SCHEMAS['Comprehensive (4-Part)']);
+  const [englishSchemaCache, setEnglishSchemaCache] = useState<IntakeFormSchema>(DEFAULT_SCHEMAS['Comprehensive (4-Part)']);
   const [spanishSchemaCache, setSpanishSchemaCache] = useState<IntakeFormSchema | null>(null);
   const [currentLanguage, setCurrentLanguage] = useState<'en' | 'es'>('en');
   const [isTranslatingForm, setIsTranslatingForm] = useState<boolean>(false);
@@ -275,6 +328,20 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
   const [showExtractionInputModal, setShowExtractionInputModal] = useState<boolean>(false);
   const [rawExtractionText, setRawExtractionText] = useState<string>('');
   const [spanishExtractionResult, setSpanishExtractionResult] = useState<any | null>(null);
+
+  // State-Reset Handler: Flush all active form values and temporary buffer streams
+  const handleResetIntakeForm = () => {
+    setFieldValues({});
+    setUploadedFiles([]);
+    setSpanishExtractionResult(null);
+    setRawExtractionText('');
+    setIsAutoFilledSample(false);
+    setNotification({
+      type: 'info',
+      title: 'State Reset & Cleared',
+      message: 'Active client profile and temporary buffers successfully wiped for a fresh intake session.'
+    });
+  };
 
   if (!isOpen) return null;
 
@@ -594,59 +661,95 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
   const handleAutoFillSampleData = () => {
     const sampleValues: Record<string, string> = {};
 
-    if (selectedCategory === 'Immigration') {
-      sampleValues['full_name'] = 'Maria Santos Rodriguez';
-      sampleValues['dob'] = '1992-08-14';
-      sampleValues['country_birth'] = 'Mexico';
-      sampleValues['a_number'] = 'A# 098-765-432';
-      sampleValues['passport_num'] = 'MX-98201948 (Exp: 2030-05-12)';
-      sampleValues['entry_date'] = '2019-11-04';
-      sampleValues['entry_visa'] = 'B2 Tourist Visa';
-      sampleValues['i94_exp'] = '2020-05-04';
-      sampleValues['prior_petitions'] = 'Prior I-130 filed by U.S. Citizen spouse in 2024; pending at California Service Center.';
+    if (selectedCategory === 'Comprehensive (4-Part)') {
+      sampleValues['Client_FirstName'] = '[Client First Name]';
+      sampleValues['Client_LastName'] = '[Client Last Name]';
+      sampleValues['Client_DOB'] = 'YYYY-MM-DD';
+      sampleValues['Client_Address_Street'] = '[Street Address]';
+      sampleValues['Client_Address_CityStateZip'] = '[City, State, Zip]';
+      sampleValues['Client_Phone'] = '[Phone Number]';
+      sampleValues['Client_Email'] = '[Email Address]';
+
+      sampleValues['Other_FirstName'] = '[Opposing Party First Name]';
+      sampleValues['Other_LastName'] = '[Opposing Party Last Name]';
+      sampleValues['Other_Address_Street'] = '[Opposing Party Street]';
+      sampleValues['Other_Address_CityStateZip'] = '[Opposing Party City, State, Zip]';
+      sampleValues['Other_Phone'] = '[Phone Number]';
+      sampleValues['Other_Email'] = '[Email Address]';
+
+      sampleValues['Court_Name'] = 'Superior Court of California';
+      sampleValues['Court_County'] = '[County]';
+      sampleValues['Court_CaseNumber'] = '[Case Number]';
+      sampleValues['Court_OpposingParty_FullName'] = '[Opposing Party Full Name]';
+      sampleValues['Court_HearingDates'] = 'YYYY-MM-DD';
+      sampleValues['Court_JudgeName'] = '[Presiding Judge]';
+
+      sampleValues['Case_AssistanceType'] = 'Family Law';
+      sampleValues['Case_IncidentDescription'] = 'Intake factual statement regarding proceeding, marriage/separation timeline, children, and relief requested.';
+      sampleValues['Case_FileUpload'] = 'Intake_Questionnaire.pdf';
+
+      // Fallback aliases for backward compatibility
+      sampleValues['client_name'] = '[Client Legal Name]';
+      sampleValues['dob'] = 'YYYY-MM-DD';
+      sampleValues['phone'] = '[Phone Number]';
+      sampleValues['email'] = '[Email Address]';
+      sampleValues['address'] = '[Residential Address]';
+      sampleValues['opposing_party_name'] = '[Opposing Party Name]';
+      sampleValues['case_number'] = '[Case Number]';
+      sampleValues['what_happened'] = sampleValues['Case_IncidentDescription'];
+    } else if (selectedCategory === 'Immigration') {
+      sampleValues['full_name'] = '[Applicant Full Legal Name]';
+      sampleValues['dob'] = 'YYYY-MM-DD';
+      sampleValues['country_birth'] = '[Country of Birth]';
+      sampleValues['a_number'] = '[Alien Registration Number]';
+      sampleValues['passport_num'] = '[Passport Number]';
+      sampleValues['entry_date'] = 'YYYY-MM-DD';
+      sampleValues['entry_visa'] = '[Entry Visa Category]';
+      sampleValues['i94_exp'] = 'YYYY-MM-DD';
+      sampleValues['prior_petitions'] = '[Prior Immigration Filings]';
       sampleValues['immigration_goal'] = 'Adjustment of Status (Green Card)';
-      sampleValues['spouse_family_info'] = 'Spouse: U.S. Citizen spouse. Minor Children: Two.';
+      sampleValues['spouse_family_info'] = '[Spouse and Dependent Children Information]';
     } else if (selectedCategory === 'Family Law') {
-      sampleValues['client_name'] = 'Jane Doe';
-      sampleValues['client_contact'] = '(714) 555-0192 | jane.doe@example.com';
-      sampleValues['opposing_party'] = 'John Doe';
-      sampleValues['date_marriage'] = '2015-06-18';
-      sampleValues['date_separation'] = '2025-05-15';
-      sampleValues['marriage_location'] = 'Orange, California';
-      sampleValues['minor_children'] = 'Two minor children.';
-      sampleValues['custody_preference'] = 'Joint Legal, Primary Physical to Petitioner with Visitation';
-      sampleValues['real_estate_assets'] = 'Community home in Orange County (Market value $850k, Mortgage balance $420k); Chase Joint Savings ($45k).';
-      sampleValues['spousal_support_req'] = 'Temporary & Permanent Spousal Support Requested';
+      sampleValues['client_name'] = '[Petitioner / Respondent Name]';
+      sampleValues['client_contact'] = '[Client Phone | Email]';
+      sampleValues['opposing_party'] = '[Opposing Party Name]';
+      sampleValues['date_marriage'] = 'YYYY-MM-DD';
+      sampleValues['date_separation'] = 'YYYY-MM-DD';
+      sampleValues['marriage_location'] = '[City, State]';
+      sampleValues['minor_children'] = '[Minor Children Names and DOBs]';
+      sampleValues['custody_preference'] = 'Joint Legal and Joint Physical Custody (FL-311)';
+      sampleValues['real_estate_assets'] = '[Community Real Property and Financial Accounts]';
+      sampleValues['spousal_support_req'] = 'Statutory Determination per Family Code § 4320';
     } else if (selectedCategory === 'Bankruptcy') {
-      sampleValues['full_name'] = 'David Miller';
-      sampleValues['ssn_last4'] = '4821';
-      sampleValues['phone'] = '(555) 432-8765';
-      sampleValues['email'] = 'david.miller@example.com';
-      sampleValues['residential_address'] = '1234 Elm Street, Irvine, CA 92614';
-      sampleValues['marital_status'] = 'Single';
+      sampleValues['full_name'] = '[Debtor Full Legal Name]';
+      sampleValues['ssn_last4'] = 'XXXX';
+      sampleValues['phone'] = '[Phone Number]';
+      sampleValues['email'] = '[Email Address]';
+      sampleValues['residential_address'] = '[Debtor Residential Address]';
+      sampleValues['marital_status'] = '[Marital Status]';
       sampleValues['bankruptcy_chapter'] = 'Chapter 7 (Liquidation)';
       sampleValues['prior_filings'] = 'None in the past 8 years';
-      sampleValues['pending_garnishments'] = 'Notice of wage garnishment received from Midland Credit for $4,200.';
-      sampleValues['monthly_household_income'] = '$4,200.00';
-      sampleValues['unsecured_debt_estimate'] = '$38,500.00 (Credit cards & medical debt)';
-      sampleValues['secured_debt_estimate'] = 'None (Renting residence, lease current)';
-      sampleValues['real_estate_and_vehicles'] = '2019 Honda Civic (Fair market value $14,000, unencumbered)';
+      sampleValues['pending_garnishments'] = '[Pending Garnishments / Creditor Actions]';
+      sampleValues['monthly_household_income'] = '$0.00';
+      sampleValues['unsecured_debt_estimate'] = '$0.00';
+      sampleValues['secured_debt_estimate'] = '$0.00';
+      sampleValues['real_estate_and_vehicles'] = '[Real Estate and Vehicles Schedule]';
     } else {
-      sampleValues['client_name'] = 'Alexander Wright';
-      sampleValues['phone_number'] = '(949) 555-0182';
-      sampleValues['phone'] = '(949) 555-0182';
-      sampleValues['email_address'] = 'alexander.wright@consulting.com';
-      sampleValues['email'] = 'alexander.wright@consulting.com';
-      sampleValues['residential_address'] = '450 Newport Center Dr, Newport Beach, CA 92660';
-      sampleValues['address'] = '450 Newport Center Dr, Newport Beach, CA 92660';
+      sampleValues['client_name'] = '[Client Legal Name]';
+      sampleValues['phone_number'] = '[Phone Number]';
+      sampleValues['phone'] = '[Phone Number]';
+      sampleValues['email_address'] = '[Email Address]';
+      sampleValues['email'] = '[Email Address]';
+      sampleValues['residential_address'] = '[Residential Address]';
+      sampleValues['address'] = '[Residential Address]';
       sampleValues['preferred_contact'] = 'Email';
-      sampleValues['matter_subject'] = 'Commercial Contract Dispute & Breach of MSA';
-      sampleValues['matter_title'] = 'Commercial Contract Dispute & Breach of MSA';
-      sampleValues['incident_date'] = '2026-03-15';
-      sampleValues['dispute_summary'] = 'Client rendered tech consulting services under written MSA. Retainer balance of $38,500 remains unpaid past 60 days.';
-      sampleValues['opposing_parties'] = 'Vanguard Pacific Holdings LLC';
-      sampleValues['damages_amount'] = '$38,500.00';
-      sampleValues['urgency_deadlines'] = 'Demand letter statutory response deadline: October 15, 2026.';
+      sampleValues['matter_subject'] = '[Matter Subject / Cause of Action]';
+      sampleValues['matter_title'] = '[Matter Title]';
+      sampleValues['incident_date'] = 'YYYY-MM-DD';
+      sampleValues['dispute_summary'] = '[Factual Summary of Claim and Damages]';
+      sampleValues['opposing_parties'] = '[Opposing Entities / Parties]';
+      sampleValues['damages_amount'] = '$0.00';
+      sampleValues['urgency_deadlines'] = '[Statutory Deadlines / Statute of Limitations]';
     }
 
     // Rule 5: Never guess or fabricate placeholder answers. Leave unmapped fields blank.
@@ -852,9 +955,11 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
     setIsCreatingClientCard(true);
     setNotification(null);
 
-    const clientName = fieldValues['client_name'] || fieldValues['full_name'] || 'New Client';
-    const clientEmail = fieldValues['email_address'] || fieldValues['email'] || 'client@level23consulting.com';
-    const clientPhone = fieldValues['phone_number'] || fieldValues['phone'] || '(555) 019-2831';
+    const firstName = fieldValues['Client_FirstName'] || (fieldValues['client_name'] ? fieldValues['client_name'].split(' ')[0] : '');
+    const lastName = fieldValues['Client_LastName'] || (fieldValues['client_name'] ? fieldValues['client_name'].split(' ').slice(1).join(' ') : '');
+    const clientName = (firstName && lastName ? `${firstName} ${lastName}` : '') || fieldValues['client_name'] || fieldValues['full_name'] || 'New Client';
+    const clientEmail = fieldValues['Client_Email'] || fieldValues['email_address'] || fieldValues['email'] || 'client@level23consulting.com';
+    const clientPhone = fieldValues['Client_Phone'] || fieldValues['phone_number'] || fieldValues['phone'] || '(555) 019-2831';
     const intakeNotesCompiled = getCompiledFormText();
 
     const newClientId = `client_${Date.now()}`;
@@ -867,7 +972,7 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
       status: 'active',
       intakeNotes: intakeNotesCompiled,
       createdAt: new Date().toISOString(),
-      practiceArea: selectedCategory
+      practiceArea: fieldValues['Case_AssistanceType'] || selectedCategory
     };
 
     // 1. Add Client Data Card
@@ -875,17 +980,19 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
 
     // 2. Add Matter if callback exists
     if (onAddMatter) {
+      const rawCaseNum = fieldValues['Court_CaseNumber'] || fieldValues['case_number'] || `MAT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      const cleanCaseNum = rawCaseNum.replace(/[^A-Za-z0-9\-]/g, '').toUpperCase();
       const newMatterObj: Matter = {
         id: `matter_${Date.now()}`,
-        title: fieldValues['matter_subject'] || fieldValues['matter_title'] || fieldValues['immigration_goal'] || `${selectedCategory} Legal Matter — ${clientName}`,
-        caseNumber: fieldValues['case_number'] || `MAT-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        title: fieldValues['Case_AssistanceType'] ? `${fieldValues['Case_AssistanceType']} Legal Matter — ${clientName}` : (fieldValues['matter_subject'] || fieldValues['matter_title'] || `${selectedCategory} Legal Matter — ${clientName}`),
+        caseNumber: cleanCaseNum,
         clientId: newClientId,
         clientName: clientName,
-        practiceArea: selectedCategory,
+        practiceArea: fieldValues['Case_AssistanceType'] || selectedCategory,
         status: 'active',
         billingRate: 350,
         billedHours: 1.5,
-        description: fieldValues['incident_summary'] || fieldValues['dispute_summary'] || fieldValues['spouse_family_info'] || `${selectedCategory} client intake dossier verified and recorded.`,
+        description: fieldValues['Case_IncidentDescription'] || fieldValues['incident_summary'] || fieldValues['dispute_summary'] || `${selectedCategory} client intake dossier verified and recorded.`,
         createdAt: new Date().toISOString(),
         tasks: [
           { id: 't1', title: 'Review completed Client Intake Dossier', completed: true, dueDate: 'Today' },
@@ -943,7 +1050,7 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rawNotes: rawText,
-          targetFields: ['Client Full Name', 'Phone Number', 'Email Address', 'Incident / Issue Summary', 'Spouse Name / Opposing Party', 'Date of Marriage or Incident', 'Financial Assets or Claims'],
+          targetFields: ['Client Full Name', 'First Name', 'Last Name', 'Phone Number', 'Email Address', 'Incident / Issue Summary', 'Spouse Name / Opposing Party', 'Date of Marriage or Incident', 'Financial Assets or Claims'],
           formTitle: activeFormSchema.formTitle
         })
       });
@@ -953,7 +1060,20 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
         const extracted = data.extractedFields;
         const newValues = { ...fieldValues };
 
-        if (extracted['Client Full Name']) newValues['client_name'] = extracted['Client Full Name'];
+        // 4-Pass Strict Atomic Placement: ONLY place called-for items in individual fields
+        if (extracted['Client Full Name']) {
+          const fullName = extracted['Client Full Name'];
+          newValues['client_name'] = fullName;
+          const tokens = fullName.split(/\s+/).filter(Boolean);
+          if (tokens.length > 1) {
+            newValues['Client_FirstName'] = tokens[0];
+            newValues['Client_LastName'] = tokens.slice(1).join(' ');
+          } else if (tokens.length === 1) {
+            newValues['Client_FirstName'] = tokens[0];
+          }
+        }
+        if (extracted['First Name']) newValues['Client_FirstName'] = extracted['First Name'];
+        if (extracted['Last Name']) newValues['Client_LastName'] = extracted['Last Name'];
         if (extracted['Phone Number']) newValues['phone_number'] = extracted['Phone Number'];
         if (extracted['Email Address']) newValues['email_address'] = extracted['Email Address'];
         if (extracted['Incident / Issue Summary']) newValues['incident_summary'] = extracted['Incident / Issue Summary'];
@@ -961,8 +1081,8 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
         setFieldValues(newValues);
         setNotification({
           type: 'success',
-          title: 'Data Extracted from Response',
-          message: `Successfully extracted structured client data from email/document submission and populated intake fields!`
+          title: '4-Pass Data Extracted & Atomic Items Isolated',
+          message: `Successfully extracted structured client data with 4-pass verification! Individual fields (First Name, Last Name) strictly populated.`
         });
       } else {
         alert('Extraction complete. Populated default intake fields.');
@@ -1036,6 +1156,12 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
                 <span>🇺🇸 English</span>
               </button>
             </div>
+
+            {/* Dedicated Erase Data / Clean Slate Button */}
+            <ClearIntakeButton
+              onReset={handleResetIntakeForm}
+              label="Erase Data / New Intake"
+            />
 
             <button
               type="button"
@@ -1128,7 +1254,27 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
               )}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              {/* Button 0: Comprehensive 4-Part Intake */}
+              <button
+                type="button"
+                onClick={() => handleSelectCategory('Comprehensive (4-Part)')}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-1 col-span-2 sm:col-span-1 ${
+                  selectedCategory === 'Comprehensive (4-Part)'
+                    ? 'bg-gradient-to-br from-amber-500/25 via-amber-600/30 to-amber-950/50 border-amber-400 text-white shadow-lg shadow-amber-500/15 ring-2 ring-amber-400/50'
+                    : 'bg-[#070b13] border-slate-800 hover:border-amber-500/50 text-slate-300 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <FileCheck2 className={`w-5 h-5 ${selectedCategory === 'Comprehensive (4-Part)' ? 'text-amber-400' : 'text-slate-400'}`} />
+                  {selectedCategory === 'Comprehensive (4-Part)' && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />}
+                </div>
+                <div>
+                  <div className="text-xs font-mono font-extrabold uppercase text-amber-300">4-Part Intake</div>
+                  <div className="text-[9.5px] text-slate-400 font-sans">Self, Other, Court, Facts</div>
+                </div>
+              </button>
+
               {/* Button 1: Civil Litigation */}
               <button
                 type="button"
@@ -1145,7 +1291,7 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
                 </div>
                 <div>
                   <div className="text-xs font-mono font-extrabold uppercase">Civil Litigation</div>
-                  <div className="text-[9.5px] text-slate-400 font-sans">Disputes, Contracts & Torts</div>
+                  <div className="text-[9.5px] text-slate-400 font-sans">Disputes & Contracts</div>
                 </div>
               </button>
 
@@ -1185,7 +1331,7 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
                 </div>
                 <div>
                   <div className="text-xs font-mono font-extrabold uppercase text-amber-300">Bankruptcy</div>
-                  <div className="text-[9.5px] text-slate-400 font-sans">Chapter 7 & 13 Filings</div>
+                  <div className="text-[9.5px] text-slate-400 font-sans">Ch. 7 & 13 Filings</div>
                 </div>
               </button>
 
@@ -1205,7 +1351,7 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
                 </div>
                 <div>
                   <div className="text-xs font-mono font-extrabold uppercase">Immigration</div>
-                  <div className="text-[9.5px] text-slate-400 font-sans">USCIS Visas & Petitions</div>
+                  <div className="text-[9.5px] text-slate-400 font-sans">USCIS Visas</div>
                 </div>
               </button>
             </div>
@@ -1615,6 +1761,12 @@ export const ClientIntakeGeneratorModal: React.FC<ClientIntakeGeneratorModalProp
               {isExportingDrive ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Share2 className="w-3.5 h-3.5" />}
               <span>Export to Drive</span>
             </button>
+
+            {/* Dedicated State-Reset Button Safeguard */}
+            <ClearIntakeButton
+              onReset={handleResetIntakeForm}
+              label="Erase Data / Reset Form"
+            />
 
             {/* Action 3: Populate Client Data Card & Court Forms */}
             <button

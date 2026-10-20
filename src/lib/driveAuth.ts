@@ -26,6 +26,10 @@ provider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
 provider.addScope('https://www.googleapis.com/auth/spreadsheets');
 provider.addScope('https://www.googleapis.com/auth/documents');
 provider.addScope('https://www.googleapis.com/auth/contacts.readonly');
+provider.setCustomParameters({
+  login_hint: 'level23consulting@gmail.com',
+  prompt: 'select_account'
+});
 
 let isSigningIn = false;
 let cachedAccessToken: string | null = typeof window !== 'undefined' ? localStorage.getItem('google_drive_access_token') : null;

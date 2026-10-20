@@ -51,6 +51,7 @@ import { audioService } from '../services/audioPlaybackService';
 import { AudioTroubleshooterModal } from './AudioTroubleshooterModal';
 import { ExecutivePipelineHandOffModal } from './ExecutivePipelineHandOffModal';
 import { ExecutiveDispatchResult } from '../services/phoenixEngine/ExecutivePipelineBridge';
+import { getModelVoiceAssignments } from '../services/voiceAssignmentService';
 
 export type ZenAgentKey = 'PHOENIX' | 'EVE' | 'ALURE' | 'SENTRY';
 
@@ -347,11 +348,60 @@ export default function ZenEntranceView({
     setIsSpeakingVoice(true);
 
     const up = String(agent).toUpperCase();
-    let voiceName = 'Aoede';
-    if (up === 'EVE') voiceName = 'Eve';
-    else if (up === 'ALURE') voiceName = 'Kore';
-    else if (up === 'SENTRY') voiceName = 'Zephyr';
+    const assignments = getModelVoiceAssignments();
+    let modelKey = 'ap-1';
+    if (up === 'EVE') modelKey = 'ap-4';
+    else if (up === 'ALURE') modelKey = 'ap-3';
+    else if (up === 'SENTRY') modelKey = 'ap-2';
 
+    const assigned = assignments[modelKey];
+    const elevenKey = (typeof window !== 'undefined' ? localStorage.getItem('level23_elevenlabs_api_key') : '') || '';
+
+    // If an ElevenLabs voice is assigned and key is present, stream authentic ElevenLabs audio
+    if (elevenKey && assigned?.provider === 'ElevenLabs' && assigned?.voiceId) {
+      fetch('/api/elevenlabs/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          voiceId: assigned.voiceId,
+          apiKey: elevenKey
+        })
+      })
+        .then(r => r.json())
+        .then(d => {
+          if (thisToken === currentAudioTokenRef.current && d.success && d.base64Audio) {
+            const audio = new Audio(`data:audio/mpeg;base64,${d.base64Audio}`);
+            audio.onplay = () => setIsSpeakingVoice(true);
+            audio.onended = () => {
+              if (thisToken === currentAudioTokenRef.current) {
+                setIsSpeakingVoice(false);
+                isSpeakingVoiceRef.current = false;
+                if (isListeningRef.current) safeRestartRecognition(300);
+              }
+            };
+            audio.play().catch(() => {
+              fallbackStudioPlayback(text, agent, assigned?.voiceName || 'Aoede', thisToken);
+            });
+            return;
+          }
+          fallbackStudioPlayback(text, agent, assigned?.voiceName || 'Aoede', thisToken);
+        })
+        .catch(() => {
+          fallbackStudioPlayback(text, agent, assigned?.voiceName || 'Aoede', thisToken);
+        });
+      return;
+    }
+
+    let defaultStudioVoice = 'Aoede';
+    if (up === 'EVE') defaultStudioVoice = 'Eve';
+    else if (up === 'ALURE') defaultStudioVoice = 'Kore';
+    else if (up === 'SENTRY') defaultStudioVoice = 'Zephyr';
+
+    fallbackStudioPlayback(text, agent, defaultStudioVoice, thisToken);
+  };
+
+  const fallbackStudioPlayback = (text: string, agent: ZenAgentKey | string, voiceName: string, thisToken: number) => {
     audioService.playVoiceAudio({
       text,
       agent,
@@ -974,8 +1024,8 @@ export default function ZenEntranceView({
   // Command intent detection to suggest workspace tab transition
   const checkNavigationIntent = (text: string) => {
     const lower = text.toLowerCase();
-    if (lower.includes('client') || lower.includes('don watson') || lower.includes('directory')) return 'clients';
-    if (lower.includes('matter') || lower.includes('case') || lower.includes('watson v')) return 'matters';
+    if (lower.includes('client') || lower.includes('roster') || lower.includes('directory')) return 'clients';
+    if (lower.includes('matter') || lower.includes('case') || lower.includes('docket')) return 'matters';
     if (lower.includes('pleading') || lower.includes('document') || lower.includes('fl-100') || lower.includes('draft')) return 'documents';
     if (lower.includes('calendar') || lower.includes('schedule') || lower.includes('event') || lower.includes('google calendar')) return 'dashboard';
     if (lower.includes('consultation') || lower.includes('video') || lower.includes('jitsi')) return 'consult';

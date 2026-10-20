@@ -51,9 +51,12 @@ import FlexiCaptureStudio from './components/FlexiCaptureStudio';
 import EnterpriseLegalStudio from './components/EnterpriseLegalStudio';
 import { PhoenixModularStudio } from './components/PhoenixModularStudio';
 import { OfficialCaliforniaJudicialCouncilFormModal } from './components/OfficialCaliforniaJudicialCouncilFormModal';
+import { DesktopWorkstationTab } from './components/DesktopWorkstationTab';
+import { TemplateUploader } from './components/TemplateUploader';
 import { UniversalPipelineStudio } from './components/UniversalPipelineStudio';
 import { PhoenixEightAgentStudio } from './components/PhoenixEightAgentStudio';
 import { ExecutivePipelineHandOffModal } from './components/ExecutivePipelineHandOffModal';
+import { BigLawIntegrationStudio } from './components/BigLawIntegrationStudio';
 import { Scale, BookOpen, Database, CloudOff, CloudLightning, Lock, Unlock, UploadCloud, Languages, Globe, ShieldCheck, Moon } from 'lucide-react';
 import { startPeriodicDriveSync } from './services/driveSyncService';
 
@@ -64,42 +67,52 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [showExecutiveHandOffModal, setShowExecutiveHandOffModal] = useState<boolean>(false);
   const [isZenEntranceMode, setIsZenEntranceMode] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('practice_os_zen_mode');
-      return saved === 'true';
-    }
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('practice_os_zen_mode');
+        return saved === 'true';
+      }
+    } catch {}
     return false;
   });
 
   const handleSetZenMode = (val: boolean) => {
     setIsZenEntranceMode(val);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('practice_os_zen_mode', String(val));
-    }
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('practice_os_zen_mode', String(val));
+      }
+    } catch {}
   };
 
   // System Hibernation & Sleep Mode - Awakened per user command
   const [isHibernating, setIsHibernating] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('practice_os_hibernating');
-      if (saved !== null) return saved === 'true';
-    }
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('practice_os_hibernating');
+        if (saved !== null) return saved === 'true';
+      }
+    } catch {}
     return false; // Awake
   });
 
   const handleSetHibernating = (val: boolean) => {
     setIsHibernating(val);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('practice_os_hibernating', String(val));
-    }
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('practice_os_hibernating', String(val));
+      }
+    } catch {}
   };
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('practice_os_hibernating', 'false');
-      localStorage.removeItem('level23_templates_v2');
-      localStorage.removeItem('universal_pipeline_state');
-    }
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('practice_os_hibernating', 'false');
+        localStorage.removeItem('level23_templates_v2');
+        localStorage.removeItem('universal_pipeline_state');
+      }
+    } catch {}
   }, []);
 
   const [systemConnected, setSystemConnected] = useState<boolean>(false);
@@ -112,19 +125,52 @@ export default function App() {
   const [selectedOfficialFormCode, setSelectedOfficialFormCode] = useState<'FL-120' | 'FL-105' | 'FL-311' | 'FL-160'>('FL-120');
   const [selectedOfficialClient, setSelectedOfficialClient] = useState<Client | null>(null);
   const [currentAppLanguage, setCurrentAppLanguage] = useState<string>('en');
+  const [preferredDocumentViewer, setPreferredDocumentViewer] = useState<'default' | 'onlyoffice'>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        return (localStorage.getItem('preferred_document_viewer') as 'default' | 'onlyoffice') || 'default';
+      }
+    } catch {}
+    return 'default';
+  });
+
+  const handleSetPreferredDocumentViewer = (viewer: 'default' | 'onlyoffice') => {
+    setPreferredDocumentViewer(viewer);
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('preferred_document_viewer', viewer);
+      }
+    } catch {}
+  };
 
   // Firestore synchronization states
   const [dbSyncStatus, setDbSyncStatus] = useState<'offline' | 'connecting' | 'synced' | 'error'>('connecting');
   const [syncMessage, setSyncMessage] = useState<string>('Connecting to persistent cloud memory...');
 
   // Storage Lock states - Password bypassed & disabled per user request
-  const [isPasswordDisabled, setIsPasswordDisabled] = useState<boolean>(() => localStorage.getItem('passwordDisabled') !== 'false'); // Default to true (bypassed/disabled)
+  const [isPasswordDisabled, setIsPasswordDisabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('passwordDisabled') !== 'false';
+    } catch {
+      return true;
+    }
+  }); // Default to true (bypassed/disabled)
   const [isStorageLocked, setIsStorageLocked] = useState<boolean>(() => {
-    // If password is bypassed/disabled, storage is never locked
-    if (localStorage.getItem('passwordDisabled') !== 'false') return false;
-    return localStorage.getItem('isStorageLocked') === 'true';
+    try {
+      // If password is bypassed/disabled, storage is never locked
+      if (localStorage.getItem('passwordDisabled') !== 'false') return false;
+      return localStorage.getItem('isStorageLocked') === 'true';
+    } catch {
+      return false;
+    }
   });
-  const [storagePin, setStoragePin] = useState<string>(() => localStorage.getItem('storagePin') || '1234'); // default standard PIN
+  const [storagePin, setStoragePin] = useState<string>(() => {
+    try {
+      return localStorage.getItem('storagePin') || '1234';
+    } catch {
+      return '1234';
+    }
+  }); // default standard PIN
   const [showLockModal, setShowLockModal] = useState<boolean>(false);
   const [lockModalMode, setLockModalMode] = useState<'lock' | 'unlock' | 'change-pin'>('lock');
   const [pinInput, setPinInput] = useState<string>('');
@@ -162,17 +208,18 @@ export default function App() {
   const [clients, setClients] = useState<Client[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem('l23_persistent_clients_v3');
+        const saved = localStorage.getItem('l23_persistent_clients_v4') || localStorage.getItem('l23_persistent_clients_v3');
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            const clean = parsed.filter(c => !isFictitiousLegacyName(c.name));
-            const hasGuinto = clean.some(c => c.name.toLowerCase().includes('guinto'));
-            if (!hasGuinto) {
-              const guintoRecord = INITIAL_CLIENTS_ROSTER.find(c => c.name.toLowerCase().includes('guinto'));
-              if (guintoRecord) clean.unshift(guintoRecord);
+            const clean = parsed.filter(c => 
+              !isFictitiousLegacyName(c.name) && 
+              !c.name.toLowerCase().includes('guinto')
+            );
+            if (clean.length > 0) {
+              localStorage.setItem('l23_persistent_clients_v4', JSON.stringify(clean));
+              return clean;
             }
-            if (clean.length > 0) return clean;
           }
         }
       } catch (e) {
@@ -186,17 +233,20 @@ export default function App() {
   const [matters, setMatters] = useState<Matter[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem('l23_persistent_matters_v3');
+        const saved = localStorage.getItem('l23_persistent_matters_v4') || localStorage.getItem('l23_persistent_matters_v3');
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            const clean = parsed.filter(m => !isFictitiousLegacyName(m.clientName) && !isFictitiousLegacyName(m.title));
-            const hasGuintoMatter = clean.some(m => m.clientName.toLowerCase().includes('guinto') || m.title.toLowerCase().includes('guinto'));
-            if (!hasGuintoMatter) {
-              const guintoMatter = INITIAL_MATTERS_ROSTER.find(m => m.clientName.toLowerCase().includes('guinto'));
-              if (guintoMatter) clean.unshift(guintoMatter);
+            const clean = parsed.filter(m => 
+              !isFictitiousLegacyName(m.clientName) && 
+              !isFictitiousLegacyName(m.title) &&
+              !m.clientName.toLowerCase().includes('guinto') &&
+              !m.title.toLowerCase().includes('guinto')
+            );
+            if (clean.length > 0) {
+              localStorage.setItem('l23_persistent_matters_v4', JSON.stringify(clean));
+              return clean;
             }
-            if (clean.length > 0) return clean;
           }
         }
       } catch (e) {
@@ -222,39 +272,7 @@ export default function App() {
         console.error('Error loading persistent docs:', e);
       }
     }
-    return [
-      {
-        id: 'doc-doe-fl100',
-        title: 'FL-100 Petition for Dissolution of Marriage — Jane Doe',
-        clientId: 'c-1',
-        clientName: 'Jane Doe',
-        templateId: 'fl_100_dissolution',
-        content: `SUPERIOR COURT OF CALIFORNIA, COUNTY OF ORANGE
-341 The City Drive South, Orange, CA 92868
-CASE NUMBER: CASE-2026-001
-
-========================================================================
-PETITION FOR DISSOLUTION OF MARRIAGE (FL-100) [TEMPLATE]
-========================================================================
-
-1. ATTORNEY FOR / UNREPRESENTED PETITIONER DETAILS:
-   - Full Legal Name: Jane Doe (Petitioner)
-   - Residential Address: 100 Main Street, Suite 200, Santa Ana, CA 92701
-   - Email: jane.doe@example.com | Phone: +1 (555) 019-2831
-
-2. RESPONDENT DETAILS:
-   - Full Legal Name: John Doe (Respondent)
-   - Residential Address: 200 Coastal Way, Newport Beach, CA 92660
-
-3. STATISTICAL FACTS:
-   - Action: Dissolution of Marriage
-   - Template Document: Ready for client replacement and filing.
-
-Filing Date: August 1, 2026
-Petitioner Signature: Jane Doe`,
-        generatedAt: '2026-08-01T09:00:00Z'
-      }
-    ];
+    return [];
   });
 
   // Master legal AI messages thread
@@ -278,30 +296,7 @@ Petitioner Signature: Jane Doe`,
         console.error('Error loading persistent evidence:', e);
       }
     }
-    return [
-      {
-        id: 'ev-1',
-        name: 'Client_Intake_Verification_JaneDoe.pdf',
-        size: '1.2 MB',
-        mimeType: 'application/pdf',
-        uploadedAt: '2026-08-01T08:30:00Z',
-        clientId: 'c-1',
-        clientName: 'Jane Doe',
-        matterId: 'm-1',
-        matterTitle: 'Matter Template — Jane Doe',
-        fileCategory: 'Client Intake Verification',
-        extractedClientName: 'Jane Doe',
-        duressLevel: 'Low',
-        summary: 'Preliminary client verification checklist and intake dossier template ready for client onboarding.',
-        extractedFacts: [
-          'Standard verified intake template.',
-          'Identity and conflict of interest check passed.',
-          'Ready for customized case documentation.'
-        ],
-        rawTextSimulated: `CLIENT VERIFICATION & INTAKE FILE\n\nClient Name: Jane Doe\nStatus: Active Placeholder Record\nAssigned Matter: CASE-2026-001\n\nThis is a standard template file. You can upload or import all your real client dossiers and case files directly via the Omni Ingestion Modal or Google Drive/Sheets sync.`,
-        status: 'scanned'
-      }
-    ];
+    return [];
   });
 
   // Master client directory pagination states
@@ -408,18 +403,7 @@ Petitioner Signature: Jane Doe`,
         }
       } catch (e) {}
     }
-    return [
-      {
-        id: 'call-1',
-        clientId: 'c-1',
-        clientName: 'Jane Doe',
-        roomName: 'L23-Client-Intake-Room',
-        meetingType: 'Client Consultation',
-        scheduledFor: '02:30 PM',
-        status: 'concluded',
-        notes: 'Initial client consultation template. Verified case intake procedures.'
-      }
-    ];
+    return [];
   });
 
   // AUTO-SAVE PERSISTENCE HOOKS: Guarantee zero data loss when app updates or reloads
@@ -458,9 +442,11 @@ Petitioner Signature: Jane Doe`,
     const checkApi = async () => {
       try {
         const res = await fetch('/api/health');
+        if (!res.ok) throw new Error('Health check failed');
         const data = await res.json();
         setSystemConnected(data.geminiConnected || false);
-      } catch {
+      } catch (err) {
+        console.warn('API health check failed, service might be unavailable:', err);
         setSystemConnected(false);
       }
     };
@@ -1673,6 +1659,32 @@ Petitioner Signature: Jane Doe`,
                     />
                   )}
 
+                  {activeTab === 'desktop_workstation' && (
+                    <DesktopWorkstationTab
+                      key="desktop_workstation"
+                      clients={clients}
+                      matters={matters}
+                      generatedDocs={generatedDocs}
+                      onAddGeneratedDoc={handleAddGeneratedDoc}
+                      onOpenOfficialFormModal={(code) => {
+                        if (code) setSelectedOfficialFormCode(code as any);
+                        setShowOfficialFormModal(true);
+                      }}
+                    />
+                  )}
+
+                  {activeTab === 'template_uploader' && (
+                    <TemplateUploader
+                      key="template_uploader"
+                      clients={clients}
+                      matters={matters}
+                      isOpen={true}
+                      onTemplateIngested={(summary) => {
+                        addLog('document', `Ingested template ${summary.formCode} into Matter Folder ${summary.matterFolderPath}`);
+                      }}
+                    />
+                  )}
+
                   {activeTab === 'flexicapture' && (
                     <FlexiCaptureStudio key="flexicapture" />
                   )}
@@ -1775,6 +1787,8 @@ Petitioner Signature: Jane Doe`,
                       onAddGeneratedDoc={handleAddGeneratedDoc}
                       evidenceFiles={evidenceFiles}
                       onAddEvidenceFile={handleAddEvidenceFile}
+                      preferredDocumentViewer={preferredDocumentViewer}
+                      setPreferredDocumentViewer={handleSetPreferredDocumentViewer}
                     />
                   )}
 
@@ -1795,6 +1809,10 @@ Petitioner Signature: Jane Doe`,
                       onAddMatter={handleAddMatter}
                       onNavigateTab={(tab) => setActiveTab(tab as any)}
                     />
+                  )}
+
+                  {activeTab === 'biglaw' && (
+                    <BigLawIntegrationStudio key="biglaw" />
                   )}
 
                   {activeTab === 'voice' && (

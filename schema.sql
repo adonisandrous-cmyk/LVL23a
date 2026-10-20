@@ -119,8 +119,30 @@ CREATE TABLE IF NOT EXISTS user_permissions (
     UNIQUE(user_id, permission)
 );
 
+-- 9. INTAKE RECORDS (Comprehensive 4-Part Intake Store)
+CREATE TABLE IF NOT EXISTS intake_records (
+    id SERIAL PRIMARY KEY,
+    client_id INT REFERENCES clients(id) ON DELETE SET NULL,
+    case_id INT REFERENCES cases(id) ON DELETE SET NULL,
+    raw_payload JSONB NOT NULL,
+    normalized_payload JSONB NOT NULL,
+    part_1_personal JSONB,
+    part_2_other_party JSONB,
+    part_3_court_info JSONB,
+    part_4_assistance JSONB,
+    detected_practice_area VARCHAR(100),
+    detected_relief TEXT,
+    fee_waiver_eligible BOOLEAN DEFAULT FALSE,
+    status VARCHAR(50) DEFAULT 'processed',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_intake_records_client ON intake_records(client_id);
+CREATE INDEX IF NOT EXISTS idx_intake_records_case ON intake_records(case_id);
+
 -- ==============================================================================
--- INITIAL SEED DATA (California Judicial Council FL-120 & Sample Client)
+-- INITIAL SEED DATA (California Judicial Council Forms & Master Catalog)
 -- ==============================================================================
 
 -- Seed Sample Client
@@ -133,21 +155,41 @@ INSERT INTO cases (client_id, case_type, case_number, court_name, judge_name, st
 VALUES (1, 'Family Law', '23-12345', 'Superior Court of California, County of Los Angeles', 'Hon. Patricia Delgado', 'Open')
 ON CONFLICT DO NOTHING;
 
--- Seed Form FL-120
-INSERT INTO forms (name, description, pdf_template_path)
-VALUES ('FL-120', 'Response—Marriage/Domestic Partnership (Family Law)', 'templates/FL-120.pdf')
+-- Seed Forms Library
+INSERT INTO forms (id, name, description, pdf_template_path) VALUES
+(1, 'FL-120', 'Response—Marriage/Domestic Partnership (Family Law)', 'templates/FL-120.pdf'),
+(2, 'FL-100', 'Petition—Marriage/Domestic Partnership (Family Law)', 'templates/FL-100.pdf'),
+(3, 'FL-200', 'Petition to Establish Parental Relationship (Uniform Parentage Act)', 'templates/FL-200.pdf'),
+(4, 'FL-300', 'Request for Order (Family Law Motion / Custody / Support)', 'templates/FL-300.pdf'),
+(5, 'FW-001', 'Request to Waive Court Fees (Fee Waiver 1)', 'templates/FW-001.pdf'),
+(6, 'FW-003', 'Order on Court Fee Waiver (Fee Waiver 3)', 'templates/FW-003.pdf'),
+(7, 'FL-115', 'Proof of Service of Summons (Family Law / General POS)', 'templates/FL-115.pdf')
 ON CONFLICT (name) DO UPDATE SET pdf_template_path = EXCLUDED.pdf_template_path;
 
--- Seed Universal Fields
+-- Seed Universal Fields Catalog
 INSERT INTO universal_fields (field_name, field_type, description) VALUES
 ('client_first_name', 'text', 'Client legal given name'),
 ('client_last_name', 'text', 'Client legal surname'),
+('client_full_name', 'text', 'Client full legal name'),
 ('client_DOB', 'date', 'Client date of birth (YYYY-MM-DD)'),
+('client_phone', 'text', 'Client telephone number'),
+('client_email', 'text', 'Client primary email address'),
 ('client_address', 'text', 'Full formatted client residential address'),
-('case_number', 'text', 'Official court filing case docket number')
+('client_gross_income', 'number', 'Gross monthly earnings for fee waiver / support calculations'),
+('opposing_party_name', 'text', 'Full legal name of opposing / other party'),
+('opposing_party_address', 'text', 'Address of opposing party'),
+('opposing_party_relationship', 'text', 'Legal relationship between parties'),
+('court_name', 'text', 'Court of filing jurisdiction'),
+('court_county', 'text', 'County of venue jurisdiction'),
+('case_number', 'text', 'Official court filing case docket number'),
+('judge_name', 'text', 'Assigned Judge, Commissioner, or Department'),
+('assistance_type', 'text', 'Legal assistance category requested by client'),
+('incident_date', 'date', 'Date of key event, marriage, separation, or injury'),
+('facts_narrative', 'text', 'Chronological factual declaration and narrative'),
+('specific_relief', 'text', 'Specific court orders and remedies sought')
 ON CONFLICT DO NOTHING;
 
--- Seed FL-120 Form Fields Mapping
+-- Seed Form Fields Mappings (FL-120 Baseline)
 INSERT INTO form_fields (form_id, universal_field, pdf_field_name) VALUES
 (1, 'client_first_name', 'ClientFirstName'),
 (1, 'client_last_name', 'ClientLastName'),
@@ -155,3 +197,4 @@ INSERT INTO form_fields (form_id, universal_field, pdf_field_name) VALUES
 (1, 'client_address', 'ClientAddress'),
 (1, 'case_number', 'CaseNumber')
 ON CONFLICT (form_id, universal_field) DO UPDATE SET pdf_field_name = EXCLUDED.pdf_field_name;
+

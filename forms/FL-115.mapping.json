@@ -1,10 +1,108 @@
 {
-  "template": "templates/FL-115.pdf",
+  "form_id": "FL-115",
+  "jurisdiction": "California Judicial Council",
+  "title": "Proof of Service of Summons",
+  "revision": "Rev. January 1, 2020",
+  "description": "Declarative mapping dictionary linking Proof of Service execution payload to California Judicial Council FL-115 (and general POS-010/POS-020) AcroForm targets.",
   "fields": {
-    "client_first_name": "FL115FirstName",
-    "client_last_name": "FL115LastName",
-    "client_DOB": "FL115DOB",
-    "client_address": "FL115Address",
-    "case_number": "FL115CaseNumber"
+    "FL-115[0].Page1[0].AttyInfo[0].AttyName_ft[0]": "attorney.name",
+    "FL-115[0].Page1[0].AttyInfo[0].BarNo_ft[0]": "attorney.bar_number",
+    "FL-115[0].Page1[0].AttyInfo[0].AttyFirm_ft[0]": "attorney.firm_name",
+    "FL-115[0].Page1[0].AttyInfo[0].AttyStreet_ft[0]": "attorney.street",
+    "FL-115[0].Page1[0].AttyInfo[0].AttyCity_ft[0]": "attorney.city",
+    "FL-115[0].Page1[0].AttyInfo[0].AttyState_ft[0]": "attorney.state",
+    "FL-115[0].Page1[0].AttyInfo[0].AttyZip_ft[0]": "attorney.zip",
+    "FL-115[0].Page1[0].AttyInfo[0].Phone_ft[0]": "attorney.phone",
+    "FL-115[0].Page1[0].AttyInfo[0].Fax_ft[0]": "attorney.fax",
+    "FL-115[0].Page1[0].AttyInfo[0].Email_ft[0]": "attorney.email",
+    "FL-115[0].Page1[0].AttyInfo[0].AttyFor_ft[0]": "attorney.representing",
+
+    "FL-115[0].Page1[0].CourtInfo[0].CrtCounty_ft[0]": {
+      "type": "format_string",
+      "source": "case.county",
+      "case": "upper"
+    },
+    "FL-115[0].Page1[0].CourtInfo[0].Street_ft[0]": "case.court_street",
+    "FL-115[0].Page1[0].CourtInfo[0].MailingAdd_ft[0]": "case.court_mailing",
+    "FL-115[0].Page1[0].CourtInfo[0].CityZip_ft[0]": "case.court_city_zip",
+    "FL-115[0].Page1[0].CourtInfo[0].Branch_ft[0]": "case.branch_name",
+
+    "FL-115[0].Page1[0].TitlePartyName[0].Petitioner_1_ft[0]": "client.full_name",
+    "FL-115[0].Page1[0].TitlePartyName[0].Respondent_ft[0]": "opposing_party.full_name",
+    "FL-115[0].Page1[0].CaseNumber[0].CaseNumber_ft[0]": "case.case_number",
+
+    "FL-115[0].Page1[0].ServedParty[0].Name_ft[0]": "service.person_served_name",
+    "FL-115[0].Page1[0].ServedParty[0].Address_ft[0]": "service.service_address",
+    "FL-115[0].Page1[0].ServedParty[0].Date_dt[0]": "service.date",
+    "FL-115[0].Page1[0].ServedParty[0].Time_tf[0]": "service.time",
+
+    "FL-115[0].Page1[0].DocsServed[0].Petition_cb[0]": {
+      "type": "checkbox",
+      "source": "service.documents.petition",
+      "checked_value": "/Yes"
+    },
+    "FL-115[0].Page1[0].DocsServed[0].Summons_cb[0]": {
+      "type": "checkbox",
+      "source": "service.documents.summons",
+      "checked_value": "/Yes"
+    },
+    "FL-115[0].Page1[0].DocsServed[0].BlankResponse_cb[0]": {
+      "type": "checkbox",
+      "source": "service.documents.blank_response",
+      "checked_value": "/Yes"
+    },
+    "FL-115[0].Page1[0].DocsServed[0].RFO_cb[0]": {
+      "type": "checkbox",
+      "source": "service.documents.request_for_order",
+      "checked_value": "/Yes"
+    },
+    "FL-115[0].Page1[0].DocsServed[0].BlankRespDecl_cb[0]": {
+      "type": "checkbox",
+      "source": "service.documents.blank_responsive_declaration",
+      "checked_value": "/Yes"
+    },
+    "FL-115[0].Page1[0].DocsServed[0].IncomeExpense_cb[0]": {
+      "type": "checkbox",
+      "source": "service.documents.income_and_expense",
+      "checked_value": "/Yes"
+    },
+
+    "FL-115[0].Page2[0].CaseNumber[0].CaseNumber_ft[0]": "case.case_number",
+    "FL-115[0].Page2[0].Method[0].PersonalDelivery_cb[0]": {
+      "type": "checkbox",
+      "source": "service.method",
+      "equals": "Personal"
+    },
+    "FL-115[0].Page2[0].Method[0].SubstitutedService_cb[0]": {
+      "type": "checkbox",
+      "source": "service.method",
+      "equals": "Substituted"
+    },
+    "FL-115[0].Page2[0].Method[0].Mail_cb[0]": {
+      "type": "checkbox",
+      "source": "service.method",
+      "equals": "Mail"
+    },
+
+    "FL-115[0].Page2[0].ServerInfo[0].Name_ft[0]": "server.full_name",
+    "FL-115[0].Page2[0].ServerInfo[0].Street_ft[0]": "server.street",
+    "FL-115[0].Page2[0].ServerInfo[0].City_ft[0]": "server.city",
+    "FL-115[0].Page2[0].ServerInfo[0].State_ft[0]": "server.state",
+    "FL-115[0].Page2[0].ServerInfo[0].Zip_ft[0]": "server.zip",
+    "FL-115[0].Page2[0].ServerInfo[0].Phone_ft[0]": "server.phone",
+    "FL-115[0].Page2[0].ServerInfo[0].RegistrationNo_ft[0]": "server.registration_number",
+    "FL-115[0].Page2[0].ServerInfo[0].County_ft[0]": "server.registration_county",
+    "FL-115[0].Page2[0].ServerInfo[0].NotRegistered_cb[0]": {
+      "type": "checkbox",
+      "source": "server.is_registered",
+      "equals": false
+    },
+    "FL-115[0].Page2[0].ServerInfo[0].Registered_cb[0]": {
+      "type": "checkbox",
+      "source": "server.is_registered",
+      "equals": true
+    },
+    "FL-115[0].Page2[0].ServerInfo[0].SignatureDate_dt[0]": "service.execution_date",
+    "FL-115[0].Page2[0].ServerInfo[0].Signature_ft[0]": "server.full_name"
   }
 }

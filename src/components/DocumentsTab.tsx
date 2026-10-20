@@ -67,6 +67,8 @@ interface DocumentsTabProps {
   onAddGeneratedDoc: (doc: GeneratedDocument) => void;
   evidenceFiles: EvidenceFile[];
   onAddEvidenceFile: (file: EvidenceFile) => void;
+  preferredDocumentViewer: 'default' | 'onlyoffice';
+  setPreferredDocumentViewer: (viewer: 'default' | 'onlyoffice') => void;
 }
 
 interface OCRPreset {
@@ -85,7 +87,9 @@ export default function DocumentsTab({
   generatedDocs,
   onAddGeneratedDoc,
   evidenceFiles,
-  onAddEvidenceFile
+  onAddEvidenceFile,
+  preferredDocumentViewer,
+  setPreferredDocumentViewer
 }: DocumentsTabProps) {
   
   // Custom sharp 3D Raised Buttons CSS Utilities
@@ -93,6 +97,8 @@ export default function DocumentsTab({
   const sharp3DAccentButton = "rounded-none border-2 border-emerald-400 bg-[#061112] text-emerald-400 font-mono text-xs font-bold uppercase py-2 px-4 shadow-[4px_4px_0px_#34d399] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_5px_0px_#34d399] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all cursor-pointer shrink-0 disabled:opacity-40 disabled:pointer-events-none";
   const sharp3DRoseButton = "rounded-none border-2 border-rose-500 bg-[#12070c] text-rose-500 font-mono text-[10px] font-bold uppercase py-1.5 px-3 shadow-[3px_3px_0px_#f43f5e] hover:translate-x-[-1.5px] hover:translate-y-[-1.5px] hover:shadow-[4px_4px_0px_#f43f5e] active:translate-x-[1.5px] active:translate-y-[1.5px] active:shadow-none transition-all cursor-pointer shrink-0";
   const smallSharp3D = "rounded-none border border-slate-700 bg-slate-900 text-slate-300 font-mono text-[10px] font-bold uppercase py-1.5 px-2.5 shadow-[2.5px_2.5px_0px_#475569] hover:translate-x-[-0.5px] hover:translate-y-[-0.5px] hover:shadow-[3.5px_3.5px_0px_#475569] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all cursor-pointer";
+
+  // Viewer Preference Selector
 
   // 1. Primary Workspace Screens (Automated generators decommissioned, dormant archives active)
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'synthesis' | 'evidence_room' | 'judicial_mapper' | 'template_builder' | 'forms_manager' | 'drive_portal'>('evidence_room');
@@ -103,7 +109,7 @@ export default function DocumentsTab({
   const [showOfficialFormModal, setShowOfficialFormModal] = useState<boolean>(false);
   const [selectedOfficialFormCode, setSelectedOfficialFormCode] = useState<'FL-120' | 'FL-105' | 'FL-311' | 'FL-160'>('FL-120');
   const [selectedOfficialClient, setSelectedOfficialClient] = useState<Client | null>(() => {
-    return clients?.find(c => c.name.includes('Christopher Guinto')) || clients?.[0] || null;
+    return clients?.[0] || null;
   });
 
   // Google Drive Integration States
@@ -176,66 +182,66 @@ export default function DocumentsTab({
   const ocrPresets: OCRPreset[] = [
     {
       id: 'p-1',
-      name: 'Jane Doe Handwritten Legal Form-21',
+      name: 'Sample Family Law Intake Questionnaire',
       templateId: 'temp-1',
-      sender: 'Jane Doe',
+      sender: 'Intake Desk',
       previewSummary: 'Spouse Intake Form. Highlights separation date 2025-05-15, married 2015-06-18.',
       rawTextSim: `INTAKE CLIENT INQUIRY FORM
-Spouse Plaintiff: Jane Doe
-Spouse Defendant: John Doe
+Spouse Plaintiff: [PETITIONER_NAME]
+Spouse Defendant: [RESPONDENT_NAME]
 Date of Marriage: June 18, 2015.
 Separation date is May 15, 2025.
-Alimony Request: Jane Doe desires temporary spousal support of $1,250 every month.
-Children: Two minor children. Physical care of Jane. Joint legal decision-making.
-Property claims: Orange County marital home purchased with joint bank account in 2018 (Community). Separate property: Inherited savings portfolio.`,
+Alimony Request: Temporary spousal support requested pursuant to California Family Code.
+Children: Two minor children. Joint legal decision-making.
+Property claims: Marital home purchased during marriage (Community). Separate property: Pre-marital inherited accounts.`,
       extracted: {
         'Date of Marriage': 'June 18, 2015',
         'Separation Date': 'May 15, 2025',
-        'Spousal Support goals': 'Temporary spousal support of $1,250/month requested by Jane',
-        'Child Custody details': 'Joint legal custody, Jane Doe to remain primary caretakers',
-        'Separate vs Community Property description': 'Marital home in Orange County is Community; Inherited personal savings portfolio claimed as Separate'
+        'Spousal Support goals': 'Temporary spousal support requested per statutory guidelines',
+        'Child Custody details': 'Joint legal custody requested',
+        'Separate vs Community Property description': 'Marital residence is Community; Pre-marital accounts claimed as Separate'
       }
     },
     {
       id: 'p-2',
-      name: 'Client Asylum Declaration Draft',
+      name: 'Sample Background & Asylum Declaration',
       templateId: 'temp-2',
-      sender: 'Jane Doe',
-      previewSummary: 'Immigration intake sheet. Notes political affiliation and threat.',
+      sender: 'Immigration Intake',
+      previewSummary: 'Immigration intake sheet. Notes background facts and circumstances.',
       rawTextSim: `USCIS STATEMENT OF BACKGROUND
-Declarant: Jane Doe
+Declarant: [DECLARANT_NAME]
 Country: El Salvador
-Event list: On April 4, 2024, received primary written threat from local extortion crew demanding business payout.
-Affiliation: Active Organizer of National community federation.
-Fear outline: Retribution, forced closure, and personal harm if sent back.
-Police reaction: Dispatched local station statement, no police bodyguard or patrols were provided.`,
+Event list: Documentation of factual incidents and country conditions.
+Affiliation: Community organization participation.
+Fear outline: Retribution and risk profile upon removal.
+Police reaction: Dispatched local station statement, lack of sufficient protection noted.`,
       extracted: {
         'Country of Origin': 'El Salvador',
-        'Specific threat occurrences': 'Written warning from local gang on April 4, 2024 at business shop',
-        'Political/Social group affiliation': 'Active Organizer inside community federation',
-        'Fear of future persecution description': 'Personal recapture and severe retaliatory violence if deported',
-        'Previous local police response details': 'Case registered but police stated lack of security patrols available'
+        'Specific threat occurrences': 'Incident reported on April 4, 2024',
+        'Political/Social group affiliation': 'Active participant in local community association',
+        'Fear of future persecution description': 'Risk of severe harm upon return',
+        'Previous local police response details': 'Report filed with precinct'
       }
     },
     {
       id: 'p-3',
-      name: 'John Doe Debts Schedule & Assets Invoice Scan',
+      name: 'Sample Debts & Assets Schedule Scan',
       templateId: 'temp-3',
-      sender: 'John Doe',
-      previewSummary: 'Chapter 7 schedule sheet detailing medical debts and automobile liens.',
+      sender: 'Bankruptcy Department',
+      previewSummary: 'Chapter 7 schedule sheet detailing unsecured debts and vehicle liens.',
       rawTextSim: `CHAPTER 7 DISCLOSURE SHEET
-Petitioner: John Doe
-Unsecured Liabilities: Credit cards, store cards, and hospital invoices totaling $85,320.
-Household assets: One primary truck valued around $8,200. Family savings of $1,500.
-Income: Clerk job of $3,140 a month.
-Failure reason: Massive medical bills from emergency operations and house foreclosure problems.
-Securities: Apex Auto holds $4,500 lien on the family vehicle.`,
+Petitioner: [DEBTOR_NAME]
+Unsecured Liabilities: Credit accounts and medical invoices totaling $85,320.
+Household assets: One vehicle valued at $8,200. Modest household personal property.
+Income: Regular employment earnings.
+Failure reason: Emergency medical liabilities and financial distress.
+Securities: Vehicle loan with security interest.`,
       extracted: {
-        'Total Unsecured Debt amount': '$85,320 in credit cards and hospital invoices',
-        'Primary Assets description': 'Personal truck valued at $8,200, family savings of $1,500',
-        'Monthly Household Income': '$3,140 from clerical wages',
-        'Explanation of insolvency cause': 'Surge of unexpected medical bills following clinic emergency in 2025',
-        'Secured creditor information': 'Apex Auto loans holding a $4,500 active lien on the family vehicle'
+        'Total Unsecured Debt amount': '$85,320 in unsecured obligations',
+        'Primary Assets description': 'Personal vehicle valued at $8,200',
+        'Monthly Household Income': '$3,140 from employment wages',
+        'Explanation of insolvency cause': 'Medical emergencies and income disruption',
+        'Secured creditor information': 'Secured auto loan holding lien on vehicle'
       }
     },
     {
@@ -757,7 +763,7 @@ Law governance: Governed by the rules of California state, County of San Francis
   
   // Standard raw client response email narrative (fully editable by user)
   const [clientNarrativeMail, setClientNarrativeMail] = useState<string>(
-    `Dear Alex,\n\nHere are the dissolution details for our case petition.\nMy spouse is John Doe. We were married on June 18, 2015, and our separation date was May 15, 2025. I am requesting $1,250 a month for spousal support because I look after the two kids. I should keep physical custody with John having joint legal custody. As for our community property assets, the marital house in Orange County was bought together in 2018 with community funds, but the inheritance savings account is mine alone (separate property).\n\nLet me know if there are other parameters needed for the California FL-100 court forms.\n\nWarm regards,\nJane Doe`
+    `Dear Counsel,\n\nHere are the dissolution details for our case petition.\nMy spouse is [RESPONDENT_NAME]. We were married on June 18, 2015, and our separation date was May 15, 2025. I am requesting guideline temporary spousal support. We request joint legal custody of our minor children. The marital residence was acquired during marriage with community funds, whereas the pre-marital inheritance account is separate property.\n\nPlease proceed with drafting the California Judicial Council petition forms.\n\nWarm regards,\n[PETITIONER_NAME]`
   );
 
   // Default Judicial Court Form Schemas with Coordinate/Token field maps
@@ -980,7 +986,7 @@ Law governance: Governed by the rules of California state, County of San Francis
             extracted[q] = 'Temporary spousal support of $1,250 every month requested by client';
             sources[q] = { sourceName: 'Verbal Client Notes', factSnippet: 'Disclosed in initial interview notes schedule' };
           } else if (q === 'Child Custody details') {
-            extracted[q] = 'Joint legal custody. Physical care of children to Jane Doe.';
+            extracted[q] = 'Joint legal custody requested; primary physical care to Petitioner.';
             sources[q] = { sourceName: 'Verbal Client Notes', factSnippet: 'Joint legal requests filed by counselor' };
           } else if (q === 'Separate vs Community Property description') {
             extracted[q] = 'Marital home in Orange County is community property; Inheritance personal account is separate property.';
@@ -1028,7 +1034,7 @@ Law governance: Governed by the rules of California state, County of San Francis
         sources['Client Name'] = { sourceName: 'System Directory Link', factSnippet: `Linked to active client name` };
       }
       if (!extracted['Spouse Defendant Name']) {
-        extracted['Spouse Defendant Name'] = alignSelectedClient.name === 'Jane Doe' ? 'John Doe' : 'Respondent';
+        extracted['Spouse Defendant Name'] = alignSelectedClient?.fl120Data?.petitionerName || (alignSelectedClient as any)?.opposingParty || 'Respondent';
         sources['Spouse Defendant Name'] = { sourceName: 'Intake Dossier', factSnippet: 'Determined based on family case records' };
       }
       if (!extracted['Filing County']) {
@@ -1059,7 +1065,7 @@ Law governance: Governed by the rules of California state, County of San Francis
 
     // Replace system default tags
     rendered = rendered.replace(/\{\{\s*Client Name\s*\}\}/gi, alignSelectedClient?.name || 'Client Name');
-    rendered = rendered.replace(/\{\{\s*Spouse Defendant Name\s*\}\}/gi, alignSelectedClient?.name === 'Jane Doe' ? 'John Doe' : 'Respondent');
+    rendered = rendered.replace(/\{\{\s*Spouse Defendant Name\s*\}\}/gi, alignSelectedClient?.fl120Data?.petitionerName || (alignSelectedClient as any)?.opposingParty || 'Respondent');
     rendered = rendered.replace(/\{\{\s*Filing County\s*\}\}/gi, alignedValues['Filing County'] || 'ORANGE COUNTY');
 
     // Render numbered california pleading margin
@@ -1581,32 +1587,32 @@ Respectfully submitted,
         // Build map variables extracted based on form requested
         let mappedData: Record<string, string> = {};
         
-        if (selectedCourtForm.formNumber === 'FL-100') {
+        if (selectedCourtForm?.formNumber === 'FL-100') {
           mappedData = {
             'ATTORNEY_OR_PARTY_WITHOUT_ATTORNEY': 'Alex, Esq. (State Bar 232323)',
-            'SUPERIOR_COURT_OF_CALIFORNIA_COUNTY': 'Superior Court of California, County of Orange',
-            'PETITIONER_NAME': selectedCourtClient?.name || 'Jane Doe',
-            'RESPONDENT_NAME': 'John Doe',
-            'DATE_OF_MARRIAGE': 'June 18, 2015',
-            'DATE_OF_SEPARATION': 'May 15, 2025',
-            'MINOR_CHILDREN_CUSTODY_PRAYER': 'Joint Legal Custody, primary physical to Petitioner Jane Doe',
-            'SPOUSAL_SUPPORT_PRAYER': 'Requested temporary spousal support of $1,250 per month',
-            'COMMUNITY_PROPERTY_ASSET_DECLARATION': 'Citrus Ave Residence community home. Inherited accounts are claims separate.'
+            'SUPERIOR_COURT_OF_CALIFORNIA_COUNTY': selectedCourtClient?.fl120Data?.courtCounty ? `Superior Court of California, County of ${selectedCourtClient.fl120Data.courtCounty}` : 'Superior Court of California, County of Orange',
+            'PETITIONER_NAME': selectedCourtClient?.name || '[PETITIONER_NAME]',
+            'RESPONDENT_NAME': selectedCourtClient?.fl120Data?.petitionerName || (selectedCourtClient as any)?.opposingParty || '[RESPONDENT_NAME]',
+            'DATE_OF_MARRIAGE': selectedCourtClient?.fl120Data?.dateOfMarriage || '[DATE_OF_MARRIAGE]',
+            'DATE_OF_SEPARATION': selectedCourtClient?.fl120Data?.dateOfSeparation || '[DATE_OF_SEPARATION]',
+            'MINOR_CHILDREN_CUSTODY_PRAYER': selectedCourtClient?.fl120Data?.visitationRequested || 'Joint Legal Custody, primary physical to Petitioner',
+            'SPOUSAL_SUPPORT_PRAYER': selectedCourtClient?.fl120Data?.spousalSupportRequested || 'Statutory guideline determination',
+            'COMMUNITY_PROPERTY_ASSET_DECLARATION': selectedCourtClient?.fl120Data?.communityPropertyNotes || 'Community property division requested.'
           };
         } else {
           mappedData = {
-            'APPLICANT_FAMILY_NAME': 'Alvarez',
-            'APPLICANT_FIRST_NAME': selectedCourtClient?.name.split(' ')[0] || 'Mateo',
+            'APPLICANT_FAMILY_NAME': selectedCourtClient?.name ? selectedCourtClient.name.split(' ').slice(1).join(' ') : '[FAMILY_NAME]',
+            'APPLICANT_FIRST_NAME': selectedCourtClient?.name ? selectedCourtClient.name.split(' ')[0] : '[FIRST_NAME]',
             'COUNTRY_OF_CITIZENSHIP': 'El Salvador',
             'POLITICAL_AFFILIATION_DETAILS': 'Federated Union Organizer for local bakery guild',
-            'THREAT_OCCURRENCES_SPECIFICATION': 'April 4, 2024 received direct cartel written notes threat at bakery',
+            'THREAT_OCCURRENCES_SPECIFICATION': 'Documentation of factual threat occurrences',
             'LOCAL_POLICE_RESPONSE_SYNOPSIS': 'Registered petition but received no active daily police protective guard'
           };
         }
 
         // Apply back to the current form's mappings configuration!
         const updatedForms = courtForms.map(form => {
-          if (form.id === selectedCourtForm.id) {
+          if (selectedCourtForm && form.id === selectedCourtForm.id) {
             const newMappings = form.mappings.map(m => {
               if (mappedData[m.fieldName]) {
                 return { ...m, value: mappedData[m.fieldName] };
@@ -1621,9 +1627,11 @@ Respectfully submitted,
         setCourtForms(updatedForms);
         
         // Update selected mapping pointer so it updates the inputs in real-time
-        const matched = updatedForms.find(f => f.id === selectedCourtForm.id);
-        if (matched) {
-          setSelectedCourtForm(matched);
+        if (selectedCourtForm) {
+          const matched = updatedForms.find(f => f.id === selectedCourtForm.id);
+          if (matched) {
+            setSelectedCourtForm(matched);
+          }
         }
 
         setMailExtractedOutput(mappedData);
@@ -1659,7 +1667,7 @@ Respectfully submitted,
     });
 
     setCourtForms(updated);
-    const matched = updated.find(f => f.id === selectedCourtForm.id);
+    const matched = updated.find(f => f.id === selectedCourtForm?.id);
     if (matched) {
       setSelectedCourtForm(matched);
     }
@@ -1680,7 +1688,7 @@ Respectfully submitted,
       return form;
     });
     setCourtForms(updated);
-    const matched = updated.find(f => f.id === selectedCourtForm.id);
+    const matched = updated.find(f => f.id === selectedCourtForm?.id);
     if (matched) {
       setSelectedCourtForm(matched);
     }
@@ -1693,7 +1701,7 @@ Respectfully submitted,
 
     setTimeout(() => {
       // Find field values for representation
-      const findVal = (fName: string) => selectedCourtForm.mappings.find(m => m.fieldName === fName)?.value || '[Unspecified]';
+      const findVal = (fName: string) => selectedCourtForm?.mappings?.find(m => m.fieldName === fName)?.value || '[Unspecified]';
       
       let generatedDraft = "";
 

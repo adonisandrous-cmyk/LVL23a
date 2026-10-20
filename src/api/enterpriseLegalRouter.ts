@@ -626,49 +626,67 @@ enterpriseLegalRouter.post('/generate-packet', async (req: Request, res: Respons
  */
 enterpriseLegalRouter.post('/intake', async (req: Request, res: Response) => {
   try {
-    const {
-      first_name,
-      last_name,
-      dob,
-      phone,
-      email,
-      address_line1,
-      city,
-      state,
-      zip,
-      a_number,
-      ssn,
-      case_type,
-      case_number,
-      court_name,
-      judge_name,
-      target_form,
-      target_packet
-    } = req.body;
+    const body = req.body || {};
+    const p1 = body.part_1 || body.client || {};
+    const p2 = body.part_2 || body.opposing_party || {};
+    const p3 = body.part_3 || body.court_info || body.case || {};
+    const p4 = body.part_4 || body.assistance || {};
+
+    const rawFirstName = body.first_name || p1.first_name || p1.firstName || '';
+    const rawLastName = body.last_name || p1.last_name || p1.lastName || '';
+    const fullName = p1.full_name || p1.client_name || '';
+
+    const first_name = rawFirstName || (fullName ? fullName.split(' ')[0] : '');
+    const last_name = rawLastName || (fullName ? fullName.split(' ').slice(1).join(' ') : '');
+
+    const dob = body.dob || p1.dob || '1990-05-12';
+    const phone = body.phone || p1.phone || '(702) 555-0149';
+    const email = body.email || p1.email || 'client@example.com';
+    const address_line1 = body.address_line1 || p1.address_line1 || p1.street || p1.address || '123 Main St';
+    const city = body.city || p1.city || 'Las Vegas';
+    const state = body.state || p1.state || 'NV';
+    const zip = body.zip || p1.zip || '89101';
+    const a_number = body.a_number || p1.a_number || '';
+    const ssn = body.ssn || p1.ssn || p1.ssn_last4 || '';
+
+    const case_type = body.case_type || p3.case_type || (p4.assistance_type?.includes('Dissolution') ? 'Family Law' : 'Civil Litigation');
+    const case_number = body.case_number || p3.case_number || p3.docket_number;
+    const court_name = body.court_name || p3.court_name;
+    const judge_name = body.judge_name || p3.judge_name;
+
+    const target_form = body.target_form || (
+      p4.assistance_type?.includes('FL-100') ? 'FL-100' :
+      p4.assistance_type?.includes('FL-141') ? 'FL-141' :
+      p4.assistance_type?.includes('FL-300') ? 'FL-300' :
+      p4.assistance_type?.includes('FL-200') ? 'FL-200' :
+      p4.assistance_type?.includes('FW-001') ? 'FW-001' :
+      (case_type === 'Immigration' ? 'EOIR-33' : 'FL-120')
+    );
+    const target_packet = body.target_packet;
 
     if (!first_name || !last_name) {
       return res.status(400).json({ success: false, error: 'First name and last name are required for intake.' });
     }
 
-    // 1. Create client
+    // 1. Create client in Universal Database
     const newClient = await runDbRpc({
       action: 'create_client',
       data: {
         first_name,
         last_name,
-        dob: dob || '1990-05-12',
-        phone: phone || '(702) 555-0149',
-        email: email || 'client@example.com',
-        address_line1: address_line1 || '123 Main St',
-        city: city || 'Las Vegas',
-        state: state || 'NV',
-        zip: zip || '89101',
-        a_number: a_number || '',
-        ssn: ssn || ''
+        dob,
+        phone,
+        email,
+        address_line1,
+        city,
+        state,
+        zip,
+        a_number,
+        ssn
       }
     });
 
-    // 2. Create case
+    // 2. Create case in Universal Database
     const docketNum = case_number || `DOCKET-${Date.now().toString().slice(-6)}`;
     const newCase = await runDbRpc({
       action: 'create_case',
@@ -684,12 +702,42 @@ enterpriseLegalRouter.post('/intake', async (req: Request, res: Response) => {
 
     // 3. Determine auto-generation target
     const formToGen = target_form || (case_type === 'Immigration' ? 'EOIR-33' : 'FL-120');
-    let genResult = null;
+
+    const sanitizedClientName = `${newClient.first_name}_${newClient.last_name}`.replace(/\s+/g, '_');
+    const sanitizedCaseType = (newCase.case_type || 'Family_Law').replace(/\s+/g, '_').replace('/', '-');
+    const sanitizedCaseNum = (newCase.case_number || docketNum).replace(/\s+/g, '_').replace('/', '-');
+
+    const deliveryDestinations = {
+      database: {
+        engine: 'PostgreSQL / SQLite3 (legal_platform.db)',
+        client_id: newClient.id,
+        case_id: newCase.id,
+        audit_table: 'generated_documents'
+      },
+      local_vault: {
+        base_dir: `output/${sanitizedCaseType}/${sanitizedCaseNum}`,
+        subfolder_taxonomy: [
+          '01_Pleadings_and_Petitions',
+          '02_Service_and_Summons',
+          '03_Financial_Disclosures',
+          '04_Motions_and_Orders',
+          '05_Immigration_Packets',
+          '06_Client_Exhibits_and_Intake',
+          '07_XFDF_Injection_Payloads'
+        ]
+      },
+      google_drive_designated_dropzone: {
+        account: 'level23consulting@gmail.com',
+        folder_id: '1EW-bOXh5eDyMyJsqRmLT6u5uZuld5XVH',
+        folder_name: 'phoenix_review',
+        local_staging_inbox: 'google_drive_level23/Inbox/'
+      }
+    };
 
     if (target_packet) {
       // Generate packet
       const packetType = target_packet === 'immigration' ? 'immigration_defense' : 'family_dissolution';
-      const targetForms = packetType === 'immigration_defense' ? ['EOIR-33', 'I-589'] : ['FL-100', 'FL-120', 'FL-300'];
+      const targetForms = packetType === 'immigration_defense' ? ['EOIR-33', 'I-589'] : ['FL-100', 'FL-120', 'FL-141', 'FL-300'];
       const formsGenerated = [];
 
       for (const f of targetForms) {
@@ -702,8 +750,7 @@ enterpriseLegalRouter.post('/intake', async (req: Request, res: Response) => {
           });
           const outputFilename = path.basename(resGen.output_xfdf_path);
           const templateFilename = path.basename(resGen.template_pdf);
-          const sanitizedClient = `${newClient.first_name}_${newClient.last_name}`.replace(/\s+/g, '_');
-          const filledPdfFilename = `${f}_${sanitizedClient}_Filled.pdf`;
+          const filledPdfFilename = `${f}_${sanitizedClientName}_Filled.pdf`;
           const filledPdfRelativePath = `output/${filledPdfFilename}`;
 
           await PdfFlattenerService.generateFlattenedPdf(
@@ -717,7 +764,8 @@ enterpriseLegalRouter.post('/intake', async (req: Request, res: Response) => {
             form_name: f,
             pdf_url: `/templates/${templateFilename}`,
             filled_pdf_url: `/${filledPdfRelativePath}`,
-            xfdf_url: `/output/${outputFilename}`
+            xfdf_url: `/output/${outputFilename}`,
+            matter_vault_path: `output/${sanitizedCaseType}/${sanitizedCaseNum}/${f}_${sanitizedClientName}.xfdf`
           });
         } catch (err: any) {
           console.warn(`Error generating ${f} during intake packet:`, err);
@@ -730,7 +778,8 @@ enterpriseLegalRouter.post('/intake', async (req: Request, res: Response) => {
         client: newClient,
         case: newCase,
         packet_type: packetType,
-        packet_forms: formsGenerated
+        packet_forms: formsGenerated,
+        delivery_destinations: deliveryDestinations
       });
     } else {
       // Generate single form
@@ -742,8 +791,7 @@ enterpriseLegalRouter.post('/intake', async (req: Request, res: Response) => {
       });
       const outputFilename = path.basename(resGen.output_xfdf_path);
       const templateFilename = path.basename(resGen.template_pdf);
-      const sanitizedClient = `${newClient.first_name}_${newClient.last_name}`.replace(/\s+/g, '_');
-      const filledPdfFilename = `${formToGen}_${sanitizedClient}_Filled.pdf`;
+      const filledPdfFilename = `${formToGen}_${sanitizedClientName}_Filled.pdf`;
       const filledPdfRelativePath = `output/${filledPdfFilename}`;
 
       await PdfFlattenerService.generateFlattenedPdf(
@@ -761,7 +809,16 @@ enterpriseLegalRouter.post('/intake', async (req: Request, res: Response) => {
         form_name: formToGen,
         pdf_url: `/templates/${templateFilename}`,
         filled_pdf_url: `/${filledPdfRelativePath}`,
-        xfdf_url: `/output/${outputFilename}`
+        xfdf_url: `/output/${outputFilename}`,
+        delivery_destinations: {
+          ...deliveryDestinations,
+          generated_file: {
+            xfdf_output: `/output/${outputFilename}`,
+            filled_pdf: `/${filledPdfRelativePath}`,
+            matter_vault_xfdf: `output/${sanitizedCaseType}/${sanitizedCaseNum}/${formToGen}_${sanitizedClientName}.xfdf`,
+            matter_vault_pdf: `output/${sanitizedCaseType}/${sanitizedCaseNum}/${formToGen}_${sanitizedClientName}_Filled.pdf`
+          }
+        }
       });
     }
   } catch (err: any) {

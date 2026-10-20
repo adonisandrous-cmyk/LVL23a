@@ -68,20 +68,20 @@ export function extractUniversalData(client?: Client | null, matter?: Matter | n
   const m = matter || ({} as Partial<Matter>);
   const fl = c.fl120Data || {};
 
-  const rawName = c.name || 'Jane Doe';
-  const nameParts = rawName.trim().split(/\s+/).filter(Boolean);
-  const firstName = nameParts[0] || 'Jane';
-  const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : 'Doe';
+  const rawName = (c.name || '').replace(/^(?:client|petitioner|respondent|name)[:\s-]+/i, '').trim();
+  const nameParts = rawName.split(/\s+/).filter(Boolean);
+  const firstName = nameParts[0] || '';
+  const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
 
-  const rawOpposing = fl.respondentName || (m as any).opposingParty || 'John Doe';
-  const oppParts = rawOpposing.trim().split(/\s+/).filter(Boolean);
-  const oppFirst = oppParts[0] || 'John';
-  const oppLast = oppParts.length > 1 ? oppParts.slice(1).join(' ') : 'Doe';
+  const rawOpposing = (fl.respondentName || (m as any).opposingParty || '').replace(/^(?:respondent|other\s*party)[:\s-]+/i, '').trim();
+  const oppParts = rawOpposing.split(/\s+/).filter(Boolean);
+  const oppFirst = oppParts[0] || '';
+  const oppLast = oppParts.length > 1 ? oppParts.slice(1).join(' ') : '';
 
-  const street = (c as any).address || '100 Main Street, Suite 200';
-  const city = 'Santa Ana';
+  const street = (c as any).address || '';
+  const city = '';
   const state = 'CA';
-  const zip = '92701';
+  const zip = '';
 
   return {
     client_first_name: firstName,

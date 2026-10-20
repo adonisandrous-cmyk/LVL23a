@@ -30,7 +30,9 @@ import {
   Layers,
   Workflow,
   Moon,
-  Camera
+  Camera,
+  Upload,
+  Network
 } from 'lucide-react';
 import {
   subscribeDriveSync,
@@ -107,6 +109,8 @@ export default function Sidebar({
 
   const sidebarItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'desktop_workstation', label: 'Desktop Workstation', icon: Laptop, badge: 'Ollama' },
+    { id: 'template_uploader', label: 'Template Ingest', icon: Upload, badge: 'Cloud' },
     { id: 'enterprise_pipeline', label: 'Form Generator', icon: Scale, badge: 'Postgres' },
     { id: 'flexicapture', label: 'FlexiCapture', icon: Camera, badge: 'Piece 1' },
     { id: 'workspace', label: 'Workspace Hub', icon: Sparkles, badge: 'Google' },
@@ -114,6 +118,7 @@ export default function Sidebar({
     { id: 'matters', label: 'Matters', icon: Briefcase },
     { id: 'documents', label: 'Documents & Vault', icon: FileText },
     { id: 'staff', label: 'Legal Staff', icon: BrainCircuit, badge: 'Active' },
+    { id: 'biglaw', label: 'Phoenix BigLaw OS', icon: Network, badge: 'Senior Counsel' },
     { id: 'voice', label: 'AI Voice', icon: Volume2, badge: 'Ready' },
     { id: 'consult', label: 'Video Meet', icon: Video, badge: 'Live' },
     { id: 'backups', label: 'Desktop & Sync', icon: FolderSync, badge: 'Active' },

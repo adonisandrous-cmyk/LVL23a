@@ -16,6 +16,7 @@ import { IntelligentTemplate, PopulatedOutputResult, PopulationInput } from './t
 import { ingestionAgent } from './Agent1Ingestion';
 import { generateCourtFormXFDF, generateCourtFormFDF } from '../xfdfService';
 import { calculateSha256, generateUUID } from '../phoenixDatabaseService';
+import { isolateAtomicFieldItem } from './Agent3Extraction';
 
 export class DeliveryPopulationAgent {
   public readonly id = 'agent_6_delivery';
@@ -31,13 +32,59 @@ export class DeliveryPopulationAgent {
 
     // 1. Retrieve the immutable original byte-for-byte
     let originalBytes = ingestionAgent.getImmutableOriginal(template.documentId);
-    if (!originalBytes) {
-      // Fallback: create base PDF with exact template geometry
-      const fallbackDoc = await PDFDocument.create();
-      template.geometry.pages.forEach(pg => {
-        fallbackDoc.addPage([pg.widthPoints, pg.heightPoints]);
+    
+    // Check if originalBytes contains a valid %PDF- header (0x25, 0x50, 0x44, 0x46)
+    const hasPdfHeader = Boolean(
+      originalBytes &&
+      originalBytes.length >= 4 &&
+      originalBytes[0] === 0x25 &&
+      originalBytes[1] === 0x50 &&
+      originalBytes[2] === 0x44 &&
+      originalBytes[3] === 0x46
+    );
+
+    let pdfDoc: PDFDocument;
+
+    if (hasPdfHeader && originalBytes) {
+      try {
+        pdfDoc = await PDFDocument.load(originalBytes, { ignoreEncryption: true });
+      } catch (loadErr) {
+        console.warn('DeliveryPopulationAgent: Error loading original bytes as PDF, generating valid PDF base:', loadErr);
+        pdfDoc = await PDFDocument.create();
+        const pages = template.geometry?.pages?.length ? template.geometry.pages : [{ pageNumber: 1, widthPoints: 612, heightPoints: 792, rotationDegrees: 0, orientation: 'portrait' as const }];
+        pages.forEach(pg => {
+          pdfDoc.addPage([pg.widthPoints || 612, pg.heightPoints || 792]);
+        });
+      }
+    } else {
+      // Source was non-PDF (e.g. .txt intake dossier, DOCX, or direct text payload)
+      // Synthesize official base PDF document preserving page dimensions
+      pdfDoc = await PDFDocument.create();
+      const pages = template.geometry?.pages?.length ? template.geometry.pages : [{ pageNumber: 1, widthPoints: 612, heightPoints: 792, rotationDegrees: 0, orientation: 'portrait' as const }];
+      pages.forEach(pg => {
+        pdfDoc.addPage([pg.widthPoints || 612, pg.heightPoints || 792]);
       });
-      originalBytes = await fallbackDoc.save();
+
+      // If source had text content, render text overlay on the generated base PDF
+      if (originalBytes && originalBytes.length > 0) {
+        try {
+          const rawText = new TextDecoder('utf-8', { fatal: false }).decode(originalBytes);
+          if (rawText && rawText.trim().length > 0) {
+            const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+            const firstPage = pdfDoc.getPage(0);
+            const lines = rawText.split('\n').slice(0, 48);
+            let y = 750;
+            for (const line of lines) {
+              const cleanLine = line.replace(/[\r\t]/g, ' ').substring(0, 95);
+              if (cleanLine.trim()) {
+                firstPage.drawText(cleanLine, { x: 36, y, size: 8.5, font, color: rgb(0.1, 0.15, 0.2) });
+              }
+              y -= 13.5;
+              if (y < 40) break;
+            }
+          }
+        } catch (_) {}
+      }
     }
 
     // 2. Aggregate available data: clientData + matterData + overrideValues
@@ -47,8 +94,6 @@ export class DeliveryPopulationAgent {
       ...(input.overrideValues || {})
     };
 
-    // 3. Load PDF for deterministic population
-    const pdfDoc = await PDFDocument.load(originalBytes);
     const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
     const form = pdfDoc.getForm();
@@ -59,10 +104,16 @@ export class DeliveryPopulationAgent {
 
     // 4. Iterate over template field mappings
     for (const mapping of template.fieldMappings) {
-      // Find value matching canonicalName or sourceLabel
-      const value = combinedData[mapping.canonicalName] ??
+      // Find candidate value matching canonicalName or sourceLabel
+      const rawValue = combinedData[mapping.canonicalName] ??
         combinedData[mapping.sourceLabel] ??
         this.lookupFuzzyValue(mapping.canonicalName, combinedData);
+
+      // Enforce Strict Atomic Field Isolation:
+      // When populating a document where a placeholder or formfield requires a specific item,
+      // ONLY place the called for item in the field (e.g. first name: Aurora; last name: Ramos)
+      const atomicAudit = isolateAtomicFieldItem(rawValue, mapping.canonicalName, mapping.sourceLabel);
+      const value = atomicAudit.isolatedValue;
 
       if (value !== undefined && value !== null && String(value).trim() !== '') {
         const valStr = String(value);

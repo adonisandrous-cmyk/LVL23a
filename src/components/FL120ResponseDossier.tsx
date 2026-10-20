@@ -51,7 +51,7 @@ PETITIONER: ${fl.petitionerName || 'Petitioner'}
 RESPONDENT: ${fl.respondentName || client.name}
 
 RESPONSE TO PETITION FOR DISSOLUTION OF MARRIAGE (FL-120)
-CASE NUMBER: ${fl.caseNumber || '26FL008921'}
+CASE NUMBER: ${fl.caseNumber || '[CASE_NUMBER]'}
 
 1. LEGAL RELATIONSHIP (Fam. Code § 300):
    [X] a. We are married.
@@ -114,7 +114,7 @@ RESPONDENT: ${fl.respondentName || client.name}
 
 DECLARATION UNDER UNIFORM CHILD CUSTODY JURISDICTION AND ENFORCEMENT ACT (UCCJEA)
 (Judicial Council Form FL-105 / GC-120 — Attachment to Form FL-120)
-CASE NUMBER: ${fl.caseNumber || '26FL008921'}
+CASE NUMBER: ${fl.caseNumber || '[CASE_NUMBER]'}
 
 1. Minor Children subject to this proceeding: ${(fl.minorChildren || []).length}
 ${(fl.minorChildren || []).map((c, i) => `   Child ${i + 1}: ${c.name}
@@ -138,7 +138,7 @@ ${fl.respondentName || client.name}, Respondent`;
     return `SUPERIOR COURT OF CALIFORNIA, COUNTY OF ${(fl.courtCounty || 'ORANGE').toUpperCase()}
 CHILD CUSTODY AND VISITATION (PARENTING TIME) APPLICATION ATTACHMENT
 (Judicial Council Form FL-311 — Attachment to Form FL-120)
-CASE NUMBER: ${fl.caseNumber || '26FL008921'}
+CASE NUMBER: ${fl.caseNumber || '[CASE_NUMBER]'}
 PETITIONER: ${fl.petitionerName || 'Petitioner'}
 RESPONDENT: ${fl.respondentName || client.name}
 
@@ -179,7 +179,7 @@ Submitted by: ${fl.respondentName || client.name}, Respondent`;
     const fullPacket = `================================================================================
 CALIFORNIA JUDICIAL COUNCIL RESPONSE PACKET: FORM FL-120 ET SEQ.
 ================================================================================
-CASE NUMBER: ${fl.caseNumber || '26FL008921'}
+CASE NUMBER: ${fl.caseNumber || '[CASE_NUMBER]'}
 COUNTY: ${(fl.courtCounty || 'ORANGE').toUpperCase()}
 CLIENT (RESPONDENT): ${fl.respondentName || client.name}
 OPPOSING PARTY (PETITIONER): ${fl.petitionerName || 'Petitioner'}
@@ -204,7 +204,7 @@ DOCUMENT 4: FORM FL-160 (COMMUNITY & SEPARATE PROPERTY DECLARATION SUMMARY)
 --------------------------------------------------------------------------------
 SUPERIOR COURT OF CALIFORNIA, COUNTY OF ${(fl.courtCounty || 'ORANGE').toUpperCase()}
 SEPARATE & COMMUNITY PROPERTY DECLARATION (FL-160)
-CASE NUMBER: ${fl.caseNumber || '26FL008921'}
+CASE NUMBER: ${fl.caseNumber || '[CASE_NUMBER]'}
 1. SEPARATE PROPERTY CONFIRMATION (Fam. Code § 770):
    ${fl.separatePropertyNotes || 'Pre-marital retirement, accounts, and tools.'}
 2. COMMUNITY PROPERTY DIVISION (Fam. Code § 2550):

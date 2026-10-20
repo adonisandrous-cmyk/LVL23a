@@ -24,8 +24,15 @@ import {
   ChevronRight,
   Database,
   ArrowRight,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Shield,
+  Trash2
 } from 'lucide-react';
+import { ClearIntakeButton } from './ClearIntakeButton';
+import {
+  AGENT_3_ISOLATION_SYSTEM_INSTRUCTION,
+  createIsolatedExtractionPayload
+} from '../services/phoenixEngine/Agent3Extraction';
 
 interface PhoenixIntakeRecord {
   id: string;
@@ -247,10 +254,14 @@ export default function PhoenixIngestionBridgeView({
     setSimStep(4);
 
     try {
+      const isolationPayload = createIsolatedExtractionPayload(
+        "STAGED_DOCUMENTS_ARRAY_ONLY",
+        `session_${Date.now()}`
+      );
       const res = await safeFetchJson('/api/phoenix/simulate-intake', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preset: simPreset })
+        body: JSON.stringify({ preset: simPreset, isolationPayload })
       });
       const data = res.data;
       
@@ -266,7 +277,7 @@ export default function PhoenixIngestionBridgeView({
         onNotify?.('success', `Intake for ${data.clientName} ingested and queued for Phoenix 23 form population!`);
       } else {
         // Fallback client simulated record for static/PWA mode
-        const fallbackClientName = simPreset === 'divorce' ? 'Eleanor Vance' : 'David Miller';
+        const fallbackClientName = simPreset === 'divorce' ? 'Dissolution Petitioner' : 'Bankruptcy Debtor';
         const fallbackCase = `P23-${Math.floor(10000 + Math.random() * 90000)}`;
         const fallbackRecord: PhoenixIntakeRecord = {
           id: `sim-${Date.now()}`,
@@ -317,6 +328,33 @@ export default function PhoenixIngestionBridgeView({
     setCopiedWebhook(true);
     setTimeout(() => setCopiedWebhook(false), 2200);
     onNotify?.('info', 'Phoenix Webhook intake URL copied.');
+  };
+
+  const [copiedIsolationJson, setCopiedIsolationJson] = useState(false);
+
+  const handleCopyIsolationJson = () => {
+    const payload = createIsolatedExtractionPayload(
+      "STAGED_DOCUMENTS_ARRAY_ONLY",
+      `session_${Date.now()}`
+    );
+    navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+    setCopiedIsolationJson(true);
+    setTimeout(() => setCopiedIsolationJson(false), 2200);
+    onNotify?.('info', 'Agent 3 Context Isolation Rule JSON copied to clipboard.');
+  };
+
+  const handleHardEraseBridgeData = async () => {
+    setIntakes([]);
+    setSelectedIntake(null);
+    setSimResult(null);
+    try {
+      sessionStorage.removeItem('phoenix_active_intake_id');
+      localStorage.removeItem('active_staged_documents');
+      await safeFetchJson('/api/phoenix/reset-intake-state', { method: 'POST' });
+    } catch {
+      // non-blocking
+    }
+    onNotify?.('info', 'Phoenix Pipeline state and cached extraction buffers permanently purged.');
   };
 
   return (
@@ -380,6 +418,12 @@ export default function PhoenixIngestionBridgeView({
             <ExternalLink className="w-3.5 h-3.5" />
             <span>Open Drive Folder</span>
           </a>
+
+          {/* Hard State-Reset & Zero Bleed Action */}
+          <ClearIntakeButton
+            onReset={handleHardEraseBridgeData}
+            label="Erase Data / Clean Slate"
+          />
         </div>
       </div>
 
@@ -504,8 +548,8 @@ export default function PhoenixIngestionBridgeView({
                     className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-amber-500 cursor-pointer"
                   >
                     <option value="divorce">Family Law — Contested Dissolution (Family Code § 2104)</option>
-                    <option value="bankruptcy">Marcus Vance — Chapter 7 Bankruptcy Liquidation</option>
-                    <option value="custody">Eleanor Vance — Minor Custody & Support Allocation</option>
+                    <option value="bankruptcy">Chapter 7 Bankruptcy Liquidation</option>
+                    <option value="custody">Minor Custody & Support Allocation</option>
                   </select>
 
                   <button
@@ -522,6 +566,84 @@ export default function PhoenixIngestionBridgeView({
                     )}
                     <span>{isSimulating ? 'Executing Pipeline...' : '⚡ Trigger Phoenix Bridge'}</span>
                   </button>
+
+                  <ClearIntakeButton
+                    onReset={handleHardEraseBridgeData}
+                    label="🗑️ Erase Data / New Intake"
+                  />
+                </div>
+              </div>
+
+              {/* Agent Context Isolation Rule Safeguard Card */}
+              <div className="my-3 p-3.5 bg-[#050b14] border border-cyan-500/30 rounded-xl space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-cyan-400 shrink-0" />
+                    <div>
+                      <h4 className="text-xs font-mono font-extrabold text-cyan-300 uppercase tracking-wide flex items-center gap-2">
+                        <span>Agent 3 Context Isolation Rule — Zero Speculation Extraction</span>
+                        <span className="px-2 py-0.5 text-[9px] rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 uppercase font-bold">
+                          ● Zero-Bleed Enforced
+                        </span>
+                      </h4>
+                      <p className="text-[10px] text-slate-400 font-sans">
+                        Guarantees a clean slate on every new client entry by explicitly nullifying memory registers and prior client schemas.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleCopyIsolationJson}
+                      className="px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 rounded-lg text-[10.5px] font-mono font-bold uppercase transition-all flex items-center gap-1 cursor-pointer"
+                      title="Copy Agent 3 Context Isolation Payload JSON"
+                    >
+                      {copiedIsolationJson ? <Check className="w-3 h-3 text-teal-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedIsolationJson ? 'Copied Rule!' : 'Copy Isolation Payload JSON'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-[#03060c] p-2.5 rounded-lg border border-slate-800/80 font-mono text-[11px] text-slate-300 overflow-x-auto space-y-1">
+                  <div className="text-[10px] text-slate-400 uppercase font-bold flex items-center gap-1.5">
+                    <Code className="w-3 h-3 text-amber-400" />
+                    <span>Active Session Prompt & Memory Nullifier:</span>
+                  </div>
+                  <pre className="text-cyan-200 text-[10.5px] leading-relaxed whitespace-pre-wrap">
+{JSON.stringify(
+  {
+    system_instruction: AGENT_3_ISOLATION_SYSTEM_INSTRUCTION,
+    active_session_payload: {
+      previous_client_memory: null,
+      current_documents: "STAGED_DOCUMENTS_ARRAY_ONLY",
+      verification_protocol: "FOUR_PASS_SURROUNDING_WORD_EXAMINATION"
+    }
+  },
+  null,
+  2
+)}
+                  </pre>
+                </div>
+
+                {/* 4-Pass Multi-Pass Verification Protocol Badges */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1 font-mono text-[10px]">
+                  <div className="p-2 bg-[#08101d] border border-cyan-500/20 rounded-lg">
+                    <span className="text-cyan-400 font-bold block uppercase">Pass 1: Extraction</span>
+                    <span className="text-slate-400">Zero-speculation raw candidate harvest</span>
+                  </div>
+                  <div className="p-2 bg-[#08101d] border border-teal-500/20 rounded-lg">
+                    <span className="text-teal-300 font-bold block uppercase">Pass 2: Atomic Audit</span>
+                    <span className="text-slate-400">ONLY called-for item (Aurora vs Ramos)</span>
+                  </div>
+                  <div className="p-2 bg-[#08101d] border border-amber-500/20 rounded-lg">
+                    <span className="text-amber-300 font-bold block uppercase">Pass 3: Surrounding Words</span>
+                    <span className="text-slate-400">AI examines adjacent words & context</span>
+                  </div>
+                  <div className="p-2 bg-[#08101d] border border-emerald-500/20 rounded-lg">
+                    <span className="text-emerald-300 font-bold block uppercase">Pass 4: Certification</span>
+                    <span className="text-slate-400">Zero bleed, final AcroForm/XFDF insertion</span>
+                  </div>
                 </div>
               </div>
 

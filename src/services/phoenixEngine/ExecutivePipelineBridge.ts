@@ -64,24 +64,24 @@ export class ExecutivePipelineBridgeService {
     return {
       dispatcherAgent: 'phoenix',
       dispatcherName: 'Phoenix',
-      dispatcherTitle: 'Managing Partner & Senior Legal Strategist',
-      directiveTitle: 'Litigation Master Directive: Exact Coordinate Pleading Mapping',
+      dispatcherTitle: 'Senior Counsel & BigLaw Managing Partner',
+      directiveTitle: 'Senior Counsel Master Directive: BigLaw DyTopo Exact Coordinate & Grounded Pleading Mapping',
       generalInstructions: 'Preserve underlying court pleading geometry byte-for-byte. Extract petitioner/respondent designations, relief requests, and case numbers. Do not guess on contested facts; flag all ambiguities for counsel review.',
       caseStrategy: 'Prepare court-admissible California Judicial Council pleading overlay. Ensure all signature blocks, court captions, and checkbox matrices retain exact millimeter alignment.',
       matterReference: {
-        clientName: params?.clientName || 'Eleanor Vance',
-        caseNumber: params?.caseNumber || '24FL-009412',
+        clientName: params?.clientName || '',
+        caseNumber: params?.caseNumber || '',
         courtCounty: 'Orange County'
       },
       customAgentDirectives: {
         agent_1_ingestion: 'Ingest immutable visual master; calculate and vault SHA-256 fingerprint.',
         agent_2_analysis: 'Analyze structural bounding boxes, AcroForm fields, and blank lines without altering source.',
-        agent_3_extraction: 'Extract key litigation parties, case number, filing dates; apply Rule 5 No-Guess review policy.',
+        agent_3_extraction: 'CRITICAL: Disregard all prior client schemas, history, cache registers, and residual text strings. When populating a document where a placeholder or formfield requires a specific item, ONLY place the called for item in the field (e.g. first name: Aurora; last name: Ramos). Once data is extracted on the first pass, go back 3 additional times (4 passes total) to verify field accuracy. On the third pass, examine the words around the response being inserted into the field to ensure document correctness. Apply Rule 5 No-Guess review policy.',
         agent_4_database: 'Relate facts to Client and Matter ledger under canonical legal field ontology.',
         agent_5_template_builder: 'Generate precision coordinate-based overlays. Zero HTML conversion or reflow permitted.',
-        agent_6_delivery: 'Generate deterministic populated PDF, Adobe XFDF, and JSON field map outputs.',
+        agent_6_delivery: 'Generate deterministic populated PDF, Adobe XFDF, and JSON field map outputs, strictly enforcing atomic single-item placement (e.g. Aurora vs Ramos) with zero label prefixes or compound string bleed.',
         agent_7_integration: 'Stage completed files in designated Google Drive folder "phoenix_review".',
-        agent_8_qa_sentinel: 'Perform independent verification of page geometry, hashes, and boundary containment.'
+        agent_8_qa_sentinel: 'Perform independent verification of page geometry, hashes, boundary containment, and 4-pass atomic field compliance.'
       },
       dispatchedAt: new Date().toISOString()
     };
@@ -100,19 +100,19 @@ export class ExecutivePipelineBridgeService {
       generalInstructions: 'Process incoming client documentation into structured intake records. Extract verified identity, contact parameters, children dates of birth, marriage/separation statistical facts, and jurisdictional residency.',
       caseStrategy: 'Consolidate raw client documents into reusable template forms. Cross-check extracted names against conflict checks and database rosters.',
       matterReference: {
-        clientName: params?.clientName || 'Eleanor Vance',
-        caseNumber: params?.caseNumber || '24FL-009412',
+        clientName: params?.clientName || '',
+        caseNumber: params?.caseNumber || '',
         courtCounty: 'Orange County'
       },
       customAgentDirectives: {
         agent_1_ingestion: 'Securely intake client onboarding packet; verify MIME and byte integrity.',
         agent_2_analysis: 'Detect all form blanks, table cells, and checkbox groups for 16-point intake mapping.',
-        agent_3_extraction: 'Extract client biographical details, addresses, and family stats with full provenance.',
+        agent_3_extraction: 'CRITICAL: Disregard prior schemas. When populating a document where a placeholder or formfield requires a specific item, ONLY place the called for item in the field (e.g. first name: Aurora; last name: Ramos). Execute 4-pass verification: Pass 1 (Candidate Harvest), Pass 2 (Atomic Item Audit), Pass 3 (Surrounding Word Examination to ensure correctness), Pass 4 (Integrity Certification).',
         agent_4_database: 'Persist facts into Level 23 Client Repository for multi-form reuse.',
-        agent_5_template_builder: 'Map blanks to canonical fields (e.g. party.petitioner.full_name, person.dob).',
-        agent_6_delivery: 'Generate pre-filled intake verification packet and standard Judicial Council draft.',
+        agent_5_template_builder: 'Map blanks to canonical fields (e.g. party.petitioner.first_name, party.petitioner.last_name).',
+        agent_6_delivery: 'Generate pre-filled intake verification packet and standard Judicial Council draft, placing ONLY called-for atomic elements into matching form blanks.',
         agent_7_integration: 'Sync to Google Workspace Drive, Calendar deadlines, and Keep notes.',
-        agent_8_qa_sentinel: 'Certify zero missing required fields and verify client data validity.'
+        agent_8_qa_sentinel: 'Certify zero missing required fields, verify client data validity, and audit atomic field compliance.'
       },
       dispatchedAt: new Date().toISOString()
     };
@@ -166,10 +166,10 @@ export class ExecutivePipelineBridgeService {
 
     // 3. Prepare client and matter facts
     const clientData: Record<string, any> = {
-      'party.petitioner.full_name': payload.clientName || 'Eleanor Vance',
-      'person.full_name': payload.clientName || 'Eleanor Vance',
-      'party.respondent.full_name': 'Jonathan Vance',
-      'matter.case_number': payload.caseNumber || '24FL-009412',
+      'party.petitioner.full_name': payload.clientName || '',
+      'person.full_name': payload.clientName || '',
+      'party.respondent.full_name': '',
+      'matter.case_number': payload.caseNumber || '',
       'court.county': payload.courtCounty || 'Orange County',
       ...(payload.clientData || {})
     };
@@ -192,7 +192,7 @@ export class ExecutivePipelineBridgeService {
     // 5. Generate executive summary from the dispatcher's perspective
     const summary = isPhoenix
       ? `[PHOENIX EXECUTIVE BRIEF]: Successfully dispatched "${payload.documentName}" to the 8-agent document pipeline under Directive "${payload.directiveTitle}". The Visual Master (SHA-256: ${pipelineResult.state.originalHash?.substring(0, 12)}...) is certified byte-for-byte immutable. Identified ${pipelineResult.template.fieldMappings.length} blank field coordinates. QA Sentinel certification: ${pipelineResult.qaReport.passed ? 'PASSED (Zero Boundary Deviation)' : 'HALTED'}. Populated ${pipelineResult.populatedOutput.populatedFieldCount} court-ready fields. Reusable template "${pipelineResult.template.templateName}" is stored in the database.`
-      : `[EVE OPERATIONS DISPATCH]: Processed intake document "${payload.documentName}" across the 8-agent pipeline under Directive "${payload.directiveTitle}". Client facts linked for "${payload.clientName || 'Eleanor Vance'}". Generated ${pipelineResult.template.fieldMappings.length} canonical mappings with full provenance. Output deliverables (PDF, XFDF, JSON) staged in the pipeline vault for future automation.`;
+      : `[EVE OPERATIONS DISPATCH]: Processed intake document "${payload.documentName}" across the 8-agent pipeline under Directive "${payload.directiveTitle}". Client facts linked for "${payload.clientName || 'Client'}". Generated ${pipelineResult.template.fieldMappings.length} canonical mappings with full provenance. Output deliverables (PDF, XFDF, JSON) staged in the pipeline vault for future automation.`;
 
     return {
       jobId: pipelineResult.state.jobId,

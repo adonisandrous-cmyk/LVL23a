@@ -48,12 +48,14 @@ import {
   FileSpreadsheet,
   Globe,
   Trash2,
-  FileDown
+  FileDown,
+  Upload
 } from 'lucide-react';
 import { Client, DocumentTemplate, GeneratedDocument, Matter } from '../types';
 import { ALL_DOCUMENT_TEMPLATES } from '../data/legalFormsCatalog';
 import { getAccessToken } from '../lib/driveAuth';
 import { OfficialCaliforniaJudicialCouncilFormModal } from './OfficialCaliforniaJudicialCouncilFormModal';
+import { TemplateUploader } from './TemplateUploader';
 import { buildCourtPdfUrl, triggerDirectCourtPdfDownload } from '../services/judicialFormHarvesterService';
 import { generateCourtFormXFDF, generateCourtFormFDF, downloadXfdfFile, downloadFdfFile } from '../services/xfdfService';
 
@@ -96,8 +98,11 @@ export default function LegalFormsTemplateManager({
   const [showOfficialFormModal, setShowOfficialFormModal] = useState<boolean>(false);
   const [selectedOfficialFormCode, setSelectedOfficialFormCode] = useState<'FL-120' | 'FL-105' | 'FL-311' | 'FL-160'>('FL-120');
   const [selectedOfficialClient, setSelectedOfficialClient] = useState<Client | null>(() => {
-    return clients?.find(c => c.name.includes('Christopher Guinto')) || clients?.[0] || null;
+    return clients?.[0] || null;
   });
+
+  // Template Uploader (Ingests templates & files to Cloud Run matter folder)
+  const [showTemplateUploader, setShowTemplateUploader] = useState<boolean>(false);
 
   // Modal form inputs
   const [selectedClient, setSelectedClient] = useState<Client | null>(clients[0] || null);
@@ -147,29 +152,29 @@ export default function LegalFormsTemplateManager({
     fields.forEach(f => {
       const lowerF = f.toLowerCase();
       if (lowerF.includes('petitioner') || lowerF.includes('applicant') || lowerF.includes('plaintiff')) {
-        extracted[f] = fl?.petitionerName || clientAny?.petitionerName || 'Maria Guinto';
+        extracted[f] = fl?.petitionerName || clientAny?.petitionerName || '[PETITIONER_NAME]';
       } else if (lowerF.includes('respondent') || lowerF.includes('defendant') || lowerF.includes('opposing')) {
-        extracted[f] = fl?.respondentName || client?.name || clientAny?.opposingParty || 'Christopher Guinto';
+        extracted[f] = fl?.respondentName || client?.name || clientAny?.opposingParty || '[RESPONDENT_NAME]';
       } else if (lowerF.includes('client name')) {
-        extracted[f] = client?.name || 'Christopher Guinto';
+        extracted[f] = client?.name || '[CLIENT_NAME]';
       } else if (lowerF.includes('county')) {
-        extracted[f] = fl?.courtCounty || clientAny?.county || 'Orange County';
+        extracted[f] = fl?.courtCounty || clientAny?.county || '[COUNTY]';
       } else if (lowerF.includes('case no') || lowerF.includes('docket') || lowerF.includes('matter') || lowerF.includes('case number')) {
-        extracted[f] = fl?.caseNumber || clientAny?.caseNumber || '26FL008921';
+        extracted[f] = fl?.caseNumber || clientAny?.caseNumber || '[CASE_NUMBER]';
       } else if (lowerF.includes('marriage') || lowerF.includes('wedding')) {
-        extracted[f] = fl?.dateOfMarriage || 'September 18, 2015';
+        extracted[f] = fl?.dateOfMarriage || '[DATE_OF_MARRIAGE]';
       } else if (lowerF.includes('separat')) {
-        extracted[f] = fl?.dateOfSeparation || 'April 10, 2026';
+        extracted[f] = fl?.dateOfSeparation || '[DATE_OF_SEPARATION]';
       } else if (lowerF.includes('custody') || lowerF.includes('visitation') || lowerF.includes('child') || lowerF.includes('minor')) {
-        extracted[f] = fl?.visitationRequested || 'Joint legal and physical custody requested (FL-311 2-2-3 schedule); Minor children: Ethan Guinto (age 9), Sophia Guinto (age 5).';
+        extracted[f] = fl?.visitationRequested || '[CUSTODY_VISITATION_REQUESTED]';
       } else if (lowerF.includes('support') || lowerF.includes('alimony')) {
         extracted[f] = fl?.spousalSupportRequested === 'Reserve'
           ? 'Reserve jurisdiction over spousal support for Respondent; terminate authority to award to Petitioner (Fam. Code § 4336).'
           : 'Spousal support per California Family Code § 4320 guidelines.';
       } else if (lowerF.includes('separate property')) {
-        extracted[f] = fl?.separatePropertyNotes || 'Confirm Respondent Christopher Guinto separate property per Fam. Code § 770 (pre-marital retirement accounts, vehicle, and trade equipment).';
+        extracted[f] = fl?.separatePropertyNotes || '[SEPARATE_PROPERTY_CONFIRMATION]';
       } else if (lowerF.includes('community property') || lowerF.includes('property') || lowerF.includes('asset')) {
-        extracted[f] = fl?.communityPropertyNotes || 'Equal division of community estate pursuant to Fam. Code § 2550: Marital residence equity, joint checking/savings accounts, retirement accrued during coverture.';
+        extracted[f] = fl?.communityPropertyNotes || '[COMMUNITY_PROPERTY_DIVISION]';
       } else if (lowerF.includes('income') || lowerF.includes('wage') || lowerF.includes('salary')) {
         extracted[f] = '$6,500/month gross earned income; W-2 and recent earnings statements attached.';
       } else if (lowerF.includes('debt') || lowerF.includes('liability')) {
@@ -802,6 +807,18 @@ export default function LegalFormsTemplateManager({
             </button>
           </div>
 
+          {/* Ingest Templates & Motions to Cloud Run Matter Folder Button */}
+          <button
+            type="button"
+            id="btn-ingest-template-matter"
+            onClick={() => setShowTemplateUploader(true)}
+            className="px-3 py-1.5 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-slate-950 font-mono text-[10.5px] font-black uppercase cursor-pointer flex items-center gap-1.5 transition-all shadow-[2px_2px_0px_#000] shrink-0"
+            title="Upload PDF/DOCX templates, extract AcroForms, map fields, and file into Matter folder on Cloud Run"
+          >
+            <Upload className="w-3.5 h-3.5 text-slate-950" />
+            <span>Ingest & File Templates</span>
+          </button>
+
           {/* Download & Prep Judicial Council Form Button */}
           {onOpenHarvesterModal && (
             <button
@@ -832,8 +849,8 @@ export default function LegalFormsTemplateManager({
           <button
             type="button"
             onClick={() => {
-              const guinto = clients?.find(c => c.name.includes('Christopher Guinto')) || clients?.[0] || null;
-              setSelectedOfficialClient(guinto);
+              const target = selectedClient || clients?.[0] || null;
+              setSelectedOfficialClient(target);
               setSelectedOfficialFormCode('FL-120');
               setShowOfficialFormModal(true);
             }}
@@ -1406,8 +1423,8 @@ export default function LegalFormsTemplateManager({
                       <button
                         type="button"
                         onClick={() => {
-                          const guinto = selectedClient || clients?.find(c => c.name.includes('Christopher Guinto')) || clients?.[0] || null;
-                          setSelectedOfficialClient(guinto);
+                          const target = selectedClient || clients?.[0] || null;
+                          setSelectedOfficialClient(target);
                           const code = (activeFormModal.name.includes('FL-120') || activeFormModal.id.includes('fl-120')) ? 'FL-120' : (activeFormModal.name.includes('FL-105') ? 'FL-105' : (activeFormModal.name.includes('FL-311') ? 'FL-311' : 'FL-120'));
                           setSelectedOfficialFormCode(code);
                           setShowOfficialFormModal(true);
@@ -2320,6 +2337,20 @@ export default function LegalFormsTemplateManager({
           client={selectedOfficialClient}
           initialFormCode={selectedOfficialFormCode}
           onAddGeneratedDoc={onAddGeneratedDoc}
+        />
+      )}
+
+      {/* Template Uploader Modal (Files to Cloud Run Matter Folder) */}
+      {showTemplateUploader && (
+        <TemplateUploader
+          clients={clients}
+          matters={matters}
+          isOpen={showTemplateUploader}
+          onClose={() => setShowTemplateUploader(false)}
+          onTemplateIngested={(summary) => {
+            setSubmissionNotice(`Successfully ingested ${summary.formCode} into ${summary.matterFolderPath}`);
+            setTimeout(() => setSubmissionNotice(null), 5000);
+          }}
         />
       )}
 

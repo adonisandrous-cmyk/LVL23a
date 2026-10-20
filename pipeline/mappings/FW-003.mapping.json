@@ -1,0 +1,57 @@
+{
+  "form_id": "FW-003",
+  "jurisdiction": "California Judicial Council",
+  "title": "Order on Court Fee Waiver (Superior Court)",
+  "revision": "Rev. September 1, 2019",
+  "description": "Declarative mapping dictionary linking 4-Part Intake / Master Standardized JSON schema to California Judicial Council FW-003 AcroForm targets.",
+  "fields": {
+    "FW-003[0].Page1[0].CourtInfo[0].CrtCounty_ft[0]": {
+      "type": "format_string",
+      "source": "case.county",
+      "case": "upper"
+    },
+    "FW-003[0].Page1[0].CourtInfo[0].Street_ft[0]": "case.court_street",
+    "FW-003[0].Page1[0].CourtInfo[0].CityZip_ft[0]": "case.court_city_zip",
+    "FW-003[0].Page1[0].CourtInfo[0].Branch_ft[0]": "case.branch_name",
+
+    "FW-003[0].Page1[0].PersonAsking[0].Name_ft[0]": "client.full_name",
+    "FW-003[0].Page1[0].PersonAsking[0].Street_ft[0]": "client.street",
+    "FW-003[0].Page1[0].PersonAsking[0].City_ft[0]": "client.city",
+    "FW-003[0].Page1[0].PersonAsking[0].State_ft[0]": "client.state",
+    "FW-003[0].Page1[0].PersonAsking[0].Zip_ft[0]": "client.zip",
+    "FW-003[0].Page1[0].PersonAsking[0].Phone_ft[0]": "client.phone",
+
+    "FW-003[0].Page1[0].LawyerInfo[0].Name_ft[0]": "attorney.name",
+    "FW-003[0].Page1[0].LawyerInfo[0].Firm_ft[0]": "attorney.firm_name",
+    "FW-003[0].Page1[0].LawyerInfo[0].BarNo_ft[0]": "attorney.bar_number",
+
+    "FW-003[0].Page1[0].CaseInfo[0].CaseName_ft[0]": {
+      "type": "template",
+      "template": "{petitioner} v. {respondent}",
+      "variables": {
+        "petitioner": "client.full_name",
+        "respondent": "opposing_party.full_name"
+      }
+    },
+    "FW-003[0].Page1[0].CaseInfo[0].CaseNumber_ft[0]": "case.case_number",
+
+    "FW-003[0].Page1[0].OrderDecision[0].Granted_cb[0]": {
+      "type": "checkbox",
+      "source": "fee_waiver_order.status",
+      "equals": "Granted"
+    },
+    "FW-003[0].Page1[0].OrderDecision[0].Denied_cb[0]": {
+      "type": "checkbox",
+      "source": "fee_waiver_order.status",
+      "equals": "Denied"
+    },
+    "FW-003[0].Page1[0].OrderDecision[0].HearingRequired_cb[0]": {
+      "type": "checkbox",
+      "source": "fee_waiver_order.hearing_required",
+      "checked_value": "/Yes"
+    },
+    "FW-003[0].Page1[0].OrderDecision[0].HearingDate_dt[0]": "fee_waiver_order.hearing_date",
+    "FW-003[0].Page1[0].OrderDecision[0].HearingTime_tf[0]": "fee_waiver_order.hearing_time",
+    "FW-003[0].Page1[0].OrderDecision[0].Department_tf[0]": "fee_waiver_order.department"
+  }
+}

@@ -76,6 +76,7 @@ export class AutomatedTestSuite {
     results.push(await this.test6AmbiguousField());
     results.push(await this.test7IntentionalStructureViolation());
     results.push(await this.test8TemplateVersionChange());
+    results.push(await this.test9AtomicItemAndFourPassVerification());
 
     const passed = results.filter(r => r.passed).length;
     return {
@@ -269,8 +270,8 @@ export class AutomatedTestSuite {
       const popResult = await deliveryPopulationAgent.populateDocument(template, {
         templateId: template.templateId,
         matterData: {
-          'party.petitioner.full_name': 'Eleanor Vance',
-          'matter.case_number': '24FL-009412'
+          'party.petitioner.full_name': 'Test Petitioner',
+          'matter.case_number': 'TEST-CASE-001'
         }
       });
 
@@ -553,6 +554,113 @@ export class AutomatedTestSuite {
         testId: 'TEST-8',
         name: 'Test 8: Template Versioning Immutability',
         category: 'Template Management',
+        passed: false,
+        assertions,
+        durationMs: Date.now() - start,
+        error: err.message
+      };
+    }
+  }
+
+  // TEST 9: Strict Atomic Item Placement & 4-Pass Multi-Pass Verification
+  // Enforces:
+  // 1. Only called-for item in field (first name: Aurora; last name: Ramos)
+  // 2. 4-Pass Multi-Pass Verification with Pass 3 surrounding word examination
+  public async test9AtomicItemAndFourPassVerification(): Promise<AutomatedTestResult> {
+    const start = Date.now();
+    const assertions: AutomatedTestResult['assertions'] = [];
+
+    try {
+      const pdfBytes = await this.createSyntheticPdf({ title: 'FL-120 RESPONSE DISSOLUTION OF MARRIAGE' });
+      const ingestion = await ingestionAgent.ingestDocument(pdfBytes, 'FL-120-Response.pdf');
+      const analysis = await documentAnalysisAgent.analyzeDocument(ingestion.documentId, pdfBytes, ingestion.sha256, ingestion.geometry);
+
+      // Inject blanks explicitly requiring first name and last name
+      analysis.detectedBlanks = [
+        {
+          blankId: 'blank-first-name',
+          pageNumber: 1,
+          bounds: { x: 50, y: 670, width: 150, height: 16, pageNumber: 1 },
+          promptLabel: 'Petitioner First Name: ',
+          suggestedCanonicalField: 'party.petitioner.first_name',
+          fieldCategory: 'text'
+        },
+        {
+          blankId: 'blank-last-name',
+          pageNumber: 1,
+          bounds: { x: 220, y: 670, width: 150, height: 16, pageNumber: 1 },
+          promptLabel: 'Petitioner Last Name: ',
+          suggestedCanonicalField: 'party.petitioner.last_name',
+          fieldCategory: 'text'
+        }
+      ];
+
+      // Provide compound candidate input
+      const testContext = {
+        'party.petitioner.first_name': 'first name: Aurora; last name: Ramos',
+        'party.petitioner.last_name': 'Aurora Ramos'
+      };
+
+      const extracted = await extractionAgent.extractValues(analysis, testContext);
+
+      const firstNameField = extracted.find(e => e.canonicalName === 'party.petitioner.first_name');
+      const lastNameField = extracted.find(e => e.canonicalName === 'party.petitioner.last_name');
+
+      assertions.push({
+        name: 'First name field contains ONLY "Aurora" (labels & compound last name stripped)',
+        expected: 'Aurora',
+        actual: firstNameField?.value,
+        passed: firstNameField?.value === 'Aurora'
+      });
+
+      assertions.push({
+        name: 'Last name field contains ONLY "Ramos" (compound first name stripped)',
+        expected: 'Ramos',
+        actual: lastNameField?.value,
+        passed: lastNameField?.value === 'Ramos'
+      });
+
+      assertions.push({
+        name: 'Pass 1 records raw candidate input',
+        expected: true,
+        actual: Boolean(firstNameField?.verificationAudit?.pass1_initialExtraction.rawCandidateValue),
+        passed: Boolean(firstNameField?.verificationAudit?.pass1_initialExtraction.rawCandidateValue)
+      });
+
+      assertions.push({
+        name: 'Pass 2 records atomic item audit and decomposition',
+        expected: true,
+        actual: Boolean(firstNameField?.verificationAudit?.pass2_atomicItemAudit.labelsStripped),
+        passed: Boolean(firstNameField?.verificationAudit?.pass2_atomicItemAudit.labelsStripped)
+      });
+
+      assertions.push({
+        name: 'Pass 3 records surrounding word examination',
+        expected: true,
+        actual: Boolean(firstNameField?.verificationAudit?.pass3_surroundingWordsExamination.examinationNotes),
+        passed: Boolean(firstNameField?.verificationAudit?.pass3_surroundingWordsExamination.examinationNotes)
+      });
+
+      assertions.push({
+        name: 'Pass 4 certifies 100% integrity and zero bleed',
+        expected: true,
+        actual: Boolean(firstNameField?.verificationAudit?.pass4_integrityCertification.zeroBleedConfirmed),
+        passed: Boolean(firstNameField?.verificationAudit?.pass4_integrityCertification.zeroBleedConfirmed)
+      });
+
+      return {
+        testId: 'TEST-9',
+        name: 'Test 9: Strict Atomic Item Placement & 4-Pass Verification Guard',
+        category: 'Field Precision & Extraction',
+        passed: assertions.every(a => a.passed),
+        assertions,
+        durationMs: Date.now() - start
+      };
+    } catch (err: any) {
+      return {
+        testId: 'TEST-9',
+        name: 'Test 9: Strict Atomic Item Placement & 4-Pass Verification Guard',
+        category: 'Field Precision & Extraction',
         passed: false,
         assertions,
         durationMs: Date.now() - start,

@@ -7,7 +7,7 @@
 // Helper to construct base64url for Gmail RFC 2822
 export function buildRawEmail({
   to,
-  from,
+  from = 'level23consulting@gmail.com',
   subject,
   body,
   cc,
@@ -22,7 +22,7 @@ export function buildRawEmail({
 }): string {
   const lines = [
     `To: ${to}`,
-    from ? `From: ${from}` : '',
+    `From: ${from}`,
     cc ? `Cc: ${cc}` : '',
     bcc ? `Bcc: ${bcc}` : '',
     `Subject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
@@ -229,13 +229,25 @@ export async function createCalendarEvent(
     addGoogleMeet?: boolean;
   }
 ): Promise<CalendarEventItem> {
+  const attendeesList = event.attendeeEmails ? [...event.attendeeEmails] : [];
+  if (!attendeesList.includes('level23consulting@gmail.com')) {
+    attendeesList.unshift('level23consulting@gmail.com');
+  }
+
+  const enhancedDescription = event.description 
+    ? `${event.description}\n\nHost & Organizer: level23consulting@gmail.com\nWorking Repository: level23consulting@gmail.com / phoenix_review`
+    : 'Level 23 Legal Video Consultation\nHost & Organizer: level23consulting@gmail.com\nWorking Repository: level23consulting@gmail.com / phoenix_review';
+
   const body: any = {
     summary: event.summary,
-    description: event.description,
-    location: event.location,
+    description: enhancedDescription,
+    location: event.location || 'Google Meet (level23consulting@gmail.com)',
     start: { dateTime: event.startTime, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
     end: { dateTime: event.endTime, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-    attendees: event.attendeeEmails?.map(email => ({ email })) || []
+    attendees: attendeesList.map(email => ({
+      email,
+      displayName: email === 'level23consulting@gmail.com' ? 'Level 23 Practice (Organizer)' : undefined
+    }))
   };
 
   if (event.addGoogleMeet) {
@@ -489,18 +501,20 @@ export async function createGoogleForm(
 }
 
 // ----------------------------------------------------
-// 5. GOOGLE MEET API
+// 5. GOOGLE MEET API (Attached to level23consulting@gmail.com)
 // ----------------------------------------------------
 export interface MeetSpace {
   name: string; // e.g. "spaces/123456"
   meetingUri: string;
   meetingCode: string;
+  hostAccount?: string; // Always attached to level23consulting@gmail.com
+  driveAttachment?: string; // Associated Google Drive folder: level23consulting@gmail.com / phoenix_review
   config?: {
     accessType?: string;
   };
 }
 
-export async function createGoogleMeetSpace(token: string): Promise<MeetSpace> {
+export async function createGoogleMeetSpace(token: string, hostEmail = 'level23consulting@gmail.com'): Promise<MeetSpace> {
   try {
     const res = await fetch('https://meet.googleapis.com/v2/spaces', {
       method: 'POST',
@@ -516,7 +530,9 @@ export async function createGoogleMeetSpace(token: string): Promise<MeetSpace> {
       return {
         name: data.name,
         meetingUri: data.meetingUri || `https://meet.google.com/${data.meetingCode}`,
-        meetingCode: data.meetingCode || data.name.split('/').pop() || ''
+        meetingCode: data.meetingCode || data.name.split('/').pop() || '',
+        hostAccount: hostEmail,
+        driveAttachment: 'Google Drive (level23consulting@gmail.com) / phoenix_review'
       };
     }
   } catch (e) {
@@ -528,7 +544,9 @@ export async function createGoogleMeetSpace(token: string): Promise<MeetSpace> {
   return {
     name: `spaces/${randomCode}`,
     meetingUri: `https://meet.google.com/${randomCode}`,
-    meetingCode: randomCode
+    meetingCode: randomCode,
+    hostAccount: hostEmail,
+    driveAttachment: 'Google Drive (level23consulting@gmail.com) / phoenix_review'
   };
 }
 
@@ -555,9 +573,9 @@ export function getLocalKeepNotes(): KeepCaseNote[] {
   return [
     {
       id: 'keep-1',
-      title: 'Watson v. Watson: Trial Strategy Highlights',
-      content: '1. Prepare preliminary declaration of disclosure (FL-140 & FL-150).\n2. Request 3 years of WatsonTech corporate tax filings.\n3. Draft evidentiary objections regarding separate property claims in Newport real estate.',
-      tags: ['Family Law', 'Trial Prep', 'Watson'],
+      title: 'California Family Law: Trial Strategy Highlights',
+      content: '1. Prepare preliminary declaration of disclosure (FL-140 & FL-150).\n2. Request 3 years of personal and business tax filings.\n3. Draft evidentiary objections regarding separate property claims in real estate.',
+      tags: ['Family Law', 'Trial Prep', 'Disclosures'],
       color: 'amber',
       isPinned: true,
       updatedAt: new Date().toLocaleDateString()

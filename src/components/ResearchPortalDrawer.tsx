@@ -228,51 +228,51 @@ Signature of Declarant / Party
       // Extract client specific verified values
       let data: any = {
         clientName: client.name,
-        clientPhone: client.phone || '+1 (714) 555-0199',
-        clientEmail: client.email || 'client@example.com',
+        clientPhone: client.phone || '',
+        clientEmail: client.email || '',
         timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC',
-        caseNumber: fl?.caseNumber || '26FL008921',
+        caseNumber: fl?.caseNumber || '',
         courtCounty: fl?.courtCounty || 'Superior Court of California, County of Orange',
-        courtAddress: fl?.branchName || 'Lamoreaux Justice Center, 341 The City Dr S, Orange, CA 92868',
+        courtAddress: fl?.branchName || '',
       };
 
       if (form.code?.includes('120') || form.code === 'FL-100' || form.code?.toLowerCase().includes('response')) {
         const isResponse = form.code?.includes('120') || form.code?.toLowerCase().includes('response');
-        data.petitionerName = fl?.petitionerName || 'Maria Guinto';
-        data.respondentName = fl?.respondentName || client.name || 'Christopher Guinto';
+        data.petitionerName = fl?.petitionerName || '[PETITIONER_NAME]';
+        data.respondentName = fl?.respondentName || client.name || '[RESPONDENT_NAME]';
         data.clientRole = isResponse ? 'Respondent' : 'Petitioner';
-        data.jurisdictionalBasis = "California Family Code § 2320 (6 Months CA / 3 Months Orange County verified)";
-        data.countyFiling = fl?.courtCounty || "Superior Court of California, County of Orange";
-        data.courtAddress = fl?.branchName || "Lamoreaux Justice Center, 341 The City Drive South, Orange, CA 92868";
+        data.jurisdictionalBasis = "California Family Code § 2320 (6 Months CA / 3 Months County verified)";
+        data.countyFiling = fl?.courtCounty || "Superior Court of California";
+        data.courtAddress = fl?.branchName || "";
         data.actionNature = `${fl?.proceedingType || 'Dissolution'} of Marriage (${fl?.legalGrounds || 'Irreconcilable Differences'})`;
-        data.marriageDetails = `Date of Marriage: ${fl?.dateOfMarriage || 'September 18, 2015'}. Date of Separation: ${fl?.dateOfSeparation || 'April 10, 2026'} (Duration: ${fl?.durationYears || 10} years, ${fl?.durationMonths || 7} months per Fam. Code § 4336).`;
+        data.marriageDetails = `Date of Marriage: ${fl?.dateOfMarriage || '[MARRIAGE_DATE]'}. Date of Separation: ${fl?.dateOfSeparation || '[SEPARATION_DATE]'}.`;
         data.children = fl?.minorChildren && fl.minorChildren.length > 0
           ? fl.minorChildren.map((c: any) => `${c.name} (Born: ${c.birthdate}, Age ${c.age})`).join('; ') + '. UCCJEA FL-105 attached.'
-          : "Ethan Guinto (Born: 2017-04-12, Age 9); Sophia Guinto (Born: 2020-11-05, Age 5). UCCJEA FL-105 attached.";
-        data.custodyRequested = `Legal: ${fl?.custodyLegal || 'Joint'} Custody. Physical: ${fl?.custodyPhysical || 'Joint'} Custody. Parenting Schedule: ${fl?.visitationRequested || 'Standard 2-2-3 schedule per FL-311'}`;
-        data.communalAssets = fl?.communityPropertyNotes || "Fullerton marital residence ($680k equity); joint checking and savings accounts; pension/retirement benefits accrued during coverture subject to QDRO.";
-        data.separateProperty = fl?.separatePropertyNotes || "Fidelity pre-marital 401(k); 2011 Toyota Tacoma truck; trade equipment acquired prior to marriage per Fam. Code § 770.";
+          : "[MINOR_CHILDREN_LIST]";
+        data.custodyRequested = `Legal: ${fl?.custodyLegal || 'Joint'} Custody. Physical: ${fl?.custodyPhysical || 'Joint'} Custody. Parenting Schedule: ${fl?.visitationRequested || 'Standard guideline schedule'}`;
+        data.communalAssets = fl?.communityPropertyNotes || "[COMMUNITY_PROPERTY_SCHEDULE]";
+        data.separateProperty = fl?.separatePropertyNotes || "[SEPARATE_PROPERTY_SCHEDULE]";
         data.spousalSupport = fl?.spousalSupportRequested === 'Reserve' 
           ? "Reserve jurisdiction over spousal support for Respondent; terminate authority to award to Petitioner (Fam. Code § 4336)."
           : "Subject to Fam. Code § 4320 statutory determination.";
       } else if (form.code === 'FL-105') {
         data.childrenDeclared = fl?.minorChildren && fl.minorChildren.length > 0
           ? fl.minorChildren.map((c: any) => `${c.name} (${c.birthdate})`).join(', ')
-          : "Ethan Guinto (04/12/2017), Sophia Guinto (11/05/2020)";
-        data.residenceHistory = "Continuous residence in Orange County, California since birth with parents.";
+          : "[CHILDREN_DECLARED]";
+        data.residenceHistory = "Continuous residence in California since birth with parents.";
         data.jurisdictionStatement = "California is the home state of the minor children under UCCJEA (Fam. Code § 3421).";
       } else if (form.code === 'FL-311') {
-        data.parentingSchedule = fl?.visitationRequested || "Alternating 2-2-3 schedule (Mon/Tue with Respondent, Wed/Thu with Petitioner, alternating weekends).";
+        data.parentingSchedule = fl?.visitationRequested || "Alternating parenting schedule.";
         data.holidaySchedule = "Alternating major national and religious holidays in odd/even years.";
         data.vacationSchedule = "Two (2) consecutive weeks of uninterrupted vacation time with 30-day advance written notice.";
       } else if (form.code === 'FL-150') {
-        data.incomeEstimation = "Gross monthly income average $6,500. W-2 / Pay stubs attached.";
+        data.incomeEstimation = "Gross monthly income statements attached.";
         data.disputedCosts = "Mortgage, escrow, property taxes, and health coverage liabilities listed.";
       } else if (form.code === 'FL-160') {
-        data.separatePropertyItems = fl?.separatePropertyNotes || "Fidelity pre-marital 401(k); 2011 Toyota Tacoma truck; trade equipment.";
-        data.communityPropertyItems = fl?.communityPropertyNotes || "Fullerton residence equity ($680,000); Chase joint accounts; retirement plan accruals.";
+        data.separatePropertyItems = fl?.separatePropertyNotes || "[SEPARATE_PROPERTY_ITEMS]";
+        data.communityPropertyItems = fl?.communityPropertyNotes || "[COMMUNITY_PROPERTY_ITEMS]";
       } else {
-        data.generalCase = `Matter referenced client file ${client.name} (Case No. ${fl?.caseNumber || '26FL008921'})`;
+        data.generalCase = `Matter referenced client file ${client.name} (Case No. ${fl?.caseNumber || '[CASE_NUMBER]'})`;
       }
 
       setPrefilledData(data);

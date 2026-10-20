@@ -48,6 +48,13 @@ export interface ClientMatterItem {
   vault_dir: string;
   file_count: number;
   files: ClientFileItem[];
+  subfolders?: Array<{
+    id: string;
+    name: string;
+    description: string;
+    file_count: number;
+    files: ClientFileItem[];
+  }>;
 }
 
 export interface ClientFilesRecord {
@@ -63,6 +70,7 @@ export interface ClientFilesRecord {
   state?: string;
   zip?: string;
   a_number?: string;
+  ssn?: string;
   matters_count: number;
   total_files: number;
   matters: ClientMatterItem[];

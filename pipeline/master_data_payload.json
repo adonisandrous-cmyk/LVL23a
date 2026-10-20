@@ -1,33 +1,33 @@
 {
   "client": {
-    "id": "CL-8921",
-    "first_name": "Christopher",
-    "middle_name": "Edward",
-    "last_name": "Guinto",
-    "full_name": "Christopher Edward Guinto",
-    "role": "Respondent",
-    "phone": "(415) 890-2134",
-    "email": "c.guinto@nexuslegal.internal",
+    "id": "",
+    "first_name": "",
+    "middle_name": "",
+    "last_name": "",
+    "full_name": "",
+    "role": "",
+    "phone": "",
+    "email": "",
     "address": {
-      "street": "742 Evergreen Terrace",
-      "city": "San Francisco",
+      "street": "",
+      "city": "",
       "state": "CA",
-      "zip": "94107"
+      "zip": ""
     }
   },
   "opposing_party": {
-    "first_name": "Maria",
-    "middle_name": "Elena",
-    "last_name": "Guinto",
-    "full_name": "Maria Elena Guinto",
-    "role": "Petitioner",
-    "phone": "(415) 771-9920",
-    "email": "m.guinto@baylawcorp.com",
+    "first_name": "",
+    "middle_name": "",
+    "last_name": "",
+    "full_name": "",
+    "role": "",
+    "phone": "",
+    "email": "",
     "address": {
-      "street": "1200 Market Street, Suite 400",
-      "city": "San Francisco",
+      "street": "",
+      "city": "",
       "state": "CA",
-      "zip": "94102"
+      "zip": ""
     }
   },
   "attorney": {
@@ -44,61 +44,44 @@
     "representing": ""
   },
   "case": {
-    "number": "FDI-24-789012",
-    "county": "San Francisco",
-    "court_name": "Superior Court of California, County of San Francisco",
-    "branch_name": "Civic Center Courthouse",
-    "court_street": "400 McAllister Street, Room 103",
-    "court_mailing": "400 McAllister Street, Room 103",
-    "court_city_zip": "San Francisco, CA 94102",
-    "title_petitioner": "MARIA ELENA GUINTO",
-    "title_respondent": "CHRISTOPHER EDWARD GUINTO"
+    "number": "",
+    "county": "",
+    "court_name": "",
+    "branch_name": "",
+    "court_street": "",
+    "court_mailing": "",
+    "court_city_zip": "",
+    "title_petitioner": "",
+    "title_respondent": ""
   },
   "proceeding": {
     "type": "Dissolution of Marriage",
-    "date_of_marriage": "06/14/2014",
-    "date_of_separation": "08/20/2024",
+    "date_of_marriage": "",
+    "date_of_separation": "",
     "filing_party": "Petitioner",
     "responsive_party": "Respondent"
   },
   "request_for_order": {
-    "requested_by": "Petitioner",
+    "requested_by": "",
     "hearing": {
-      "date": "10/15/2026",
-      "time": "09:00 AM",
-      "dept": "Room 404",
-      "address": "400 McAllister Street, San Francisco, CA 94102"
+      "date": "",
+      "time": "",
+      "dept": "",
+      "address": ""
     },
     "orders_requested": {
-      "child_custody": true,
-      "child_visitation": true,
-      "child_support": true,
+      "child_custody": false,
+      "child_visitation": false,
+      "child_support": false,
       "spousal_support": false,
-      "property_control": true,
-      "attorney_fees": true,
+      "property_control": false,
+      "attorney_fees": false,
       "other": false
     },
     "temporary_emergency_orders_requested": false,
-    "facts_in_support": "Petitioner requests modification of physical custody to a shared 2-2-3 schedule pursuant to Family Code Section 3040. Both parties are actively engaged and reside within 3 miles of the minor children's school.",
-    "custody_details": "Joint legal and joint physical custody of the minor children pursuant to the attached FL-311 parenting schedule.",
-    "property_details": "Exclusive temporary possession and use of the 2022 Audi e-tron vehicle pending final property division."
+    "facts_in_support": "",
+    "custody_details": "",
+    "property_details": ""
   },
-  "children": [
-    {
-      "first_name": "Lucas",
-      "last_name": "Guinto",
-      "full_name": "Lucas Guinto",
-      "birthdate": "04/12/2017",
-      "age": 9,
-      "gender": "Male"
-    },
-    {
-      "first_name": "Chloe",
-      "last_name": "Guinto",
-      "full_name": "Chloe Guinto",
-      "birthdate": "09/28/2019",
-      "age": 6,
-      "gender": "Female"
-    }
-  ]
+  "children": []
 }

@@ -47,6 +47,7 @@ export interface Client {
   createdAt: string;
   practiceArea: string;
   fl120Data?: FL120IntakeData;
+  address?: string;
 }
 
 export interface Matter {
@@ -63,6 +64,8 @@ export interface Matter {
   createdAt: string;
   tasks: Task[];
   riskAssessment?: string;
+  courtVenue?: string;
+  opposingParty?: string;
 }
 
 export interface Task {
@@ -202,6 +205,10 @@ export interface ConsultationSession {
   scheduledFor: string;
   status: 'active' | 'scheduled' | 'concluded';
   notes: string;
+  hostAccount?: string; // Attached to level23consulting@gmail.com
+  meetUrl?: string;
+  driveFolderAttachment?: string;
+  calendarEventId?: string;
 }
 
 export interface EvidenceFile {

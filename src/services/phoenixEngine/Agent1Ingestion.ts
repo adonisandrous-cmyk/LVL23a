@@ -67,7 +67,10 @@ export class IngestionAgent {
 
     // 2. Safely read geometry without modifying source
     try {
-      if (mimeType.includes('pdf') || filename.toLowerCase().endsWith('.pdf')) {
+      const isActualPdf = fileBytes && fileBytes.length >= 4 &&
+        fileBytes[0] === 0x25 && fileBytes[1] === 0x50 && fileBytes[2] === 0x44 && fileBytes[3] === 0x46;
+
+      if (isActualPdf) {
         const pdfDoc = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
         pageCount = pdfDoc.getPageCount();
         geometry.pageCount = pageCount;

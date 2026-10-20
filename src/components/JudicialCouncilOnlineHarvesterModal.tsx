@@ -196,16 +196,16 @@ export default function JudicialCouncilOnlineHarvesterModal({
     const template = generateTemplateFromJudicialForm(selectedForm);
     let text = template.templateBody;
 
-    const cName = targetClient?.name || 'Christopher Guinto';
-    const sName = (targetClient as any)?.spouseName || (targetClient as any)?.opposingParty || 'Maria Guinto';
-    const cCounty = (targetClient as any)?.county || 'Orange County';
-    const cCase = (targetClient as any)?.caseNumber || `26FL008921`;
+    const cName = targetClient?.name || '[CLIENT_NAME]';
+    const sName = (targetClient as any)?.spouseName || (targetClient as any)?.opposingParty || targetClient?.fl120Data?.petitionerName || '[OPPOSING_PARTY]';
+    const cCounty = (targetClient as any)?.county || targetClient?.fl120Data?.courtCounty || '[COUNTY]';
+    const cCase = (targetClient as any)?.caseNumber || targetClient?.fl120Data?.caseNumber || '[CASE_NUMBER]';
 
     text = text.replace(/\{\{Client Name\}\}/g, cName);
     text = text.replace(/\{\{Spouse Defendant Name\}\}/g, sName);
     text = text.replace(/\{\{Filing County\}\}/g, cCounty);
     text = text.replace(/\{\{Case Number\}\}/g, cCase);
-    text = text.replace(/\{\{Court Address\}\}/g, '341 The City Drive South, Orange, CA 92868');
+    text = text.replace(/\{\{Court Address\}\}/g, '[COURT_ADDRESS]');
     text = text.replace(/\{\{Attorney Name and Bar Number\}\}/g, 'Alex, Esq. (State Bar 232323)');
     text = text.replace(/\{\{Current Date\}\}/g, new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }));
 

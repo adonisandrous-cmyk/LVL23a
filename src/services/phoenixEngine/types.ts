@@ -58,6 +58,29 @@ export interface DocumentStructureMap {
   analyzedAt: string;
 }
 
+export interface MultiPassVerificationAudit {
+  pass1_initialExtraction: {
+    rawCandidateValue: string | boolean | number;
+    timestamp: string;
+  };
+  pass2_atomicItemAudit: {
+    isolatedItemValue: string | boolean | number;
+    specificFieldType: string;
+    labelsStripped: boolean;
+    compoundDecomposed: boolean;
+  };
+  pass3_surroundingWordsExamination: {
+    surroundingTokensFound: string[];
+    semanticContextMatched: boolean;
+    examinationNotes: string;
+  };
+  pass4_integrityCertification: {
+    certified: boolean;
+    zeroBleedConfirmed: boolean;
+    finalValue: string | boolean | number;
+  };
+}
+
 export interface ExtractedFieldValue {
   fieldId: string;
   canonicalName: string;
@@ -70,6 +93,7 @@ export interface ExtractedFieldValue {
   requiresReview: boolean;
   reviewReason?: string;
   timestamp: string;
+  verificationAudit?: MultiPassVerificationAudit;
   provenance: {
     documentId: string;
     originalSha256: string;

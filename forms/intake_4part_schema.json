@@ -1,0 +1,272 @@
+{
+  "version": "3.0.0",
+  "name": "App-Ready Canonical 4-Part Legal Intake Schema",
+  "description": "Standardized canonical 4-part legal intake schema using exact application key names for zero-loss mapping into California FL and FW court documents.",
+  "canonical_keys": {
+    "Part_1_Personal": {
+      "Client_FirstName": {
+        "type": "string",
+        "required": true,
+        "label": "First Name",
+        "description": "Client legal given name",
+        "maps_to": {
+          "universal": "client.first_name",
+          "FL-100": "FL-100[0].Page1[0].TitlePartyName[0].Petitioner_1_ft[0]",
+          "FL-120": "FL-120[0].Page1[0].TitlePartyName[0].Respondent_ft[0]",
+          "FL-141": "FL-141[0].Page1[0].TitlePartyName[0].Respondent_ft[0]",
+          "FL-200": "FL-200[0].Page1[0].TitlePartyName[0].Petitioner_1_ft[0]",
+          "FW-001": "FW-001[0].Page1[0].PersonAsking[0].Name_ft[0]",
+          "FW-003": "FW-003[0].Page1[0].PersonAsking[0].Name_ft[0]"
+        }
+      },
+      "Client_LastName": {
+        "type": "string",
+        "required": true,
+        "label": "Last Name",
+        "description": "Client legal surname",
+        "maps_to": {
+          "universal": "client.last_name"
+        }
+      },
+      "Client_DOB": {
+        "type": "string",
+        "format": "date",
+        "required": true,
+        "label": "Date of Birth",
+        "description": "YYYY-MM-DD",
+        "maps_to": {
+          "universal": "client.dob",
+          "FL-120": "FL-120[0].Page1[0].Caption_sf[0].ClientDOB",
+          "FW-001": "FW-001[0].Page1[0].PersonAsking[0].DOB_dt[0]"
+        }
+      },
+      "Client_Address_Street": {
+        "type": "string",
+        "required": true,
+        "label": "Street Address",
+        "description": "Client residential street address",
+        "maps_to": {
+          "universal": "client.street",
+          "FL-100": "FL-100[0].Page1[0].AttyInfo[0].AttyStreet_ft[0]",
+          "FL-120": "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].AttyStreet_ft[0]",
+          "FL-141": "FL-141[0].Page1[0].AttyInfo[0].AttyStreet_ft[0]",
+          "FW-001": "FW-001[0].Page1[0].PersonAsking[0].Street_ft[0]",
+          "FW-003": "FW-003[0].Page1[0].PersonAsking[0].Street_ft[0]"
+        }
+      },
+      "Client_Address_CityStateZip": {
+        "type": "string",
+        "required": true,
+        "label": "City, State, Zip",
+        "description": "e.g. San Francisco, CA 94107",
+        "maps_to": {
+          "universal": "client.city_state_zip",
+          "FL-100": "FL-100[0].Page1[0].AttyInfo[0].AttyCity_ft[0]",
+          "FL-120": "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].AttyCity_ft[0]",
+          "FL-141": "FL-141[0].Page1[0].AttyInfo[0].AttyCity_ft[0]",
+          "FW-001": "FW-001[0].Page1[0].PersonAsking[0].City_ft[0]"
+        }
+      },
+      "Client_Phone": {
+        "type": "string",
+        "required": true,
+        "label": "Phone Number",
+        "description": "Primary telephone number",
+        "maps_to": {
+          "universal": "client.phone",
+          "FL-100": "FL-100[0].Page1[0].AttyInfo[0].Phone_ft[0]",
+          "FL-120": "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].Phone_ft[0]",
+          "FL-141": "FL-141[0].Page1[0].AttyInfo[0].Phone_ft[0]",
+          "FW-001": "FW-001[0].Page1[0].PersonAsking[0].Phone_ft[0]"
+        }
+      },
+      "Client_Email": {
+        "type": "string",
+        "format": "email",
+        "required": true,
+        "label": "Email Address",
+        "description": "Client primary email",
+        "maps_to": {
+          "universal": "client.email",
+          "FL-100": "FL-100[0].Page1[0].AttyInfo[0].Email_ft[0]",
+          "FL-120": "FL-120[0].Page1[0].Caption_sf[0].AttyInfo[0].Email_ft[0]",
+          "FL-141": "FL-141[0].Page1[0].AttyInfo[0].Email_ft[0]"
+        }
+      }
+    },
+    "Part_2_Information_About_Other": {
+      "Other_FirstName": {
+        "type": "string",
+        "required": true,
+        "label": "First Name",
+        "description": "Opposing party / co-parent legal given name",
+        "maps_to": {
+          "universal": "opposing_party.first_name"
+        }
+      },
+      "Other_LastName": {
+        "type": "string",
+        "required": true,
+        "label": "Last Name",
+        "description": "Opposing party / co-parent legal surname",
+        "maps_to": {
+          "universal": "opposing_party.last_name"
+        }
+      },
+      "Other_Address_Street": {
+        "type": "string",
+        "required": false,
+        "label": "Street Address",
+        "description": "Opposing party physical address",
+        "maps_to": {
+          "universal": "opposing_party.street",
+          "FL-115": "FL-115[0].Page1[0].ServedParty[0].Address_ft[0]",
+          "FL-141": "FL-141[0].Page1[0].Service[0].ServedAddress_ft[0]"
+        }
+      },
+      "Other_Address_CityStateZip": {
+        "type": "string",
+        "required": false,
+        "label": "City, State, Zip",
+        "description": "Opposing party City, State, ZIP",
+        "maps_to": {
+          "universal": "opposing_party.city_state_zip"
+        }
+      },
+      "Other_Phone": {
+        "type": "string",
+        "required": false,
+        "label": "Phone Number",
+        "description": "Opposing party telephone",
+        "maps_to": {
+          "universal": "opposing_party.phone"
+        }
+      },
+      "Other_Email": {
+        "type": "string",
+        "format": "email",
+        "required": false,
+        "label": "Email Address",
+        "description": "Opposing party electronic contact",
+        "maps_to": {
+          "universal": "opposing_party.email"
+        }
+      }
+    },
+    "Part_3_Court_Info": {
+      "Court_Name": {
+        "type": "string",
+        "required": true,
+        "default": "Superior Court of California",
+        "label": "Court Name",
+        "description": "Court of filing jurisdiction",
+        "maps_to": {
+          "universal": "case.court_name",
+          "FL-100": "FL-100[0].Page1[0].CourtInfo[0].Branch_ft[0]",
+          "FL-120": "FL-120[0].Page1[0].Caption_sf[0].CourtInfo[0].Branch_ft[0]",
+          "FL-141": "FL-141[0].Page1[0].CourtInfo[0].Branch_ft[0]"
+        }
+      },
+      "Court_County": {
+        "type": "string",
+        "required": true,
+        "label": "Court Location / County",
+        "description": "County of venue jurisdiction (e.g. Orange, San Francisco, Los Angeles)",
+        "maps_to": {
+          "universal": "case.county",
+          "FL-100": "FL-100[0].Page1[0].CourtInfo[0].CrtCounty_ft[0]",
+          "FL-120": "FL-120[0].Page1[0].Caption_sf[0].CourtInfo[0].CrtCounty_ft[0]",
+          "FL-141": "FL-141[0].Page1[0].CourtInfo[0].CrtCounty_ft[0]",
+          "FL-300": "FL-300[0].Page1[0].CourtInfo[0].CrtCounty_ft[0]",
+          "FW-001": "FW-001[0].Page1[0].CourtInfo[0].CrtCounty_ft[0]",
+          "FW-003": "FW-003[0].Page1[0].CourtInfo[0].CrtCounty_ft[0]"
+        }
+      },
+      "Court_CaseNumber": {
+        "type": "string",
+        "required": true,
+        "label": "Case Number",
+        "description": "Formatted court docket number (alphanumeric and hyphens only)",
+        "sanitization_rule": "re.sub(r'[^A-Za-z0-9\\-]', '', val).upper()",
+        "maps_to": {
+          "universal": "case.case_number",
+          "FL-100": "FL-100[0].Page1[0].CaseNumber[0].CaseNumber_ft[0]",
+          "FL-120": "FL-120[0].Page1[0].Caption_sf[0].CaseNumber[0].CaseNumber_ft[0]",
+          "FL-141": "FL-141[0].Page1[0].CaseNumber[0].CaseNumber_ft[0]",
+          "FL-200": "FL-200[0].Page1[0].CaseNumber[0].CaseNumber_ft[0]",
+          "FL-300": "FL-300[0].Page1[0].CaseNumber[0].CaseNumber_ft[0]",
+          "FW-001": "FW-001[0].Page1[0].CaseInfo[0].CaseNumber_ft[0]",
+          "FW-003": "FW-003[0].Page1[0].CaseInfo[0].CaseNumber_ft[0]"
+        }
+      },
+      "Court_OpposingParty_FullName": {
+        "type": "string",
+        "required": true,
+        "label": "Opposing Party",
+        "description": "Opposing party title name in court caption",
+        "maps_to": {
+          "universal": "case.title_respondent",
+          "FL-100": "FL-100[0].Page1[0].TitlePartyName[0].Respondent_ft[0]",
+          "FL-120": "FL-120[0].Page1[0].Caption_sf[0].TitlePartyName[0].Petitioner_1_ft[0]",
+          "FL-141": "FL-141[0].Page1[0].TitlePartyName[0].Respondent_ft[0]",
+          "FL-300": "FL-300[0].Page1[0].List1[0].Li1[0].NameOfParty_ft[0]"
+        }
+      },
+      "Court_HearingDates": {
+        "type": "string",
+        "required": false,
+        "label": "Date Info / Hearings",
+        "description": "Scheduled hearing date or appearance timeline",
+        "maps_to": {
+          "universal": "case.hearing_dates",
+          "FL-300": "FL-300[0].Page1[0].List2[0].Li1[0].DateofHearing_dt[0]",
+          "FW-003": "FW-003[0].Page1[0].OrderDecision[0].HearingDate_dt[0]"
+        }
+      },
+      "Court_JudgeName": {
+        "type": "string",
+        "required": false,
+        "label": "Judge's Name",
+        "description": "Assigned Judge, Commissioner, or Department",
+        "maps_to": {
+          "universal": "case.judge_name",
+          "FL-300": "FL-300[0].Page1[0].List2[0].Li1[0].DepartmentNo_tf[0]"
+        }
+      }
+    },
+    "Part_4_Assistance_Seeking_Incident_Details": {
+      "Case_AssistanceType": {
+        "type": "string",
+        "enum": ["Civil Litigation", "Bankruptcy", "Family Law", "Immigration", "Fee Waiver", "Other"],
+        "required": true,
+        "label": "Type of Assistance",
+        "description": "Dropdown or short text matter classification",
+        "maps_to": {
+          "universal": "case.case_type"
+        }
+      },
+      "Case_IncidentDescription": {
+        "type": "string",
+        "required": true,
+        "label": "What Happened?",
+        "description": "Detailed chronological narrative and dispute facts",
+        "maps_to": {
+          "universal": "case.facts_in_support",
+          "FL-300": "FL-300[0].Page4[0].Item10Facts_ft[0]",
+          "FW-001": "FW-001[0].Page2[0].FinancialStatement[0].Notes_ft[0]"
+        }
+      },
+      "Case_FileUpload": {
+        "type": "string",
+        "format": "uri-or-base64",
+        "required": false,
+        "label": "Supporting Documents",
+        "description": "Client intake attachments (.pdf/.docx) routed to matter vault",
+        "maps_to": {
+          "universal": "client_files.attachment",
+          "vault_destination": "output/<case_type>/<case_number>/06_Client_Exhibits_and_Intake/"
+        }
+      }
+    }
+  }
+}

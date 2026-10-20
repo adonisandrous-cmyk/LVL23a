@@ -33,9 +33,13 @@ export class DocumentAnalysisAgent {
     let isScannedOrImage = false;
 
     try {
-      const pdfDoc = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
-      const form = pdfDoc.getForm();
-      const fields = form ? form.getFields() : [];
+      const isActualPdf = fileBytes && fileBytes.length >= 4 &&
+        fileBytes[0] === 0x25 && fileBytes[1] === 0x50 && fileBytes[2] === 0x44 && fileBytes[3] === 0x46;
+
+      if (isActualPdf) {
+        const pdfDoc = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
+        const form = pdfDoc.getForm();
+        const fields = form ? form.getFields() : [];
 
       if (fields.length > 0) {
         hasNativeAcroForms = true;
@@ -88,7 +92,8 @@ export class DocumentAnalysisAgent {
           });
         });
       }
-    } catch (err) {
+    }
+  } catch (err) {
       console.warn('DocumentAnalysisAgent: AcroForm inspection note:', err);
     }
 

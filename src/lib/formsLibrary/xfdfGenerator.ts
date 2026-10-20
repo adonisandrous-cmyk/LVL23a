@@ -5,6 +5,7 @@
 
 import { UniversalLegalData } from './universalSchema';
 import { CourtFormDefinition } from './formsCatalog';
+import { isolateAtomicFieldItem } from '../../services/phoenixEngine/Agent3Extraction';
 
 export interface GeneratedXfdfResult {
   formCode: string;
@@ -36,7 +37,9 @@ export function generateXfdf(
 
   for (const [universalKey, pdfFieldName] of Object.entries(formDef.fieldMap)) {
     const rawVal = universalData[universalKey];
-    const valString = rawVal !== undefined && rawVal !== null ? String(rawVal) : '';
+    // Enforce atomic single-item placement (e.g., first name: Aurora; last name: Ramos)
+    const atomicAudit = isolateAtomicFieldItem(rawVal, universalKey, pdfFieldName);
+    const valString = atomicAudit.isolatedValue !== undefined && atomicAudit.isolatedValue !== null ? String(atomicAudit.isolatedValue) : '';
     mappedFields.push({
       universalKey,
       pdfFieldName,

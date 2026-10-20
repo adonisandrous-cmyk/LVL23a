@@ -1,0 +1,83 @@
+{
+  "form_id": "FL-200",
+  "jurisdiction": "California Judicial Council",
+  "title": "Petition to Establish Parental Relationship",
+  "revision": "Rev. January 1, 2020",
+  "description": "Declarative mapping dictionary linking 4-Part Intake / Master Standardized JSON schema to California Judicial Council FL-200 AcroForm targets.",
+  "fields": {
+    "FL-200[0].Page1[0].AttyInfo[0].AttyName_ft[0]": "attorney.name",
+    "FL-200[0].Page1[0].AttyInfo[0].BarNo_ft[0]": "attorney.bar_number",
+    "FL-200[0].Page1[0].AttyInfo[0].AttyFirm_ft[0]": "attorney.firm_name",
+    "FL-200[0].Page1[0].AttyInfo[0].AttyStreet_ft[0]": "attorney.street",
+    "FL-200[0].Page1[0].AttyInfo[0].AttyCity_ft[0]": "attorney.city",
+    "FL-200[0].Page1[0].AttyInfo[0].AttyState_ft[0]": "attorney.state",
+    "FL-200[0].Page1[0].AttyInfo[0].AttyZip_ft[0]": "attorney.zip",
+    "FL-200[0].Page1[0].AttyInfo[0].Phone_ft[0]": "attorney.phone",
+    "FL-200[0].Page1[0].AttyInfo[0].Fax_ft[0]": "attorney.fax",
+    "FL-200[0].Page1[0].AttyInfo[0].Email_ft[0]": "attorney.email",
+    "FL-200[0].Page1[0].AttyInfo[0].AttyFor_ft[0]": "attorney.representing",
+
+    "FL-200[0].Page1[0].CourtInfo[0].CrtCounty_ft[0]": {
+      "type": "format_string",
+      "source": "case.county",
+      "case": "upper"
+    },
+    "FL-200[0].Page1[0].CourtInfo[0].Street_ft[0]": "case.court_street",
+    "FL-200[0].Page1[0].CourtInfo[0].MailingAdd_ft[0]": "case.court_mailing",
+    "FL-200[0].Page1[0].CourtInfo[0].CityZip_ft[0]": "case.court_city_zip",
+    "FL-200[0].Page1[0].CourtInfo[0].Branch_ft[0]": "case.branch_name",
+
+    "FL-200[0].Page1[0].TitlePartyName[0].Petitioner_1_ft[0]": "client.full_name",
+    "FL-200[0].Page1[0].TitlePartyName[0].Respondent_ft[0]": "opposing_party.full_name",
+    "FL-200[0].Page1[0].CaseNumber[0].CaseNumber_ft[0]": "case.case_number",
+
+    "FL-200[0].Page1[0].PetitionerStatus[0].Mother_cb[0]": {
+      "type": "checkbox",
+      "source": "parentage.petitioner_relationship",
+      "equals": "Mother"
+    },
+    "FL-200[0].Page1[0].PetitionerStatus[0].Father_cb[0]": {
+      "type": "checkbox",
+      "source": "parentage.petitioner_relationship",
+      "equals": "Father"
+    },
+
+    "FL-200[0].Page1[0].ChildrenTable[0].Child1Name_ft[0]": "children.0.full_name",
+    "FL-200[0].Page1[0].ChildrenTable[0].Child1DOB_dt[0]": "children.0.birthdate",
+    "FL-200[0].Page1[0].ChildrenTable[0].Child1Age_ft[0]": "children.0.age",
+    "FL-200[0].Page1[0].ChildrenTable[0].Child1BirthPlace_ft[0]": "children.0.birthplace",
+    "FL-200[0].Page1[0].ChildrenTable[0].Child2Name_ft[0]": "children.1.full_name",
+    "FL-200[0].Page1[0].ChildrenTable[0].Child2DOB_dt[0]": "children.1.birthdate",
+    "FL-200[0].Page1[0].ChildrenTable[0].Child2Age_ft[0]": "children.1.age",
+
+    "FL-200[0].Page2[0].CaseNumber[0].CaseNumber_ft[0]": "case.case_number",
+    "FL-200[0].Page2[0].OrdersRequested[0].CustodyLegal_cb[0]": {
+      "type": "checkbox",
+      "source": "parentage.orders_requested.custody_legal",
+      "checked_value": "/Yes"
+    },
+    "FL-200[0].Page2[0].OrdersRequested[0].CustodyPhysical_cb[0]": {
+      "type": "checkbox",
+      "source": "parentage.orders_requested.custody_physical",
+      "checked_value": "/Yes"
+    },
+    "FL-200[0].Page2[0].OrdersRequested[0].ChildSupport_cb[0]": {
+      "type": "checkbox",
+      "source": "parentage.orders_requested.child_support",
+      "checked_value": "/Yes"
+    },
+    "FL-200[0].Page2[0].OrdersRequested[0].GeneticTesting_cb[0]": {
+      "type": "checkbox",
+      "source": "parentage.orders_requested.genetic_testing",
+      "checked_value": "/Yes"
+    },
+    "FL-200[0].Page2[0].OrdersRequested[0].BirthExpenses_cb[0]": {
+      "type": "checkbox",
+      "source": "parentage.orders_requested.pregnancy_expenses",
+      "checked_value": "/Yes"
+    },
+    "FL-200[0].Page3[0].CaseNumber[0].CaseNumber_ft[0]": "case.case_number",
+    "FL-200[0].Page3[0].SignatureDate_dt[0]": "parentage.filing_date",
+    "FL-200[0].Page3[0].Signature_ft[0]": "client.full_name"
+  }
+}

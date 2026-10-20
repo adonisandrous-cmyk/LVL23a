@@ -59,20 +59,19 @@ export class AbbyyFlexiCaptureAssociate {
    * Maps extracted ABBYY fields directly into Universal Legal Schema
    */
   public static mapToUniversalSchema(task: AbbyyTaskItem) {
-    // Determine client name
-    const rawClient = task.fields.clientName || task.fields.description || 'Maria Lopez';
-    const nameParts = rawClient.replace(/^(Payment|Invoice|Matter for)\s+/i, '').trim().split(/\s+/);
-    const firstName = nameParts[0] || 'Maria';
-    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : 'Lopez';
+    // Determine client name dynamically without hardcoding
+    const rawClient = task.fields.clientName || (task.fields.description?.replace(/^(Payment|Invoice|Matter for|Legal Representation -)\s+/i, '').trim()) || '';
+    const nameParts = rawClient ? rawClient.trim().split(/\s+/) : [];
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
 
     // Format address from location
-    const location = task.fields.location || 'Las Vegas, NV 89101';
     const address = task.fields.description?.includes('Street')
       ? task.fields.description
-      : `123 Main St, ${location}`;
+      : (task.fields.location || '');
 
     // Normalize date (YYYY-MM-DD)
-    let dob = '1990-05-12';
+    let dob = '';
     if (task.fields.receivedDate && /^\d{2}\/\d{2}\/\d{2}$/.test(task.fields.receivedDate)) {
       const [d, m, y] = task.fields.receivedDate.split('/');
       dob = `20${y}-${m}-${d}`;
@@ -83,11 +82,11 @@ export class AbbyyFlexiCaptureAssociate {
       client_last_name: lastName,
       client_DOB: dob,
       client_address: address,
-      case_number: task.fields.invoiceNo || task.fields.jobNumber || '23-12345',
-      court_name: task.fields.courtName || 'Superior Court of California',
-      case_type: 'Family Law / Matter Billing',
-      amount_total: task.fields.invoiceAmount,
-      tax_amount: task.fields.gstAmount,
+      case_number: task.fields.invoiceNo || task.fields.jobNumber || '',
+      court_name: task.fields.courtName || '',
+      case_type: 'Family Law / Dissolution of Marriage',
+      amount_total: task.fields.invoiceAmount || '',
+      tax_amount: task.fields.gstAmount || '',
       batch_id: task.batchName,
       work_id: task.fields.workId
     };
