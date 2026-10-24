@@ -350,9 +350,9 @@ export default function LegalFormsTemplateManager({
     const handleTemplateUpdated = (e: any) => {
       if (e.detail?.template) {
         setAllTemplates(prev => {
-          const exists = prev.find(t => t.id === e.detail.template.id);
+          const exists = prev.find(t => t?.id === e.detail?.template?.id);
           if (exists) {
-            return prev.map(t => t.id === e.detail.template.id ? e.detail.template : t);
+            return prev.map(t => t?.id === e.detail?.template?.id ? e.detail.template : t);
           }
           return [e.detail.template, ...prev];
         });
@@ -732,7 +732,7 @@ export default function LegalFormsTemplateManager({
             <select
               value={selectedClient?.id || ''}
               onChange={(e) => {
-                const client = clients.find(c => c.id === e.target.value);
+                const client = (clients || []).find(c => c?.id === e.target.value);
                 if (client) setSelectedClient(client);
               }}
               className="bg-[#0b1322] border border-[#1e293b] text-teal-300 font-mono text-xs px-2 py-1 outline-none focus:border-amber-500 cursor-pointer max-w-[200px]"
@@ -1277,7 +1277,7 @@ export default function LegalFormsTemplateManager({
                   <select
                     value={selectedClient?.id || ''}
                     onChange={(e) => {
-                      const found = clients.find(c => c.id === e.target.value);
+                      const found = (clients || []).find(c => c?.id === e.target.value);
                       if (found) handleClientSelectInModal(found);
                     }}
                     className="w-full bg-[#070b13] border border-[#1e293b] text-xs font-mono text-slate-200 px-2.5 py-2 focus:border-teal-500 outline-none cursor-pointer"
@@ -1729,7 +1729,7 @@ export default function LegalFormsTemplateManager({
                   <select
                     value={selectedClient?.id || ''}
                     onChange={(e) => {
-                      const found = clients.find(c => c.id === e.target.value);
+                      const found = (clients || []).find(c => c?.id === e.target.value);
                       if (found) {
                         setSelectedClient(found);
                         setShowSampleData(true);
@@ -2093,7 +2093,7 @@ export default function LegalFormsTemplateManager({
                 <select
                   value={selectedClient?.id || ''}
                   onChange={(e) => {
-                    const client = clients.find(c => c.id === e.target.value);
+                    const client = (clients || []).find(c => c?.id === e.target.value);
                     if (client) setSelectedClient(client);
                   }}
                   className="bg-[#050811] border border-[#1e293b] text-teal-300 font-mono text-xs px-2.5 py-1.5 outline-none focus:border-amber-500 cursor-pointer max-w-[220px]"

@@ -88,7 +88,7 @@ export const AssignExtractionTaskModal: React.FC<AssignExtractionTaskModalProps>
 
   if (!isOpen) return null;
 
-  const currentAgent = AGENTS.find(a => a.id === selectedAgentId) || AGENTS[0];
+  const currentAgent = (AGENTS || []).find(a => a?.id === selectedAgentId) || AGENTS[0];
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

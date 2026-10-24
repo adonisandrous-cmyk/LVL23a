@@ -167,7 +167,7 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
   const handleAssignVoiceToModel = (modelId: string, voice: VoiceOption) => {
     const updated = saveModelVoiceAssignment(modelId, voice.id, voice.name, voice.provider);
     setAssignments({ ...updated });
-    const targetModel = FIRM_AI_MODELS.find(m => m.id === modelId);
+    const targetModel = (FIRM_AI_MODELS || []).find(m => m?.id === modelId);
     setAssignmentNotice(`✓ Assigned ${voice.name} (${voice.provider} Female) to ${targetModel?.name || 'Model'}`);
     setActiveAssignmentTargetModelId(null);
     setTimeout(() => setAssignmentNotice(null), 4000);
@@ -186,7 +186,7 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
     setActiveProvider(assignment.provider === 'ElevenLabs' ? 'elevenlabs' : 'studio');
 
     // Find the voice option
-    const matchedVoice = ALL_FEMALE_VOICES.find(v => v.id === assignment.voiceId);
+    const matchedVoice = (ALL_FEMALE_VOICES || []).find(v => v?.id === assignment.voiceId);
     if (matchedVoice && matchedVoice.previewUrl) {
       handleAuditionVoice(matchedVoice);
       setStatusMessage(`Auditioning ${model.name}'s assigned voice (${matchedVoice.name}) using verified cloud sample.`);
@@ -308,12 +308,12 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
   };
 
   const handleSynthesizeSpeak = () => {
-    const currentVoice = (activeProvider === 'elevenlabs' ? elevenLabsVoices : FEMALE_STUDIO_VOICES).find(v => v.id === selectedVoiceId);
+    const currentVoice = (activeProvider === 'elevenlabs' ? elevenLabsVoices : FEMALE_STUDIO_VOICES).find(v => v?.id === selectedVoiceId);
     triggerSpeechSynthesis(text, selectedVoiceId, currentVoice?.provider || 'ElevenLabs');
   };
 
   const currentVoiceList = activeProvider === 'elevenlabs' ? elevenLabsVoices : FEMALE_STUDIO_VOICES;
-  const selectedVoiceName = ALL_FEMALE_VOICES.find(v => v.id === selectedVoiceId)?.name || 'Sarah';
+  const selectedVoiceName = (ALL_FEMALE_VOICES || []).find(v => v?.id === selectedVoiceId)?.name || 'Sarah';
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto font-mono text-slate-200">
@@ -489,7 +489,7 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
               provider: model.defaultProvider,
               gender: 'Female'
             };
-            const matchedVoice = ALL_FEMALE_VOICES.find(v => v.id === assignment.voiceId);
+            const matchedVoice = (ALL_FEMALE_VOICES || []).find(v => v?.id === assignment.voiceId);
 
             return (
               <div
@@ -525,7 +525,7 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
                         value={assignment.voiceId}
                         onChange={(e) => {
                           const newVoiceId = e.target.value;
-                          const newVoice = ALL_FEMALE_VOICES.find(v => v.id === newVoiceId);
+                          const newVoice = (ALL_FEMALE_VOICES || []).find(v => v?.id === newVoiceId);
                           if (newVoice) {
                             handleAssignVoiceToModel(model.id, newVoice);
                           }

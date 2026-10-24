@@ -1,26 +1,38 @@
 import React from 'react';
-import { ArrowRight, Briefcase, FileText, Research, Sparkles } from 'lucide-react';
+import { ArrowRight, Briefcase, FileText, Search as Research, Sparkles } from 'lucide-react';
 import { Client, Matter } from '../types';
 
 export interface PhoenixModularStudioProps {
   clients?: Client[];
   matters?: Matter[];
   onNavigateTab?: (tab: string) => void;
-  onOpenOfficialForm?: (formCode: 'FL-120' | 'FL-105' | 'FL-311' | 'FL-160', clientName?: string) => void;
+  onOpenOfficialForm?: (formCode?: string, clientName?: string) => void;
+  onOpenPhoenixWorkspace?: () => void;
+  onOpenIntakeGenerator?: () => void;
+  onOpenOmniUpload?: () => void;
 }
 
 export const PhoenixModularStudio: React.FC<PhoenixModularStudioProps> = ({
   clients = [],
   matters = [],
   onNavigateTab,
-  onOpenOfficialForm
+  onOpenOfficialForm,
+  onOpenPhoenixWorkspace,
+  onOpenIntakeGenerator,
+  onOpenOmniUpload
 }) => {
   const quickActions = [
     {
       label: 'Client intake',
       detail: `${clients.length} active clients`,
       icon: Briefcase,
-      onClick: () => onNavigateTab?.('clients')
+      onClick: () => {
+        if (onOpenIntakeGenerator) {
+          onOpenIntakeGenerator();
+        } else {
+          onNavigateTab?.('clients');
+        }
+      }
     },
     {
       label: 'Matter workspace',
@@ -30,9 +42,15 @@ export const PhoenixModularStudio: React.FC<PhoenixModularStudioProps> = ({
     },
     {
       label: 'Draft and file',
-      detail: 'Generate forms and track workflow',
+      detail: 'Template Library & document drafting',
       icon: Sparkles,
-      onClick: () => onOpenOfficialForm?.('FL-120')
+      onClick: () => {
+        if (onOpenPhoenixWorkspace) {
+          onOpenPhoenixWorkspace();
+        } else {
+          onNavigateTab?.('template_library');
+        }
+      }
     },
     {
       label: 'Research desk',

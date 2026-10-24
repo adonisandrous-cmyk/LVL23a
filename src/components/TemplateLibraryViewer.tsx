@@ -304,19 +304,19 @@ export const TemplateLibraryViewer: React.FC<TemplateLibraryViewerProps> = ({
 
   // Active Client
   const activeClient = useMemo(() => {
-    return clients.find(c => c.id === selectedClientId) || clients[0] || null;
+    return (clients || []).find(c => c?.id === selectedClientId) || clients?.[0] || null;
   }, [clients, selectedClientId]);
 
   // Active Matter for Active Client
   const activeMatter = useMemo(() => {
-    if (!activeClient) return matters[0] || null;
-    return matters.find(m => m.clientId === activeClient.id) || matters[0] || null;
+    if (!activeClient) return (matters || [])[0] || null;
+    return (matters || []).find(m => m?.clientId === activeClient?.id) || (matters || [])[0] || null;
   }, [activeClient, matters]);
 
   // Active Form Metadata
   const activeForm = useMemo(() => {
     return (
-      UNIVERSAL_TEMPLATES.find(f => f.code === selectedFormCode) ||
+      UNIVERSAL_TEMPLATES.find(f => f?.code === selectedFormCode) ||
       UNIVERSAL_TEMPLATES[0]
     );
   }, [selectedFormCode]);

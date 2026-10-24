@@ -112,11 +112,11 @@ export const TemplateUploader: React.FC<TemplateUploaderProps> = ({
 
   // Active Client & Matter Records for live field value preview
   const activeClient = useMemo(() => {
-    return clients.find(c => c.id === selectedClientId) || clients[0] || null;
+    return (clients || []).find(c => c?.id === selectedClientId) || clients?.[0] || null;
   }, [clients, selectedClientId]);
 
   const activeMatter = useMemo(() => {
-    return matters.find(m => m.id === selectedMatterId) || matters[0] || null;
+    return (matters || []).find(m => m?.id === selectedMatterId) || matters?.[0] || null;
   }, [matters, selectedMatterId]);
 
   // Derive client record value for a canonical key

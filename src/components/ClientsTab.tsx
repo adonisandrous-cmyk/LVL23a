@@ -2358,7 +2358,7 @@ END:VCARD`;
                          <FL120ResponseDossier
                            client={selectedClient}
                            fl120Data={selectedClient.fl120Data}
-                           matter={matters.find(m => m.clientId === selectedClient.id)}
+                           matter={matters.find(m => m?.clientId === selectedClient.id)}
                            matters={matters}
                            onAddGeneratedDoc={onAddGeneratedDoc}
                            onNavigateToTab={onNavigateToTab}

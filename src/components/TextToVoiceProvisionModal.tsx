@@ -172,7 +172,7 @@ export const TextToVoiceProvisionModal: React.FC<TextToVoiceProvisionModalProps>
     setIsLoading(true);
     setErrorMessage(null);
 
-    const voiceMeta = VOICE_ROSTER.find(v => v.id === selectedVoice);
+    const voiceMeta = (VOICE_ROSTER || []).find(v => v?.id === selectedVoice);
 
     try {
       // 1. Attempt Gemini 3.8 Flash Lite TTS endpoint

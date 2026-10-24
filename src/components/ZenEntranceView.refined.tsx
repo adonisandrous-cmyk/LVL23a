@@ -178,7 +178,7 @@ export default function ZenEntranceViewRefined({
     }
   };
 
-  const activeAgentName = ZEN_AGENTS.find((agent) => agent.id === selectedAgent)?.name || selectedAgent;
+  const activeAgentName = (ZEN_AGENTS || []).find((agent) => agent?.id === selectedAgent)?.name || selectedAgent;
 
   return (
     <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col overflow-hidden">

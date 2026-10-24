@@ -100,7 +100,7 @@ export default function MattersTab({
 
   // Selected Client Object
   const selectedClient = useMemo(() => {
-    return clients.find(c => c.id === selectedClientId) || clients[0] || null;
+    return (clients || []).find(c => c?.id === selectedClientId) || clients?.[0] || null;
   }, [clients, selectedClientId]);
 
   // Selected Practice Type for Create / Assemble Pipeline

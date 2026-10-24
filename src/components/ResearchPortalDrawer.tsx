@@ -122,7 +122,7 @@ Signature of Declarant / Party
 
       saveHarvestedTemplate(template);
 
-      const targetClient = clients.find(c => c.id === selectedClientForForm) || clients[0];
+      const targetClient = (clients || []).find(c => c?.id === selectedClientForForm) || clients?.[0];
       const schema = {
         id: `schema-${form.code.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
         formNumber: form.code,
@@ -219,7 +219,7 @@ Signature of Declarant / Party
     setIsPrefilling(true);
     
     setTimeout(() => {
-      const client = clients.find(c => c.id === selectedClientForForm);
+      const client = (clients || []).find(c => c?.id === selectedClientForForm);
       if (!client) return;
 
       const fl = (client as any).fl120Data;
@@ -1341,7 +1341,7 @@ Signature of Declarant / Party
                                     <div className="flex items-center justify-between border-b border-slate-850 pb-1.5">
                                       <h6 className="text-[9px] text-[#dfb76c] font-mono uppercase font-bold tracking-wider flex items-center gap-1">
                                         <Check className="w-3.5 h-3.5 text-teal-400" />
-                                        <span>Synthesized Fields Map ({clients.find(c => c.id === selectedClientForForm)?.name})</span>
+                                        <span>Synthesized Fields Map ({(clients || []).find(c => c?.id === selectedClientForForm)?.name || 'Client'})</span>
                                       </h6>
                                       <span className="text-[8px] text-slate-500 font-mono uppercase">{prefilledData.timestamp}</span>
                                     </div>

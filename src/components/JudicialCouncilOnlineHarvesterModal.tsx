@@ -308,7 +308,7 @@ export default function JudicialCouncilOnlineHarvesterModal({
             <select
               value={targetClient?.id || ''}
               onChange={(e) => {
-                const found = clients.find(c => c.id === e.target.value);
+                const found = (clients || []).find(c => c?.id === e.target.value);
                 if (found) setTargetClient(found);
               }}
               className="bg-[#080d16] border border-[#1e293b] text-slate-200 px-2 py-1 text-xs outline-none"

@@ -570,7 +570,7 @@ CONFIDENTIAL - CALIFORNIA JUDICIAL COUNCIL AUTOMATION PIPELINE (PHOENIX ENGINE)
                   <select
                     value={selectedClient?.id || ''}
                     onChange={(e) => {
-                      const found = clients.find(c => c.id === e.target.value);
+                      const found = (clients || []).find(c => c?.id === e.target.value);
                       if (found) setSelectedClient(found);
                     }}
                     className="bg-[#050811] border border-slate-700 rounded-lg text-xs px-2.5 py-1 text-slate-200 focus:outline-none focus:border-amber-400"

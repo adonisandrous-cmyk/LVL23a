@@ -169,14 +169,76 @@ export default function DocumentsTab({
   // Template Category Filter State
   const [templateCategoryFilter, setTemplateCategoryFilter] = useState<string>('all');
 
-  // Form templates deleted per user directive
-  const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('level23_templates_v2');
+  // Clean universal templates without state-specific form codes or instructional references
+  const DEFAULT_UNIVERSAL_TEMPLATES: DocumentTemplate[] = [
+    {
+      id: 'temp-1',
+      name: 'General Family Law Intake Questionnaire',
+      category: 'Family Law',
+      description: 'Universal intake and fact-gathering questionnaire for marital and domestic relations matters.',
+      defaultQuestions: [
+        'Date of Marriage',
+        'Separation Date',
+        'Spousal Support goals',
+        'Child Custody details',
+        'Separate vs Community Property description'
+      ]
+    },
+    {
+      id: 'temp-2',
+      name: 'Factual Background & Asylee Statement',
+      category: 'Immigration',
+      description: 'Sworn statement outlining factual incidents, timeline of fear, and identity documentation.',
+      defaultQuestions: [
+        'Country of Origin',
+        'Specific threat occurrences',
+        'Political/Social group affiliation',
+        'Fear of future persecution description',
+        'Previous local police response details'
+      ]
+    },
+    {
+      id: 'temp-3',
+      name: 'Debts & Assets Disclosure Schedule',
+      category: 'Bankruptcy',
+      description: 'Itemized schedule detailing secured and unsecured obligations, property valuation, and monthly income.',
+      defaultQuestions: [
+        'Total Unsecured Debt amount',
+        'Primary Assets description',
+        'Monthly Household Income',
+        'Explanation of insolvency cause',
+        'Secured creditor information'
+      ]
+    },
+    {
+      id: 'temp-4',
+      name: 'Mutual Non-Disclosure & Practice Agreement',
+      category: 'General Practice',
+      description: 'Bilateral confidentiality and non-disclosure agreement protecting proprietary materials and work product.',
+      defaultQuestions: [
+        'Disclosing Party Name',
+        'Receiving Party Name',
+        'Confidentiality Term duration',
+        'Permitted disclosure purpose',
+        'State Governing Jurisdiction'
+      ]
     }
-  }, []);
+  ];
+
+  const [templates, setTemplates] = useState<DocumentTemplate[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('level23_templates_v2');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {
+        // fallback
+      }
+    }
+    return DEFAULT_UNIVERSAL_TEMPLATES;
+  });
 
   // Scanned paperwork presets corresponding to templates for testing immediately
   const ocrPresets: OCRPreset[] = [
@@ -270,7 +332,7 @@ Law governance: Governed by the rules of California state, County of San Francis
   // -----------------------------------------------------------------------------------
   // SCREEN 1: CLIENT INTAKE ASSEMBLY STATES
   // -----------------------------------------------------------------------------------
-  const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate>(templates[0]);
+  const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(() => templates[0] || null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(clients[0] || null);
   const [formAnswers, setFormAnswers] = useState<Record<string, string>>({});
   const [isCompiling, setIsCompiling] = useState(false);
@@ -1212,7 +1274,7 @@ Law governance: Governed by the rules of California state, County of San Francis
             body: JSON.stringify({
               imageBase64: cleanBase64,
               mimeType: file.type,
-              keysToExtract: selectedTemplate.defaultQuestions
+              keysToExtract: selectedTemplate?.defaultQuestions || []
             })
           });
 
@@ -1239,8 +1301,8 @@ Law governance: Governed by the rules of California state, County of San Francis
   };
 
   const runLocalExtractionFallback = () => {
-    const matchingPreset = ocrPresets.find(p => p.templateId === selectedTemplate.id) || ocrPresets[0];
-    setFormAnswers(matchingPreset.extracted);
+    const matchingPreset = ocrPresets.find(p => p.templateId === selectedTemplate?.id) || ocrPresets[0];
+    setFormAnswers(matchingPreset?.extracted || {});
     setOcrCompletedPreset("custom-uploaded-fallback");
   };
 
@@ -1504,9 +1566,9 @@ Law governance: Governed by the rules of California state, County of San Francis
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          templateName: selectedTemplate.name,
+          templateName: selectedTemplate?.name || 'Document Draft',
           answers: formAnswers,
-          clientName: selectedClient.name,
+          clientName: selectedClient?.name || 'Client',
           model: draftingModel
         })
       });
@@ -1516,17 +1578,17 @@ Law governance: Governed by the rules of California state, County of San Francis
         setCompiledText(data.documentText);
         onAddGeneratedDoc({
           id: `doc-${Date.now()}`,
-          title: selectedTemplate.name,
-          clientId: selectedClient.id,
-          clientName: selectedClient.name,
-          templateId: selectedTemplate.id,
+          title: selectedTemplate?.name || 'Document Draft',
+          clientId: selectedClient?.id || '',
+          clientName: selectedClient?.name || 'Client',
+          templateId: selectedTemplate?.id || 'temp-default',
           content: data.documentText,
           generatedAt: new Date().toISOString()
         });
       } else {
         setCompiledText(`# ⚖️ AUTOMATED CASE MEMORANDUM & DRAFT
-## Template: ${selectedTemplate.name}
-**Prepared For**: ${selectedClient.name}
+## Template: ${selectedTemplate?.name || 'Document Draft'}
+**Prepared For**: ${selectedClient?.name || 'Client'}
 
 ### SUMMARY OF INTENDED REMEDIES
 Pursuant to client instructions, this memorandum outlines preliminary evidentiary matters and requested structural support remedies. The division of resources must reflect actual certified filings.
@@ -1537,8 +1599,8 @@ Respectfully submitted,
       }
     } catch {
       setCompiledText(`# ⚖️ AUTOMATED CASE MEMORANDUM & DRAFT
-## Template: ${selectedTemplate.name}
-**Prepared For**: ${selectedClient.name}
+## Template: ${selectedTemplate?.name || 'Document Draft'}
+**Prepared For**: ${selectedClient?.name || 'Client'}
 
 ### SUMMARY OF INTENDED REMEDIES
 Pursuant to client instructions, this memorandum outlines preliminary evidentiary matters and requested structural support remedies. The division of resources must reflect actual certified filings.
@@ -1784,7 +1846,7 @@ Respectfully submitted,
     }, 1400);
   };
 
-  const activePreset = ocrPresets.find(p => p.templateId === selectedTemplate.id);
+  const activePreset = ocrPresets.find(p => p.templateId === selectedTemplate?.id);
 
   return (
     <div id="documents-tab" className="flex flex-col gap-4 h-[calc(100vh-140px)]">
@@ -2102,7 +2164,7 @@ Respectfully submitted,
                         setOcrCompletedPreset(null);
                       }}
                       className={`w-full text-left p-3 rounded-none border-2 flex flex-col gap-1 transition-all ${
-                        selectedTemplate.id === temp.id && !viewingDoc
+                        selectedTemplate?.id === temp.id && !viewingDoc
                           ? 'bg-[#0f242a] border-teal-500 text-teal-300 shadow-[3px_3px_0px_#14b8a6]'
                           : 'bg-transparent border-[#1e293b] text-slate-300 hover:border-[#334155] hover:bg-[#0d131f]/40'
                       }`}
@@ -2241,12 +2303,12 @@ Respectfully submitted,
                     className="flex-1 flex flex-col h-full"
                   >
                     <DocumentSplitPreview
-                      title={selectedTemplate.name}
+                      title={selectedTemplate?.name || 'Document Draft'}
                       clientName={selectedClient?.name}
                       content={compiledText}
                       generatedAt={new Date().toLocaleDateString()}
                       version={1}
-                      category={selectedTemplate.category}
+                      category={selectedTemplate?.category || 'General'}
                       onClose={() => setCompiledText(null)}
                       onSave={(updatedContent) => {
                         setCompiledText(updatedContent);
@@ -2267,15 +2329,15 @@ Respectfully submitted,
                     <div className="p-5.5 bg-[#0d1624] border-b border-[#1e293b] space-y-1">
                       <div className="flex items-center gap-2 select-none">
                         <span className="text-[10px] uppercase font-mono text-slate-500 bg-[#090d16] px-2 py-0.5 border border-[#1e293b]">
-                          {selectedTemplate.category} Pleading
+                          {selectedTemplate?.category || 'General'} Pleading
                         </span>
                         <span className="text-[10px] uppercase font-mono text-[#10b981] bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1 font-bold animate-pulse">
                           <Scan className="w-3 h-3 text-emerald-400" />
                           OCR SCANNERS ARMED
                         </span>
                       </div>
-                      <h3 className="text-sm font-extrabold text-white font-heading uppercase tracking-wide">{selectedTemplate.name}</h3>
-                      <p className="text-[11px] text-slate-400 leading-normal">{selectedTemplate.description}</p>
+                      <h3 className="text-sm font-extrabold text-white font-heading uppercase tracking-wide">{selectedTemplate?.name || 'Select a Template'}</h3>
+                      <p className="text-[11px] text-slate-400 leading-normal">{selectedTemplate?.description || 'Select a template from the library or create a custom pleading.'}</p>
                     </div>
 
                     <form onSubmit={handleSynthesize} className="p-5 flex-1 overflow-y-auto space-y-5">
@@ -2401,7 +2463,7 @@ Respectfully submitted,
                             <FileCode className="w-4 h-4 text-teal-400" />
                             Pleading Questionnaire Details
                           </h4>
-                          {selectedTemplate.defaultQuestions.map((question, idx) => (
+                          {(selectedTemplate?.defaultQuestions || []).map((question, idx) => (
                             <div key={idx} className="space-y-1">
                               <label className="block text-xs font-mono text-slate-400 font-bold uppercase">
                                 {question} <span className="text-teal-400">*</span>

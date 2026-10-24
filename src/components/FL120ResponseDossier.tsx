@@ -110,7 +110,7 @@ function resolveInitialMatterType(
   }
 
   // Fallback to associated matter in client matters
-  const associatedMatter = matters?.find(m => m.clientId === client?.id);
+  const associatedMatter = matters?.find(m => m?.clientId === client?.id);
   if (associatedMatter) {
     const assocArea = (associatedMatter.practiceArea || '').toLowerCase();
     const assocTitle = (associatedMatter.title || '').toLowerCase();
@@ -184,8 +184,8 @@ export const FL120ResponseDossier: React.FC<StatutoryResponseDossierProps> = ({
   // Find associated matter if not directly passed
   const activeMatter = useMemo(() => {
     if (matter) return matter;
-    return matters.find(m => m.clientId === client.id) || null;
-  }, [matter, matters, client.id]);
+    return (matters || []).find(m => m?.clientId === client?.id) || null;
+  }, [matter, matters, client?.id]);
 
   // Determine initial matter type dynamically from active matter or client
   const initialType = useMemo(

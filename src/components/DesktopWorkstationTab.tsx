@@ -97,13 +97,13 @@ export const DesktopWorkstationTab: React.FC<DesktopWorkstationTabProps> = ({
 
   // Active Matter Record
   const activeMatter = useMemo(() => {
-    return matters.find(m => m.id === selectedMatterId) || matters[0] || null;
+    return (matters || []).find(m => m?.id === selectedMatterId) || matters?.[0] || null;
   }, [matters, selectedMatterId]);
 
   // Active Client Record linked to this matter
   const activeClient = useMemo(() => {
-    if (!activeMatter) return clients[0] || null;
-    return clients.find(c => c.name.toLowerCase() === activeMatter.clientName?.toLowerCase()) || clients[0] || null;
+    if (!activeMatter) return clients?.[0] || null;
+    return (clients || []).find(c => c?.name?.toLowerCase() === activeMatter?.clientName?.toLowerCase()) || clients?.[0] || null;
   }, [clients, activeMatter]);
 
   // Filtered matters list for master grid

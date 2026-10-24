@@ -233,10 +233,10 @@ export default function EnterpriseLegalStudio() {
     fetchData();
   }, []);
 
-  const selectedClient = clients.find((c) => c.id === selectedClientId) || clients[0];
-  const clientCases = cases.filter((c) => c.client_id === (selectedClient?.id || 1));
-  const selectedCase = clientCases.find((c) => c.id === selectedCaseId) || clientCases[0] || cases[0];
-  const selectedForm = forms.find((f) => f.name === selectedFormName) || forms[0];
+  const selectedClient = (clients || []).find((c) => c?.id === selectedClientId) || clients?.[0];
+  const clientCases = (cases || []).filter((c) => c?.client_id === (selectedClient?.id || 1));
+  const selectedCase = clientCases.find((c) => c?.id === selectedCaseId) || clientCases[0] || cases?.[0];
+  const selectedForm = (forms || []).find((f) => f?.name === selectedFormName) || forms?.[0];
 
   const handleGenerate = async () => {
     if (!selectedClient || !selectedCase || !selectedForm) return;

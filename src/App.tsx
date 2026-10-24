@@ -870,7 +870,7 @@ export default function App() {
     let finalDoc: GeneratedDocument = { ...docData };
     
     setGeneratedDocs(prev => {
-      const existingDoc = prev.find(d => d.id === docData.id || (d.title === docData.title && d.clientId === docData.clientId));
+      const existingDoc = (prev || []).find(d => d?.id === docData?.id || (d?.title === docData?.title && d?.clientId === docData?.clientId));
       
       if (existingDoc && existingDoc.content !== docData.content) {
         // Document updated with new edits: archive previous version into history
