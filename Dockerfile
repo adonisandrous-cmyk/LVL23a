@@ -19,7 +19,7 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=8080
 
 # Copy package configs and node_modules from builder
 COPY --from=builder /app/package*.json ./
@@ -29,6 +29,6 @@ COPY --from=builder /app/templates ./templates
 COPY --from=builder /app/forms ./forms
 COPY --from=builder /app/pipeline ./pipeline
 
-EXPOSE 3000
+EXPOSE 8080 3000
 
 CMD ["node", "dist/server.cjs"]

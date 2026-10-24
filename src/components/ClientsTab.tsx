@@ -68,6 +68,7 @@ import { PipelineExecutionState, QAValidationReport } from '../services/phoenixE
 
 interface ClientsTabProps {
   clients: Client[];
+  matters?: Matter[];
   onAddClient: (newClient: Omit<Client, 'id' | 'createdAt'> | Client) => void;
   onAddMatter?: (newMatter: Omit<Matter, 'id' | 'createdAt'> | Matter) => void;
   onAddGeneratedDoc?: (doc: GeneratedDocument) => void;
@@ -81,6 +82,7 @@ interface ClientsTabProps {
 
 export default function ClientsTab({ 
   clients, 
+  matters = [],
   onAddClient,
   onAddMatter,
   onAddGeneratedDoc,
@@ -2351,11 +2353,13 @@ END:VCARD`;
                          </div>
                        </div>
 
-                       {/* STATUTORY RESPONSE DOSSIER (CA JUDICIAL COUNCIL) */}
-                       {selectedClient.fl120Data && (
+                       {/* DYNAMIC STATUTORY RESPONSE DOSSIER (MATTER-DRIVEN) */}
+                       {selectedClient && (
                          <FL120ResponseDossier
                            client={selectedClient}
                            fl120Data={selectedClient.fl120Data}
+                           matter={matters.find(m => m.clientId === selectedClient.id)}
+                           matters={matters}
                            onAddGeneratedDoc={onAddGeneratedDoc}
                            onNavigateToTab={onNavigateToTab}
                          />
@@ -3785,6 +3789,10 @@ END:VCARD`;
       <ExecutivePipelineHandOffModal
         isOpen={showExecutiveHandOffModal}
         onClose={() => setShowExecutiveHandOffModal(false)}
+        onOpenPhoenixWorkspace={() => {
+          setShowExecutiveHandOffModal(false);
+          onNavigateToTab?.('workspace');
+        }}
         initialDispatcher="eve"
         initialClientName={selectedClient?.name}
         initialCaseNumber={selectedClient?.fl120Data?.caseNumber}

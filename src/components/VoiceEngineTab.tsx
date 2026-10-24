@@ -63,13 +63,6 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
   const [activeAssignmentTargetModelId, setActiveAssignmentTargetModelId] = useState<string | null>(null);
   const [assignmentNotice, setAssignmentNotice] = useState<string | null>(null);
 
-  const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('level23_elevenlabs_api_key') || '';
-    }
-    return '';
-  });
-
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -108,14 +101,6 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
     return () => { isMounted = false; };
   }, []);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('level23_elevenlabs_api_key', elevenLabsApiKey);
-      } catch (_) {}
-    }
-  }, [elevenLabsApiKey]);
-
   // Listen to cross-component assignment updates
   useEffect(() => {
     const handleUpdate = () => {
@@ -139,11 +124,12 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
     setAuditioningVoiceId(null);
   };
 
-  // 1-Click Audition of Authentic ElevenLabs Natural Voice
+  // 1-Click Audition of Authentic Natural Voice (No API Key Requirement)
   const handleAuditionVoice = (voice: VoiceOption) => {
     handleSilence();
     if (!voice.previewUrl) {
-      setStatusMessage(`Custom sample for ${voice.name} requires API key. Enter free key below or select another female voice.`);
+      // Synthesize directly using studio engine with zero key requirement
+      triggerSpeechSynthesis(text || PRESET_PHRASES[0], voice.id, voice.provider);
       return;
     }
 
@@ -201,7 +187,7 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
 
     // Find the voice option
     const matchedVoice = ALL_FEMALE_VOICES.find(v => v.id === assignment.voiceId);
-    if (matchedVoice && matchedVoice.previewUrl && !elevenLabsApiKey.trim()) {
+    if (matchedVoice && matchedVoice.previewUrl) {
       handleAuditionVoice(matchedVoice);
       setStatusMessage(`Auditioning ${model.name}'s assigned voice (${matchedVoice.name}) using verified cloud sample.`);
       return;
@@ -236,17 +222,16 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             text: cleanSpokenText,
-            voiceId: voiceIdToUse,
-            apiKey: elevenLabsApiKey.trim()
+            voiceId: voiceIdToUse
           })
         });
 
         const data = await response.json();
         if (data.success && data.base64Audio) {
-          const audio = new Audio(`data:audio/mpeg;base64,${data.base64Audio}`);
+          const audio = new Audio(`data:${data.mimeType || 'audio/mpeg'};base64,${data.base64Audio}`);
           activeAudioElementRef.current = audio;
           setIsPlaying(true);
-          setStatusMessage(`Streaming ElevenLabs natural human audio`);
+          setStatusMessage(`Streaming ${data.voiceUsed || 'studio'} legal counsel audio`);
 
           audio.onended = () => {
             setIsPlaying(false);
@@ -258,17 +243,6 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
           await audio.play();
           setIsSynthesizing(false);
           return;
-        } else if (data.requiresKey) {
-          const currentVoice = elevenLabsVoices.find(v => v.id === voiceIdToUse) || FEMALE_ELEVENLABS_VOICES.find(v => v.id === voiceIdToUse);
-          if (currentVoice && currentVoice.previewUrl) {
-            setStatusMessage(`ElevenLabs Free Tier key needed for arbitrary text. Playing authentic sample for ${currentVoice.name}.`);
-            handleAuditionVoice(currentVoice);
-            setIsSynthesizing(false);
-            return;
-          }
-          setStatusMessage('ElevenLabs free API key required. Paste your free key below or audition voice samples on cards.');
-        } else {
-          setStatusMessage(`Notice: ${data.error || 'Switching to natural female Studio fallback'}`);
         }
       }
 
@@ -649,28 +623,19 @@ export default function VoiceEngineTab({ systemConnected }: VoiceEngineTabProps)
         {/* Left Column: Voice Selector & API Key (5/12) */}
         <div className="lg:col-span-5 space-y-4">
           
-          {/* ElevenLabs API Key Card */}
-          {activeProvider === 'elevenlabs' && (
-            <div className="p-4 bg-[#090f1d] border border-cyan-500/30 rounded-2xl space-y-2.5 shadow-md">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-cyan-300 uppercase flex items-center gap-1.5">
-                  <Key className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>ElevenLabs Free Tier API Key</span>
-                </span>
-                <span className="text-[10px] text-emerald-400 font-mono">10k Chars/Mo Free</span>
-              </div>
-              <input
-                type="password"
-                value={elevenLabsApiKey}
-                onChange={(e) => setElevenLabsApiKey(e.target.value)}
-                placeholder="sk_... (paste your free key here)"
-                className="w-full bg-[#050811] border border-slate-800 focus:border-cyan-500 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none"
-              />
-              <p className="text-[10px] text-slate-500 font-sans">
-                Stored privately in your browser local storage. Never shared or sent to third parties.
-              </p>
+          {/* Zero-Key Natural Voice Engine Banner */}
+          <div className="p-4 bg-gradient-to-r from-cyan-950/40 via-slate-900 to-slate-900 border border-cyan-500/30 rounded-2xl space-y-1.5 shadow-md">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-cyan-300 uppercase flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Zero-Key Voice Engine</span>
+              </span>
+              <span className="text-[10px] text-emerald-400 font-mono">Ready • No Keys Required</span>
             </div>
-          )}
+            <p className="text-[11px] text-slate-400 font-sans">
+              All legal counsel voice personas stream automatically with zero external API key requirements.
+            </p>
+          </div>
 
           {/* Voice Cards Roster (Strictly Female) */}
           <div className="p-4 bg-[#090f1d] border border-slate-800 rounded-2xl space-y-3">

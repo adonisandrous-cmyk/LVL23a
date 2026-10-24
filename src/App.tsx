@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Sparkles,
@@ -57,6 +57,8 @@ import { UniversalPipelineStudio } from './components/UniversalPipelineStudio';
 import { PhoenixEightAgentStudio } from './components/PhoenixEightAgentStudio';
 import { ExecutivePipelineHandOffModal } from './components/ExecutivePipelineHandOffModal';
 import { BigLawIntegrationStudio } from './components/BigLawIntegrationStudio';
+import TextToVoiceProvisionModal from './components/TextToVoiceProvisionModal';
+import TemplateLibraryViewer from './components/TemplateLibraryViewer';
 import { Scale, BookOpen, Database, CloudOff, CloudLightning, Lock, Unlock, UploadCloud, Languages, Globe, ShieldCheck, Moon } from 'lucide-react';
 import { startPeriodicDriveSync } from './services/driveSyncService';
 
@@ -64,8 +66,17 @@ import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch, query, orderBy
 import { db, ensureAuthenticated, handleFirestoreError, OperationType, sanitizeForFirestore } from './lib/firebase';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
-  const [showExecutiveHandOffModal, setShowExecutiveHandOffModal] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<string>('workspace');
+  const [showExecutiveModal, setShowExecutiveModal] = useState<boolean>(false);
+  const [selectedClientName, setSelectedClientName] = useState<string | undefined>(undefined);
+  const [selectedDocumentName, setSelectedDocumentName] = useState<string | undefined>(undefined);
+  const [showTextToVoiceModal, setShowTextToVoiceModal] = useState<boolean>(false);
+
+  // single, shared entry point for all Phoenix workflow triggers
+  const openPhoenixWorkspace = useCallback(() => {
+    setActiveTab('workspace');
+    setShowExecutiveModal(false);
+  }, []);
   const [isZenEntranceMode, setIsZenEntranceMode] = useState<boolean>(() => {
     try {
       if (typeof window !== 'undefined') {
@@ -1483,6 +1494,21 @@ export default function App() {
                 
                 {/* Header Tray status tags */}
                 <div className="flex items-center gap-3">
+                  {/* Text-to-Voice Provision Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTextToVoiceModal(true);
+                      addLog('system', 'Text-to-Voice provision activated: legal counsel speech generator.');
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-950/70 via-orange-950/70 to-slate-900 hover:from-amber-900/90 hover:to-orange-900/90 border border-amber-500/50 hover:border-amber-400 text-amber-200 rounded-xl text-xs font-mono font-bold uppercase transition-all cursor-pointer shadow-[0_0_12px_rgba(245,158,11,0.2)]"
+                    title="Text-to-Voice Provision: Stream natural legal counsel audio briefings (Gemini TTS & Neural Voice)"
+                  >
+                    <Volume2 className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                    <span className="hidden sm:inline">Voice Provision</span>
+                    <span className="bg-amber-500/20 text-amber-300 text-[9px] px-1 py-0.5 rounded border border-amber-500/30">TTS</span>
+                  </button>
+
                   {/* Google Hosting, Desktop App & PWA Hub Button */}
                   <button
                     type="button"
@@ -1745,9 +1771,23 @@ export default function App() {
                   )}
 
                   {activeTab === 'workspace' && (
-                    <GoogleWorkspaceTab
-                      key="workspace"
-                      onNotify={(_type, msg) => addLog('system', `[Workspace] ${msg}`)}
+                    <PhoenixModularStudio
+                      clients={clients}
+                      matters={matters}
+                      onNavigateTab={(tab) => setActiveTab(tab as any)}
+                      onOpenPhoenixWorkspace={openPhoenixWorkspace}
+                      onOpenIntakeGenerator={() => setShowClientIntakeGeneratorModal(true)}
+                      onOpenOmniUpload={() => setShowOmniUploadModal(true)}
+                    />
+                  )}
+
+                  {activeTab === 'template_library' && (
+                    <TemplateLibraryViewer
+                      key="template_library"
+                      clients={clients}
+                      matters={matters}
+                      onAddGeneratedDoc={handleAddGeneratedDoc}
+                      onNavigateToTab={(tab) => setActiveTab(tab as any)}
                     />
                   )}
 
@@ -1755,6 +1795,7 @@ export default function App() {
                     <ClientsTab
                       key="clients"
                       clients={clients}
+                      matters={matters}
                       onAddClient={handleAddClient}
                       onAddMatter={handleAddMatter}
                       onAddGeneratedDoc={handleAddGeneratedDoc}
@@ -1775,6 +1816,8 @@ export default function App() {
                       consultations={consultations}
                       onAddMatter={handleAddMatter}
                       onUpdateMatter={handleUpdateMatter}
+                      onAddGeneratedDoc={handleAddGeneratedDoc}
+                      onNavigateToTab={(tab) => setActiveTab(tab as any)}
                     />
                   )}
 
@@ -1925,6 +1968,7 @@ export default function App() {
               <div className="p-2 max-h-64 overflow-y-auto space-y-1">
                 {[
                   { text: '🎯 Go To Dashboard overview', tab: 'dashboard' },
+                  { text: '⚖️ Template & Court Form Library (Auto-Populate)', tab: 'template_library' },
                   { text: '✨ Google Workspace Hub (Gmail, Calendar, Tasks, Forms, Meet, Keep)', tab: 'workspace' },
                   { text: '✉️ Check and Compose Gmail messages', tab: 'workspace' },
                   { text: '📅 Schedule Google Calendar Hearings & Events', tab: 'workspace' },
@@ -2239,15 +2283,15 @@ export default function App() {
 
 
       {/* Executive Pipeline Hand-Off Modal (Phoenix & EVE Directive Control) */}
-      <ExecutivePipelineHandOffModal
-        isOpen={showExecutiveHandOffModal}
-        onClose={() => setShowExecutiveHandOffModal(false)}
-        initialDispatcher="phoenix"
-        onDispatchComplete={(result) => {
-          addLog('system', `⚡ Executive Hand-Off completed by ${result.dispatcherName}${result.dispatcherTitle ? ` (${result.dispatcherTitle})` : ''} for "${result.documentName || 'Document'}". SHA-256: ${result.template.sourceSha256.slice(0, 16)}... QA Sentinel: 100% Valid.`);
-          setActiveTab('phoenix_pipeline');
-        }}
-      />
+      {showExecutiveModal && (
+        <ExecutivePipelineHandOffModal
+          isOpen={showExecutiveModal}
+          onClose={() => setShowExecutiveModal(false)}
+          onOpenPhoenixWorkspace={openPhoenixWorkspace}
+          initialClientName={selectedClientName}
+          initialDocumentName={selectedDocumentName}
+        />
+      )}
 
     </div>
   );

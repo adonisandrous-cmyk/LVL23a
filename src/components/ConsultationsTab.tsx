@@ -53,6 +53,39 @@ export default function ConsultationsTab({
   const [isSavingToDrive, setIsSavingToDrive] = useState(false);
   const [driveSaveNotice, setDriveSaveNotice] = useState<string | null>(null);
 
+  // Active Jitsi Real-Time Video Conference state
+  const [inConferenceView, setInConferenceView] = useState<boolean>(false);
+  const [activeConferenceRoom, setActiveConferenceRoom] = useState<string>('');
+  const [activeConferenceTitle, setActiveConferenceTitle] = useState<string>('');
+
+  const handleJoinConference = (customRoom?: string, customTitle?: string) => {
+    const room = customRoom || (activeSession ? activeSession.roomName : roomName) || `Level23-${Date.now().toString(36).toUpperCase()}`;
+    const title = customTitle || (selectedClient ? `${selectedClient.name} — ${meetingType}` : 'Real-Time Client Conference');
+
+    if (!activeSession && selectedClient) {
+      const newSession: ConsultationSession = {
+        id: `call-${Date.now()}`,
+        clientId: selectedClient.id,
+        clientName: selectedClient.name,
+        roomName: room,
+        meetingType,
+        scheduledFor: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'active',
+        notes: meetingNotes,
+        hostAccount: 'level23consulting@gmail.com',
+        meetUrl: `https://meet.jit.si/${room}`,
+        driveFolderAttachment: 'Google Drive (level23consulting@gmail.com) / phoenix_review'
+      };
+      onAddConsultation(newSession);
+      setActiveSession(newSession);
+      setActiveMeetLink(`https://meet.jit.si/${room}`);
+    }
+
+    setActiveConferenceRoom(room);
+    setActiveConferenceTitle(title);
+    setInConferenceView(true);
+  };
+
   const handleSaveToDrive = async (sessionToSave?: ConsultationSession) => {
     const targetSession = sessionToSave || activeSession;
     if (!targetSession) return;
@@ -325,30 +358,43 @@ export default function ConsultationsTab({
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={isGeneratingMeet}
-                className="w-full py-2.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-xl text-xs font-heading flex items-center justify-center gap-2 transition-all shadow-lg text-center cursor-pointer disabled:opacity-50"
-              >
-                {isGeneratingMeet ? (
-                  <>
-                    <span className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>
-                    <span>Creating Google Meet...</span>
-                  </>
-                ) : (
-                  <>
-                    <Video className="w-4 h-4 text-slate-950" />
-                    <span>Launch Google Meet Consultation</span>
-                  </>
-                )}
-              </button>
+              {/* Call Action Buttons: Join Conference (Jitsi) & Google Meet */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  id="btn-join-conference-main"
+                  onClick={() => handleJoinConference()}
+                  className="py-2.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold rounded-xl text-xs font-heading flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-950/30 cursor-pointer"
+                >
+                  <Video className="w-4 h-4 text-slate-950" />
+                  <span>Join Conference</span>
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isGeneratingMeet}
+                  className="py-2.5 px-4 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-xl text-xs font-heading flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer disabled:opacity-50"
+                >
+                  {isGeneratingMeet ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      <span>Creating Meet...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ExternalLink className="w-4 h-4 text-sky-200" />
+                      <span>Google Meet</span>
+                    </>
+                  )}
+                </button>
+              </div>
 
             </form>
           ) : (
             <div className="p-4 bg-sky-950/20 border border-sky-500/30 rounded-2xl space-y-3">
               <span className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest font-mono flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping"></span>
-                Google Meet Active & Synced
+                Active Consultation Room
               </span>
               <p className="text-xs text-slate-300 font-sans leading-relaxed">
                 Hosting live video session for <strong className="text-sky-400">{activeSession.clientName}</strong>. 
@@ -367,6 +413,17 @@ export default function ConsultationsTab({
               </div>
               
               <div className="space-y-2">
+                {/* Primary Join Conference Button */}
+                <button
+                  type="button"
+                  id="btn-join-conference-active"
+                  onClick={() => handleJoinConference(activeSession.roomName, `${activeSession.clientName} — ${activeSession.meetingType}`)}
+                  className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold rounded-xl text-xs font-heading flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
+                >
+                  <Video className="w-4 h-4 text-slate-950" />
+                  <span>Join Conference (In-App Video)</span>
+                </button>
+
                 <a
                   href={activeMeetLink}
                   target="_blank"
@@ -374,7 +431,7 @@ export default function ConsultationsTab({
                   className="w-full py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-xl text-xs font-mono flex items-center justify-center gap-2 transition-all shadow-md"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Open Google Meet</span>
+                  <span>Open Google Meet Window</span>
                 </a>
 
                 <div className="flex flex-wrap gap-2">
@@ -449,7 +506,7 @@ export default function ConsultationsTab({
                     <div className="flex items-center gap-2 pt-0.5 text-[9px] font-mono text-slate-400">
                       <span className="text-sky-400 flex items-center gap-1">
                         <Video className="w-2.5 h-2.5 text-sky-400" />
-                        level23consulting@gmail.com
+                        Room: {call.roomName}
                       </span>
                       <span>&bull;</span>
                       <span className="text-amber-400 flex items-center gap-1">
@@ -457,34 +514,42 @@ export default function ConsultationsTab({
                         phoenix_review
                       </span>
                     </div>
-                    <span className="text-[10px] text-sky-400 font-mono flex items-center gap-1 pt-0.5">
-                      <Clock className="w-3 h-3 text-slate-500" />
-                      Google Meet ID: {call.roomName}
-                    </span>
                     <p className="text-[10px] text-slate-500 leading-normal italic font-sans truncate">{call.notes}</p>
                   </div>
                   <div className="flex flex-col gap-1 items-end shrink-0">
+                    {/* Join Conference Button on Archive Item */}
                     <button
-                      onClick={() => handleCopyLink(`https://meet.google.com/${call.roomName}`)}
-                      className="p-1.5 bg-[#090d16] border border-[#1e293b] text-slate-400 hover:text-white rounded hover:bg-slate-900 transition-colors cursor-pointer"
-                      title="Copy Google Meet Link"
+                      type="button"
+                      onClick={() => handleJoinConference(call.roomName, `${call.clientName} — ${call.meetingType}`)}
+                      className="px-2 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-[10.5px] font-mono rounded flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Join Conference (Jitsi Meet)"
                     >
-                      <Copy className="w-3.5 h-3.5 text-sky-400" />
+                      <Video className="w-3 h-3 text-emerald-400" />
+                      <span>Join</span>
                     </button>
-                    <button
-                      onClick={() => handleSaveToDrive(call)}
-                      className="p-1.5 bg-[#090d16] border border-[#1e293b] text-slate-400 hover:text-teal-400 rounded hover:bg-slate-900 transition-colors cursor-pointer"
-                      title="Sync to Google Drive (level23consulting@gmail.com)"
-                    >
-                      <HardDrive className="w-3.5 h-3.5 text-teal-400" />
-                    </button>
-                    <button
-                      onClick={() => onDeleteConsultation(call.id)}
-                      className="p-1.5 text-slate-600 hover:text-rose-400 transition-colors cursor-pointer"
-                      title="Delete log"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleCopyLink(`https://meet.jit.si/${call.roomName}`)}
+                        className="p-1 bg-[#090d16] border border-[#1e293b] text-slate-400 hover:text-white rounded hover:bg-slate-900 transition-colors cursor-pointer"
+                        title="Copy Room Link"
+                      >
+                        <Copy className="w-3 h-3 text-sky-400" />
+                      </button>
+                      <button
+                        onClick={() => handleSaveToDrive(call)}
+                        className="p-1 bg-[#090d16] border border-[#1e293b] text-slate-400 hover:text-teal-400 rounded hover:bg-slate-900 transition-colors cursor-pointer"
+                        title="Sync to Google Drive"
+                      >
+                        <HardDrive className="w-3 h-3 text-teal-400" />
+                      </button>
+                      <button
+                        onClick={() => onDeleteConsultation(call.id)}
+                        className="p-1 text-slate-600 hover:text-rose-400 transition-colors cursor-pointer"
+                        title="Delete log"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))
@@ -494,10 +559,103 @@ export default function ConsultationsTab({
 
       </div>
 
-      {/* Right Panel: Embedded active Google Meet frame or Idle Screen (7/12 width) */}
+      {/* Right Panel: Embedded Real-Time Jitsi Meet Iframe or Google Meet Launcher (7/12 width) */}
       <div className="lg:col-span-7 bg-[#0e1626] rounded-2.5xl border border-[#1e293b] overflow-hidden flex flex-col justify-between shadow-xl relative">
         <AnimatePresence mode="wait">
-          {activeSession ? (
+          {inConferenceView && activeConferenceRoom ? (
+            /* REAL-TIME SECURE JITSI MEET IFRAME VIEW */
+            <motion.div
+              key="jitsi-conference-iframe"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex-1 flex flex-col h-full bg-[#070b16] relative"
+            >
+              {/* Meeting title band */}
+              <div className="p-3.5 bg-[#0c1322] border-b border-[#1e293b] flex justify-between items-center z-10 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded font-bold">
+                        Live Video Conference Active
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400">
+                        Room: {activeConferenceRoom}
+                      </span>
+                    </div>
+                    <h3 className="text-xs font-bold text-white font-heading mt-0.5 truncate max-w-sm">
+                      {activeConferenceTitle}
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleCopyLink(`https://meet.jit.si/${activeConferenceRoom}`)}
+                    className="p-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-mono flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-teal-400" />}
+                    <span>{copiedLink ? 'Copied' : 'Copy Link'}</span>
+                  </button>
+
+                  <a
+                    href={`https://meet.jit.si/${activeConferenceRoom}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-mono flex items-center gap-1.5 cursor-pointer"
+                    title="Open Jitsi Meet in new window"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Pop Out</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => setInConferenceView(false)}
+                    className="p-1.5 px-3 bg-rose-500 hover:bg-rose-600 text-slate-950 font-bold text-xs font-heading rounded-lg transition-all cursor-pointer"
+                  >
+                    Leave Conference
+                  </button>
+                </div>
+              </div>
+
+              {/* Real-time Jitsi Meet Iframe view */}
+              <iframe
+                src={`https://meet.jit.si/${activeConferenceRoom}#config.prejoinPageEnabled=false&config.startWithAudioMuted=false&config.startWithVideoMuted=false&userInfo.displayName="Attorney Alex - Level 23 Practice"`}
+                allow="camera; microphone; display-capture; autoplay; clipboard-write; speaker"
+                className="w-full flex-1 border-0"
+                title="Secure Jitsi Meet Legal Video Conference"
+              />
+
+              {/* Note Taking Footer Drawer */}
+              <div className="p-3 bg-[#0c1322] border-t border-[#1e293b] flex items-center gap-2 shrink-0">
+                <Mic className="w-4 h-4 text-sky-400 shrink-0" />
+                <input
+                  type="text"
+                  value={meetingNotes}
+                  onChange={(e) => {
+                    setMeetingNotes(e.target.value);
+                    if (activeSession) {
+                      onUpdateConsultation({ ...activeSession, notes: e.target.value });
+                    }
+                  }}
+                  placeholder="Record live conference minutes, deposition statements, or case findings..."
+                  className="flex-1 bg-[#070d18] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-400 font-sans"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleSaveToDrive()}
+                  disabled={isSavingToDrive}
+                  className="px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border border-teal-500/40 rounded-lg text-xs font-mono font-bold flex items-center gap-1 cursor-pointer shrink-0"
+                >
+                  <HardDrive className="w-3.5 h-3.5" />
+                  <span>{isSavingToDrive ? 'Archiving...' : 'Save to Drive'}</span>
+                </button>
+              </div>
+            </motion.div>
+          ) : activeSession ? (
             <motion.div
               key="active-video-grid"
               initial={{ opacity: 0 }}
@@ -510,11 +668,19 @@ export default function ConsultationsTab({
                 <div>
                   <h3 className="text-xs font-mono uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping"></span>
-                    Google Meet Live Video Room
+                    Active Consultation Room
                   </h3>
                   <h2 className="text-sm font-bold text-white font-heading">{activeSession.clientName} — {activeSession.meetingType}</h2>
                 </div>
                 <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleJoinConference(activeSession.roomName, `${activeSession.clientName} — ${activeSession.meetingType}`)}
+                    className="p-2 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold rounded-lg text-xs font-heading flex items-center gap-1.5 cursor-pointer shadow-md"
+                  >
+                    <Video className="w-3.5 h-3.5 text-slate-950" />
+                    <span>Join Conference</span>
+                  </button>
                   <a
                     href={activeMeetLink}
                     target="_blank"
@@ -522,7 +688,7 @@ export default function ConsultationsTab({
                     className="p-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-lg transition-all text-xs font-mono flex items-center gap-1 cursor-pointer"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Launch Google Meet</span>
+                    <span>Google Meet</span>
                   </a>
                   <button
                     onClick={handleConcludeCall}
@@ -533,40 +699,41 @@ export default function ConsultationsTab({
                 </div>
               </div>
 
-              {/* Google Meet Frame / Launch Card */}
+              {/* Video Room Card */}
               <div className="flex-1 bg-[#090d16] relative flex flex-col items-center justify-center p-6 text-center space-y-4">
-                <div className="w-16 h-16 bg-sky-500/10 border border-sky-500/30 rounded-2xl flex items-center justify-center text-sky-400 shadow-lg shadow-sky-500/10">
-                  <Video className="w-8 h-8 text-sky-400 animate-pulse" />
+                <div className="w-16 h-16 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/10">
+                  <Video className="w-8 h-8 text-emerald-400 animate-pulse" />
                 </div>
                 
                 <div className="max-w-md space-y-2">
-                  <span className="text-[10px] font-mono uppercase bg-sky-500/10 text-sky-300 border border-sky-500/30 px-2.5 py-1 rounded-full font-bold">
-                    Official Google Meet Video Room Created
+                  <span className="text-[10px] font-mono uppercase bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-full font-bold">
+                    Secure Conference Room Ready
                   </span>
-                  <h3 className="text-base font-bold text-white font-heading">{activeSession.clientName} Video Conference</h3>
+                  <h3 className="text-base font-bold text-white font-heading">{activeSession.clientName} Conference</h3>
                   <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                    Click below to enter the live Google Meet conference room with HD audio/video, noise cancellation, and screen sharing.
+                    Click &apos;Join Conference&apos; below to open the secure real-time Jitsi Meet video room directly inside this window, or launch via Google Meet.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleJoinConference(activeSession.roomName, `${activeSession.clientName} — ${activeSession.meetingType}`)}
+                    className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs uppercase font-heading rounded-xl shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    <Video className="w-4 h-4" />
+                    <span>Join Conference Now</span>
+                  </button>
+
                   <a
                     href={activeMeetLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-5 py-2.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs uppercase font-heading rounded-xl shadow-lg shadow-sky-500/20 transition-all flex items-center gap-2"
+                    className="px-4 py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-mono text-xs rounded-xl transition-all flex items-center gap-1.5"
                   >
                     <ExternalLink className="w-4 h-4" />
-                    <span>Enter Google Meet Now</span>
+                    <span>Google Meet</span>
                   </a>
-
-                  <button
-                    onClick={() => handleCopyLink(activeMeetLink)}
-                    className="px-4 py-2.5 bg-[#0e1626] hover:bg-slate-900 border border-[#1e293b] text-slate-300 hover:text-white font-mono text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-                  >
-                    {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-sky-400" />}
-                    <span>{copiedLink ? 'Copied!' : 'Copy Link'}</span>
-                  </button>
                 </div>
               </div>
 
@@ -601,28 +768,36 @@ export default function ConsultationsTab({
               className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4 h-full bg-[#090d16]/20 select-none animate-fade-in"
             >
               <div className="relative">
-                <div className="w-20 h-20 bg-sky-500/10 border border-sky-500/20 rounded-full flex items-center justify-center text-sky-400 relative">
+                <div className="w-20 h-20 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 relative">
                   <Video className="w-10 h-10 animate-soft-pulse" />
                 </div>
-                {/* Glowing ring */}
-                <div className="absolute -inset-1 border border-sky-500/30 rounded-full animate-ping scale-110 pointer-events-none opacity-30"></div>
+                <div className="absolute -inset-1 border border-emerald-500/30 rounded-full animate-ping scale-110 pointer-events-none opacity-30"></div>
               </div>
 
               <div className="max-w-md space-y-2">
                 <h4 className="text-base font-bold font-heading text-white tracking-wide">
-                  Google Meet Video Conference Center
+                  Real-Time Video Conference Center
                 </h4>
                 <p className="text-xs text-slate-400 leading-normal font-sans">
-                  Instantly open secure Google Meet client intake consultations, expert depositions, and federal hearing briefings seamlessly synchronized with Google Calendar and Gmail.
+                  Instantly launch secure Jitsi Meet video client intake consultations, depositions, and mediator briefings with end-to-end encryption directly embedded in the workspace.
                 </p>
               </div>
+
+              <button
+                type="button"
+                onClick={() => handleJoinConference()}
+                className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs uppercase font-heading rounded-xl shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <Video className="w-4 h-4 text-slate-950" />
+                <span>Join Conference</span>
+              </button>
 
               {/* Security Banner info */}
               <div className="max-w-xs mt-3 p-4 bg-[#090d16]/80 border border-[#1e293b] rounded-2xl space-y-1.5 flex flex-col items-center justify-center">
                 <ShieldAlert className="w-4 h-4 text-emerald-400" />
-                <span className="text-[9px] font-mono uppercase text-emerald-400 font-bold">Google Workspace Active</span>
+                <span className="text-[9px] font-mono uppercase text-emerald-400 font-bold">Secure WebRTC & Jitsi Meet</span>
                 <p className="text-[9px] text-slate-500 leading-relaxed text-center font-sans">
-                  Direct Google Workspace integration for calendar events, Google Meet video spaces, and instant Gmail client invites.
+                  HD audio/video, real-time screen sharing, and direct Google Workspace cloud recording backup.
                 </p>
               </div>
             </motion.div>

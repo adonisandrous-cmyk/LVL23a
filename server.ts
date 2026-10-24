@@ -11,7 +11,6 @@ import mammoth from "mammoth";
 import { Readable } from "stream";
 import { createRequire } from "module";
 import { DocumentProcessorServiceClient } from "@google-cloud/documentai";
-import twilio from "twilio";
 import multer from "multer";
 import { phoenixRouter } from "./src/api/phoenixRouter";
 import { enterpriseLegalRouter } from "./src/api/enterpriseLegalRouter";
@@ -4746,13 +4745,11 @@ app.post("/api/elevenlabs/tts", async (req: Request, res: Response) => {
     .trim()
     .slice(0, 2500);
 
+  // If no ElevenLabs API key is configured on server, seamlessly delegate to Gemini 3.8 Flash Lite TTS or Browser Speech (Zero API Key Requirement)
   if (!effectiveApiKey) {
-    return res.json({
-      success: false,
-      requiresKey: true,
-      message: "ElevenLabs API key required. Enter your free ElevenLabs API Key in Voice Settings to stream natural human voices.",
-      base64Audio: null
-    });
+    req.body.text = cleanText;
+    req.body.voice = targetVoiceId || "Fenrir";
+    return handleGeminiTtsRequest(req, res, "/api/elevenlabs/tts");
   }
 
   try {
@@ -4774,12 +4771,10 @@ app.post("/api/elevenlabs/tts", async (req: Request, res: Response) => {
     });
 
     if (!elevenRes.ok) {
-      const errText = await elevenRes.text().catch(() => "");
-      return res.json({
-        success: false,
-        error: `ElevenLabs API error (${elevenRes.status}): ${errText || elevenRes.statusText}`,
-        base64Audio: null
-      });
+      console.warn(`ElevenLabs API returned ${elevenRes.status}, falling back to Gemini TTS.`);
+      req.body.text = cleanText;
+      req.body.voice = targetVoiceId || "Fenrir";
+      return handleGeminiTtsRequest(req, res, "/api/elevenlabs/tts");
     }
 
     const audioBuffer = await elevenRes.arrayBuffer();
@@ -4792,12 +4787,10 @@ app.post("/api/elevenlabs/tts", async (req: Request, res: Response) => {
       voiceUsed: targetVoiceId
     });
   } catch (err: any) {
-    console.error("ElevenLabs proxy error:", err);
-    return res.status(500).json({
-      success: false,
-      error: err.message || "Failed to reach ElevenLabs API",
-      base64Audio: null
-    });
+    console.warn("ElevenLabs proxy notice, falling back to Gemini TTS:", err?.message || err);
+    req.body.text = cleanText;
+    req.body.voice = targetVoiceId || "Fenrir";
+    return handleGeminiTtsRequest(req, res, "/api/elevenlabs/tts");
   }
 });
 
@@ -4806,30 +4799,34 @@ let ttsDepletedUntil = 0;
 
 async function handleGeminiTtsRequest(req: Request, res: Response, routeName: string) {
   try {
-    const { text, voice = "Aoede", voiceName, agent } = req.body;
+    const { text, voice = "Fenrir", voiceName, agent, style } = req.body;
     if (!text || typeof text !== "string" || !text.trim()) {
       return res.status(400).json({ success: false, error: "Text is required for TTS." });
     }
 
-    let selectedVoice = voiceName || voice || "Aoede";
+    const cleanText = text.trim().slice(0, 5000);
 
-    // Strictly Female voices enforcement for fallbacks
-    // Phoenix is specifically assigned the distinguished UK / British accent female voice (Aoede)
-    const agentStr = String(agent || "").toUpperCase();
-    const voiceStr = String(selectedVoice || "").toUpperCase();
-    const isPhoenix =
-      agentStr.includes("PHOENIX") ||
-      agentStr === "AP-1" ||
-      voiceStr.includes("PHOENIX") ||
-      voiceStr.includes("LILLY") ||
-      voiceStr.includes("AOEDE");
-
-    if (isPhoenix) {
-      selectedVoice = "Aoede"; // British / UK accent female voice
-    } else if (selectedVoice !== "Aoede" && selectedVoice !== "Kore") {
-      // All fallback voices must strictly be female (Aoede or Kore)
+    // Map requested voice or agent to valid Gemini prebuilt voices: 'Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'
+    const rawVoice = (voiceName || voice || "Fenrir").toString();
+    let selectedVoice = "Fenrir";
+    const lower = rawVoice.toLowerCase();
+    if (lower.includes("kore") || lower.includes("sarah") || lower.includes("eve") || lower.includes("lilly") || lower.includes("female") || lower.includes("aoede") || lower.includes("michelle")) {
       selectedVoice = "Kore";
+    } else if (lower.includes("zephyr") || lower.includes("neutral") || lower.includes("maya")) {
+      selectedVoice = "Zephyr";
+    } else if (lower.includes("puck") || lower.includes("jessica")) {
+      selectedVoice = "Puck";
+    } else if (lower.includes("charon") || lower.includes("clerk")) {
+      selectedVoice = "Charon";
+    } else {
+      selectedVoice = "Fenrir"; // Default authoritative senior legal counsel
     }
+
+    const speechStyle = style || (selectedVoice === "Fenrir"
+      ? "Authoritative, confident senior litigation counsel with clear diction and measured cadence"
+      : selectedVoice === "Kore"
+      ? "Poised, clear and articulate managing partner delivering precise legal analysis"
+      : "Measured, objective legal advisor");
 
     // Cooldown check: if prepayment credits were depleted, route immediately to browser speech fallback
     const now = Date.now();
@@ -4839,7 +4836,6 @@ async function handleGeminiTtsRequest(req: Request, res: Response, routeName: st
         depleted: true,
         fallback: "browser_speech",
         voiceUsed: selectedVoice,
-        accent: selectedVoice === "Aoede" ? "British (UK Female)" : "American (US Female)",
         message: "Gemini TTS prepayment credits currently depleted on project. Routing directly to browser speech fallback."
       });
     }
@@ -4847,13 +4843,25 @@ async function handleGeminiTtsRequest(req: Request, res: Response, routeName: st
     const ai = getAiClient();
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: text,
+      model: "gemini-3.8-flash-lite-tts",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: cleanText,
+              speechMetadata: {
+                style: speechStyle,
+              },
+            },
+          ],
+        },
+      ] as any,
       config: {
         responseModalities: ["AUDIO"],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: selectedVoice }, // Strictly female: 'Aoede' (UK Female), 'Kore' (US Female)
+            prebuiltVoiceConfig: { voiceName: selectedVoice },
           },
         },
       },
@@ -4878,7 +4886,8 @@ async function handleGeminiTtsRequest(req: Request, res: Response, routeName: st
       base64Audio: audioPart.inlineData.data,
       mimeType: audioPart.inlineData.mimeType || "audio/wav",
       voiceUsed: selectedVoice,
-      accent: selectedVoice === "Aoede" ? "British (UK Female)" : "American (US Female)"
+      engine: "gemini-3.8-flash-lite-tts",
+      style: speechStyle
     });
   } catch (err: any) {
     const errMsg = err?.message || String(err);
@@ -4891,20 +4900,18 @@ async function handleGeminiTtsRequest(req: Request, res: Response, routeName: st
       errMsg.includes("billing#prepay");
 
     if (isDepleted) {
-      // Cooldown for 10 minutes so subsequent speech calls skip directly to browser speech without delay
       ttsDepletedUntil = Date.now() + 10 * 60 * 1000;
-      console.warn(`[Gemini TTS ${routeName}] Prepayment credits depleted (code 402). Gracefully using browser speech fallback for Phoenix & staff voices.`);
+      console.warn(`[Gemini TTS ${routeName}] Prepayment credits notice. Seamlessly utilizing browser speech fallback.`);
       return res.json({
         success: false,
         depleted: true,
         fallback: "browser_speech",
-        message: "Your Gemini prepayment credits are depleted. Falling back to authentic browser female voice synthesis.",
+        message: "Gemini prepayment credits reached. Utilizing authentic browser legal voice synthesis.",
         billingUrl: "https://ai.google.dev/gemini-api/docs/billing#prepay"
       });
     }
 
-    // For any other unexpected error, log as warning to prevent registering an unhandled app crash
-    console.warn(`[Gemini TTS ${routeName}] Synthesis unavailable:`, errMsg);
+    console.warn(`[Gemini TTS ${routeName}] Synthesis notice:`, errMsg);
     return res.json({
       success: false,
       fallback: "browser_speech",
@@ -4914,7 +4921,7 @@ async function handleGeminiTtsRequest(req: Request, res: Response, routeName: st
 }
 
 // Gemini TTS API (Natural Human Speech Route)
-app.post("/api/tts", async (req: Request, res: Response) => {
+app.post(["/api/tts", "/api/phoenix/tts"], async (req: Request, res: Response) => {
   await handleGeminiTtsRequest(req, res, "/api/tts");
 });
 
@@ -8986,14 +8993,6 @@ function getDocumentAiClient(): DocumentProcessorServiceClient {
   return documentAiClient;
 }
 
-let twilioClientObj: any = null;
-function getTwilioClient(accountSid: string, authToken: string): any {
-  if (!twilioClientObj) {
-    twilioClientObj = twilio(accountSid, authToken);
-  }
-  return twilioClientObj;
-}
-
 // 11. Google Cloud Document AI OCR Scanner Integration
 app.post("/api/document-ai/scan", async (req: Request, res: Response) => {
   const { fileContentBase64, mimeType } = req.body;
@@ -9056,86 +9055,22 @@ FACTS REGISTERED:
   }
 });
 
-// 12. Twilio WebRTC Signaling and ICE server credentials generator
-app.post("/api/twilio/token", async (req: Request, res: Response) => {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const apiKey = process.env.TWILIO_API_KEY;
-  const apiSecret = process.env.TWILIO_API_SECRET;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
+// 12. Open Standard WebRTC Signaling and ICE Server Configuration (Zero Twilio Dependency)
+app.post(["/api/webrtc/token", "/api/twilio/token"], (req: Request, res: Response) => {
   const { identity, roomName } = req.body;
 
-  const hasTwilioCredentials = !!(accountSid && (authToken || (apiKey && apiSecret)));
-
-  if (!hasTwilioCredentials) {
-    console.warn("⚠️ Twilio credentials unconfigured. Emitting secure development RTC configuration.");
-    return res.json({
-      success: true,
-      token: "mock-twilio-access-token-for-dev",
-      identity: identity || "legal-practitioner-co-counsel",
-      roomName: roomName || "courtroom-stream-23",
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-        { urls: "stun:stun.twilio.com:3478" }
-      ],
-      simulated: true
-    });
-  }
-
-  try {
-    if (apiKey && apiSecret) {
-      const AccessToken = twilio.jwt.AccessToken;
-      const VideoGrant = AccessToken.VideoGrant;
-
-      const token = new AccessToken(
-        accountSid,
-        apiKey,
-        apiSecret,
-        { identity: identity || "legal-practitioner-co-counsel" }
-      );
-
-      const videoGrant = new VideoGrant({ room: roomName || "courtroom-stream-23" });
-      token.addGrant(videoGrant);
-
-      let iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
-      try {
-        if (authToken) {
-          const client = getTwilioClient(accountSid, authToken);
-          const tokenResult = await client.tokens.create();
-          if (tokenResult.iceServers) {
-            iceServers = tokenResult.iceServers;
-          }
-        }
-      } catch (ntsErr) {
-        console.warn("Could not retrieve Twilio TURN credentials:", ntsErr);
-      }
-
-      return res.json({
-        success: true,
-        token: token.toJwt(),
-        identity: identity || "legal-practitioner-co-counsel",
-        roomName: roomName || "courtroom-stream-23",
-        iceServers,
-        simulated: false
-      });
-    } else if (authToken) {
-      const client = getTwilioClient(accountSid, authToken);
-      const tokenResult = await client.tokens.create();
-      return res.json({
-        success: true,
-        token: null,
-        identity: identity || "legal-practitioner-co-counsel",
-        roomName: roomName || "courtroom-stream-23",
-        iceServers: tokenResult.iceServers,
-        simulated: false
-      });
-    } else {
-      throw new Error("Incomplete Twilio setup configurations.");
-    }
-  } catch (err: any) {
-    console.error("❌ Twilio Video Signaling Token generation failed:", err);
-    return res.status(500).json({ error: `Twilio token generation failed: ${err.message}` });
-  }
+  return res.json({
+    success: true,
+    token: "open-webrtc-signaling-token",
+    identity: identity || "legal-practitioner-co-counsel",
+    roomName: roomName || "courtroom-stream-23",
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+      { urls: "stun:stun2.l.google.com:19302" }
+    ],
+    simulated: false
+  });
 });
 
 // ----------------------------------------------------------------------
@@ -9783,8 +9718,10 @@ app.post("/api/biglaw/redline", (req: Request, res: Response) => {
 // ----------------------------------------------------------------------
 
 async function startServer() {
-  const isProduction = process.env.NODE_ENV === "production";
-  const PORT = 3000;
+  const distPath = path.join(process.cwd(), "dist");
+  const hasBuiltDist = fs.existsSync(path.join(distPath, "index.html"));
+  const isProduction = process.env.NODE_ENV === "production" || hasBuiltDist;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   if (!isProduction) {
     const { createServer: createViteServer } = await import("vite");
@@ -9795,18 +9732,17 @@ async function startServer() {
     app.use(vite.middlewares);
     console.log("🛠️ Vite middleware loaded.");
   } else {
-    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req: Request, res: Response) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
-    console.log("📦 Production static assets loaded.");
+    console.log(`📦 Production static assets loaded from: ${distPath}`);
   }
 
   if (!process.env.VERCEL) {
     app.listen(PORT, "0.0.0.0", () => {
-      console.log(`🌐 Server running at http://localhost:${PORT} (or http://127.0.0.1:${PORT})`);
-      console.log(`💡 Note: In your browser, open http://localhost:${PORT} (not http://0.0.0.0:${PORT})`);
+      console.log(`🌐 Server running at http://0.0.0.0:${PORT} (listening on port ${PORT})`);
+      console.log(`💡 Local access: http://localhost:${PORT}`);
     });
   }
 }

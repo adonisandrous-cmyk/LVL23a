@@ -177,29 +177,27 @@ class AudioPlaybackService {
     await this.unlockAudioSystem();
 
     try {
-      // 1. Try ElevenLabs if configured with user's API key
-      const elevenKey = typeof window !== 'undefined' ? localStorage.getItem('level23_elevenlabs_api_key') : null;
-      if (elevenKey) {
-        try {
-          const res = await fetch('/api/elevenlabs/tts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              text,
-              voiceName: options.voiceName || (isUkAccent ? 'Lilly' : 'Sarah'),
-              apiKey: elevenKey
-            })
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.success && data.base64Audio && thisToken === this.currentPlayToken) {
-              await this.playBase64Audio(data.base64Audio, 'audio/mpeg', onStart, onEnd, thisToken);
-              return { success: true, method: 'elevenlabs' };
-            }
+      // 1. Direct Server Voice Synthesis (Zero API Key Requirement)
+      try {
+        const res = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text,
+            voiceName: options.voiceName || femaleVoice,
+            voice: femaleVoice,
+            agent: isUkAccent ? 'PHOENIX' : (agent || 'EVE')
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.base64Audio && thisToken === this.currentPlayToken) {
+            await this.playBase64Audio(data.base64Audio, data.mimeType || 'audio/wav', onStart, onEnd, thisToken);
+            return { success: true, method: data.engine || 'studio-tts' };
           }
-        } catch (e) {
-          console.warn('[AudioService] ElevenLabs failed, falling back to Gemini TTS:', e);
         }
+      } catch (e) {
+        console.warn('[AudioService] Server TTS notice, falling back to Web Speech:', e);
       }
 
       // 2. Gemini TTS Fallback (Natural Female Human Speech)

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Briefcase,
@@ -28,7 +28,6 @@ import {
   Upload,
   X,
   TrendingUp,
-  Scale,
   Clock,
   Activity,
   CheckCircle2,
@@ -36,9 +35,26 @@ import {
   ShieldCheck,
   Percent,
   BarChart3,
-  Users
+  Users,
+  User,
+  Eye,
+  Scale,
+  Building2,
+  Globe,
+  MapPin,
+  Calendar,
+  Check,
+  Video,
+  VideoOff,
+  Phone,
+  Mic,
+  Maximize2,
+  Minimize2,
+  Copy,
+  Send
 } from 'lucide-react';
-import { Client, Matter, EvidenceFile, ConsultationSession } from '../types';
+import { Client, Matter, EvidenceFile, ConsultationSession, GeneratedDocument } from '../types';
+import MatterFormsViewer, { CaseSpecifics, OFFICIAL_FORM_CATALOG } from './MatterFormsViewer';
 
 interface MattersTabProps {
   matters: Matter[];
@@ -47,7 +63,11 @@ interface MattersTabProps {
   consultations?: ConsultationSession[];
   onAddMatter: (newMatter: Omit<Matter, 'id' | 'createdAt'>) => void;
   onUpdateMatter: (updatedMatter: Matter) => void;
+  onAddGeneratedDoc?: (doc: GeneratedDocument) => void;
+  onNavigateToTab?: (tab: string, clientId?: string) => void;
 }
+
+export type MatterPracticeType = 'Family Law' | 'Civil Litigation' | 'Immigration' | 'Bankruptcy' | 'General Practice';
 
 export default function MattersTab({
   matters,
@@ -55,1616 +75,1691 @@ export default function MattersTab({
   evidenceFiles = [],
   consultations = [],
   onAddMatter,
-  onUpdateMatter
+  onUpdateMatter,
+  onAddGeneratedDoc,
+  onNavigateToTab
 }: MattersTabProps) {
+  // Navigation & View Mode inside Matters Tab
+  const [leftPanelMode, setLeftPanelMode] = useState<'directory' | 'create-assemble'>('create-assemble');
+  const [rightPanelMode, setRightPanelMode] = useState<'forms-viewer' | 'case-dossier'>('forms-viewer');
+
+  // Search & Filter for Matters Directory
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'completed'>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [selectedMatter, setSelectedMatter] = useState<Matter | null>(matters[0] || null);
 
-  // Summary stats widget view mode
-  const [statsViewMode, setStatsViewMode] = useState<'selected' | 'portfolio'>('selected');
-  const [showPredictorModal, setShowPredictorModal] = useState(false);
+  // Active Client associated with matter assembly
+  const [selectedClientId, setSelectedClientId] = useState<string>(() => {
+    if (matters[0]?.clientId) return matters[0].clientId;
+    if (clients[0]?.id) return clients[0].id;
+    return '';
+  });
+  const [clientSearchQuery, setClientSearchQuery] = useState('');
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
 
-  // New Matter Form state
-  const [showModal, setShowModal] = useState(false);
-  const [newMatterTitle, setNewMatterTitle] = useState('');
-  const [newMatterClient, setNewMatterClient] = useState('');
-  const [newMatterArea, setNewMatterArea] = useState<'Family Law' | 'Immigration' | 'Bankruptcy' | 'General Practice'>('Immigration');
-  const [newMatterStatus, setNewMatterStatus] = useState<'active' | 'pending'>('active');
-  const [newMatterRate, setNewMatterRate] = useState(250);
-  const [newMatterDescription, setNewMatterDescription] = useState('');
+  // Selected Client Object
+  const selectedClient = useMemo(() => {
+    return clients.find(c => c.id === selectedClientId) || clients[0] || null;
+  }, [clients, selectedClientId]);
 
-  // AI legal risk assessment state
-  const [analyzingRisk, setAnalyzingRisk] = useState(false);
-
-  // New Task input inside active matter
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-
-  // Active Matter folder directory states
-  const [localFolderStatus, setLocalFolderStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
-  const [bridgeFiles, setBridgeFiles] = useState<string[]>([]);
-  const [bridgeFolder, setBridgeFolder] = useState<string>('C:\\Users\\Administrator\\iiiamadex');
-  const [matterFileSearch, setMatterFileSearch] = useState<string>('');
-  
-  // File Editor state for Matter Dossier
-  const [isEditingFileModalOpen, setIsEditingFileModalOpen] = useState(false);
-  const [editingFileName, setEditingFileName] = useState('');
-  const [editingFileContent, setEditingFileContent] = useState('');
-  const [isNewFile, setIsNewFile] = useState(true);
-
-  // Helper functions for Summary Stats Widget
-  const calculateMatterStats = (m: Matter) => {
-    const linkedEvidence = (evidenceFiles || []).filter(
-      e => (e.matterId && e.matterId === m.id) || 
-           (e.clientId && e.clientId === m.clientId) || 
-           (e.matterTitle && e.matterTitle.toLowerCase() === m.title.toLowerCase())
-    );
-    const linkedConsultations = (consultations || []).filter(
-      c => c.clientId === m.clientId || c.clientName?.toLowerCase() === m.clientName?.toLowerCase()
-    );
-
-    const coreHours = m.billedHours || 0;
-    const consultHours = Number((linkedConsultations.length * 1.25).toFixed(1)); // 1.25 hrs per consultation/deposition
-    const evidenceHours = Number((linkedEvidence.length * 0.75).toFixed(1)); // 0.75 hrs per discovery document audit
-    const totalEstimatedHours = Number((coreHours + consultHours + evidenceHours).toFixed(1));
-    const estimatedRevenue = Math.round(totalEstimatedHours * (m.billingRate || 250));
-
-    // Multi-factor Empirical Outcome Success Probability (45% - 98%)
-    let score = 64; // baseline for accepted matters
-    
-    // 1. Task Completion factor (up to +16%)
-    const totalTasks = m.tasks?.length || 0;
-    const completedTasks = m.tasks?.filter(t => t.completed).length || 0;
-    if (totalTasks > 0) {
-      const taskRatio = completedTasks / totalTasks;
-      score += Math.round(taskRatio * 16);
-    } else {
-      score += 6;
-    }
-
-    // 2. Linked Evidence factor (up to +12%)
-    const evidenceBonus = Math.min(linkedEvidence.length * 4, 12);
-    score += evidenceBonus;
-
-    // 3. Linked Consultations factor (up to +10%)
-    const consultBonus = Math.min(linkedConsultations.length * 5, 10);
-    score += consultBonus;
-
-    // 4. Status adjustment
-    if (m.status === 'completed') score += 8;
-    if (m.status === 'pending') score -= 3;
-
-    // 5. Practice area statutory alignment
-    if (m.practiceArea === 'Immigration') score += 2;
-    if (m.practiceArea === 'Family Law') score += 1;
-    if (m.practiceArea === 'Bankruptcy') score += 3;
-
-    // 6. Duress / Risk penalty check
-    const highDuressFiles = linkedEvidence.filter(e => e.duressLevel === 'High');
-    if (highDuressFiles.length > 0) score -= 3;
-
-    const probability = Math.max(48, Math.min(96, score));
-
-    return {
-      matter: m,
-      linkedEvidence,
-      linkedConsultations,
-      coreHours,
-      consultHours,
-      evidenceHours,
-      totalEstimatedHours,
-      estimatedRevenue,
-      probability,
-      taskCompletionRate: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 100,
-      evidenceCount: linkedEvidence.length,
-      consultationCount: linkedConsultations.length,
-      highDuressCount: highDuressFiles.length
-    };
-  };
-
-  const calculatePortfolioStats = () => {
-    let totalCoreHours = 0;
-    let totalConsultHours = 0;
-    let totalEvidenceHours = 0;
-    let totalRevenue = 0;
-    let totalEvidenceLinked = 0;
-    let totalConsultationsLinked = 0;
-    let weightedProbabilitySum = 0;
-
-    matters.forEach(m => {
-      const stats = calculateMatterStats(m);
-      totalCoreHours += stats.coreHours;
-      totalConsultHours += stats.consultHours;
-      totalEvidenceHours += stats.evidenceHours;
-      totalRevenue += stats.estimatedRevenue;
-      totalEvidenceLinked += stats.evidenceCount;
-      totalConsultationsLinked += stats.consultationCount;
-      weightedProbabilitySum += stats.probability;
-    });
-
-    const count = matters.length || 1;
-    const avgProbability = Math.round(weightedProbabilitySum / count);
-    const grandTotalHours = Number((totalCoreHours + totalConsultHours + totalEvidenceHours).toFixed(1));
-
-    return {
-      totalCoreHours,
-      totalConsultHours,
-      totalEvidenceHours,
-      grandTotalHours,
-      totalRevenue,
-      totalEvidenceLinked,
-      totalConsultationsLinked,
-      avgProbability
-    };
-  };
-
-  const currentMatterStats = selectedMatter ? calculateMatterStats(selectedMatter) : null;
-  const portfolioStats = calculatePortfolioStats();
-
-  // Fallback simulated local filesystem database for Case Matters
-  const [simulatedMatterFiles, setSimulatedMatterFiles] = useState<Record<string, { name: string; content: string; size: string; type: string; date: string }[]>>(() => {
-    const saved = localStorage.getItem('l23_simulated_matter_files_v3');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object') return parsed;
-      } catch (e) {}
-    }
-    return {};
+  // Selected Practice Type for Create / Assemble Pipeline
+  const [selectedType, setSelectedType] = useState<MatterPracticeType>(() => {
+    const area = selectedMatter?.practiceArea || selectedClient?.practiceArea || 'Family Law';
+    if (area.includes('Civil')) return 'Civil Litigation';
+    if (area.includes('Immigration')) return 'Immigration';
+    if (area.includes('Bankruptcy')) return 'Bankruptcy';
+    if (area.includes('General')) return 'General Practice';
+    return 'Family Law';
   });
 
-  const saveSimulatedMatters = (updated: Record<string, any>) => {
-    setSimulatedMatterFiles(updated);
-    localStorage.setItem('l23_simulated_matter_files_v3', JSON.stringify(updated));
-  };
+  // Keep practice type synchronized when selecting an existing matter
+  useEffect(() => {
+    if (selectedMatter?.practiceArea) {
+      const area = selectedMatter.practiceArea;
+      if (area.includes('Civil')) setSelectedType('Civil Litigation');
+      else if (area.includes('Immigration')) setSelectedType('Immigration');
+      else if (area.includes('Bankruptcy')) setSelectedType('Bankruptcy');
+      else if (area.includes('General')) setSelectedType('General Practice');
+      else setSelectedType('Family Law');
 
-  // Drag and drop case files support
-  const [isDragging, setIsDragging] = useState(false);
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleFileDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (!selectedMatter) return;
-
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      await processMatterFiles(files);
-    }
-  };
-
-  const processMatterFiles = async (files: FileList) => {
-    if (!selectedMatter) return;
-
-    let successCount = 0;
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const reader = new FileReader();
-
-      await new Promise<void>((resolve) => {
-        const isBinary = file.name.endsWith('.pdf') || file.name.endsWith('.png') || file.name.endsWith('.jpg') || file.name.endsWith('.doc') || file.name.endsWith('.docx') || file.name.endsWith('.zip');
-        
-        if (isBinary) {
-          reader.readAsDataURL(file);
-        } else {
-          reader.readAsText(file);
-        }
-
-        reader.onload = async (e) => {
-          const content = (e.target?.result as string) || '';
-          const baseName = file.name;
-          const relativePath = `Clients/${selectedMatter.clientName.replace(/\s+/g, '_')}/Matters/${selectedMatter.caseNumber}_${selectedMatter.title.replace(/\s+/g, '_')}/${baseName}`;
-          const sizeStr = file.size > 1024 * 1024
-            ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-            : `${(file.size / 1024).toFixed(1)} KB`;
-
-          if (localFolderStatus === 'connected') {
-            const ok = await handleSaveFileToBridge(relativePath, content);
-            if (ok) {
-              await checkDesktopBridge();
-            } else {
-              saveProcessedMatterFileToSimulated(baseName, content, sizeStr);
-            }
-          } else {
-            saveProcessedMatterFileToSimulated(baseName, content, sizeStr);
-          }
-          successCount++;
-          resolve();
-        };
-
-        reader.onerror = () => {
-          resolve();
-        };
-      });
-    }
-
-    if (successCount > 0) {
-      alert(`🎉 Successfully synchronized ${successCount} case folder document(s)!`);
-    }
-  };
-
-  const saveProcessedMatterFileToSimulated = (baseName: string, content: string, sizeStr: string) => {
-    if (!selectedMatter) return;
-    const matterList = simulatedMatterFiles[selectedMatter.id] || [];
-    const ext = baseName.split('.').pop() || 'TXT';
-    const existingIndex = matterList.findIndex(f => f.name.toLowerCase() === baseName.toLowerCase());
-
-    const newFileObj = {
-      name: baseName,
-      type: ext.toUpperCase(),
-      size: sizeStr,
-      date: new Date().toISOString().split('T')[0],
-      content: content
-    };
-
-    let updatedList = [...matterList];
-    if (existingIndex >= 0) {
-      updatedList[existingIndex] = newFileObj;
-    } else {
-      updatedList.push(newFileObj);
-    }
-
-    saveSimulatedMatters({
-      ...simulatedMatterFiles,
-      [selectedMatter.id]: updatedList
-    });
-  };
-
-  // Poll Local Editor Bridge for directory contents
-  const checkDesktopBridge = async () => {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1200);
-      const res = await fetch('http://localhost:4321/api/local-files', { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.success) {
-          setBridgeFiles(data.files || []);
-          setBridgeFolder(data.folder || 'C:\\Users\\Administrator\\iiiamadex');
-          setLocalFolderStatus('connected');
-        } else {
-          setLocalFolderStatus('disconnected');
-        }
-      } else {
-        setLocalFolderStatus('disconnected');
+      if (selectedMatter.clientId) {
+        setSelectedClientId(selectedMatter.clientId);
       }
-    } catch {
-      setLocalFolderStatus('disconnected');
     }
-  };
+  }, [selectedMatter]);
+
+  // Nature of Suit / Specific Matter Request options by practice area
+  const natureOfSuitOptions = useMemo(() => {
+    switch (selectedType) {
+      case 'Family Law':
+        return [
+          'Divorce / Dissolution of Marriage (FL-120 / FL-100)',
+          'Child Custody & Visitation Dispute (FL-311 / FL-105)',
+          'Child & Spousal Support Modification (FL-150 / FL-300)',
+          'Legal Separation of Marriage',
+          'Domestic Violence Restraining Order (DV-100)',
+          'Property & Community Debt Division (FL-160)',
+          'Declaration of Financial Disclosures (FL-141)'
+        ];
+      case 'Immigration':
+        return [
+          'Defensive Asylum & Withholding of Removal (I-589)',
+          'Application for Employment Authorization / Work Permit (I-765)',
+          'Adjustment of Status to Permanent Resident (I-485)',
+          'Cancellation of Removal for Non-Permanent Residents (EOIR-42B)',
+          'Alien Notice of Change of Address (EOIR-33)',
+          'Petition for Alien Relative (I-130)'
+        ];
+      case 'Civil Litigation':
+        return [
+          'Breach of Written Contract (PLD-C-010 Answer)',
+          'Tort / Personal Injury (Motor Vehicle Negligence)',
+          'Premises Liability / Commercial Property Injury',
+          'Business Partnership Dispute & Breach of Fiduciary Duty',
+          'Commercial Debt Collection & Verified General Denial',
+          'Wrongful Termination & Employment Retaliation'
+        ];
+      case 'Bankruptcy':
+        return [
+          'Chapter 7 Liquidation (Voluntary Petition Form 101)',
+          'Chapter 13 Individual Debt Adjustment (Repayment Plan)',
+          'Chapter 11 Small Business Reorganization',
+          'Means Test Calculation & Disposable Income Determination',
+          'Homestead & Wildcard Exemption Election (Schedule C)'
+        ];
+      case 'General Practice':
+        return [
+          'Revocable Living Trust & Estate Plan Package',
+          'California Statutory Durable Power of Attorney (DPOA-01)',
+          'Civil Harassment Restraining Order (CH-100)',
+          'Adult or Minor Petition for Change of Name (NC-100)',
+          'Pre-Litigation Demand Letter & Settlement Release'
+        ];
+    }
+  }, [selectedType]);
+
+  const [selectedNatureOfSuit, setSelectedNatureOfSuit] = useState<string>(natureOfSuitOptions[0]);
 
   useEffect(() => {
-    checkDesktopBridge();
-    const interval = setInterval(checkDesktopBridge, 6000);
-    return () => clearInterval(interval);
-  }, []);
+    setSelectedNatureOfSuit(natureOfSuitOptions[0]);
+  }, [natureOfSuitOptions]);
 
-  // Save to local bridge
-  const handleSaveFileToBridge = async (fileName: string, content: string) => {
-    try {
-      const res = await fetch('http://localhost:4321/api/local-write', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName, content })
-      });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  };
-
-  // Get active files in the Matter folder
-  const getMatterFiles = () => {
-    if (!selectedMatter) return [];
-    const query = matterFileSearch.toLowerCase();
-
-    if (localFolderStatus === 'connected') {
-      const sanitizedTitle = selectedMatter.title.replace(/[^a-zA-Z0-9]/g, '_');
-      const lowerCaseNum = selectedMatter.caseNumber.toLowerCase();
-      // Look for files tagged with this matter case number or title
-      return bridgeFiles.filter(f => {
-        const lf = f.toLowerCase();
-        const matchesMatter = lf.includes(lowerCaseNum) || lf.includes(sanitizedTitle.toLowerCase());
-        const matchesQuery = query ? lf.includes(query) : true;
-        return matchesMatter && matchesQuery;
-      }).map(f => {
-        const ext = f.split('.').pop() || '';
-        const cleanName = f.slice(f.lastIndexOf('/') + 1).slice(f.lastIndexOf('\\') + 1);
-        return {
-          name: cleanName,
-          fullName: f,
-          type: ext.toUpperCase() || 'FILE',
-          size: '1.8 KB',
-          date: new Date().toISOString().split('T')[0]
-        };
-      });
-    } else {
-      const list = simulatedMatterFiles[selectedMatter.id] || [];
-      return list.filter(f => {
-        const matchesQuery = query ? f.name.toLowerCase().includes(query) : true;
-        return matchesQuery;
-      });
-    }
-  };
-
-  // Save manual file edit
-  const handleSaveMatterFileSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedMatter || !editingFileName) return;
-
-    const baseName = editingFileName.endsWith('.md') || editingFileName.endsWith('.txt')
-      ? editingFileName
-      : `${editingFileName}.md`;
-
-    // Path inside C:\Users\Administrator\iiiamadex: Clients/[Client_Name]/Matters/[Case_Number] - [Title]/[File_Name]
-    const relativePath = `Clients/${selectedMatter.clientName.replace(/\s+/g, '_')}/Matters/${selectedMatter.caseNumber}_${selectedMatter.title.replace(/\s+/g, '_')}/${baseName}`;
-
-    if (localFolderStatus === 'connected') {
-      const ok = await handleSaveFileToBridge(relativePath, editingFileContent);
-      if (ok) {
-        await checkDesktopBridge();
-      } else {
-        saveMatterFileToSimulated(baseName);
-      }
-    } else {
-      saveMatterFileToSimulated(baseName);
-    }
-
-    setIsEditingFileModalOpen(false);
-    setEditingFileName('');
-    setEditingFileContent('');
-  };
-
-  const saveMatterFileToSimulated = (baseName: string) => {
-    if (!selectedMatter) return;
-    const matterList = simulatedMatterFiles[selectedMatter.id] || [];
-    const ext = baseName.split('.').pop() || 'md';
-    const existingIndex = matterList.findIndex(f => f.name.toLowerCase() === baseName.toLowerCase());
-
-    const newFileObj = {
-      name: baseName,
-      type: ext.toUpperCase(),
-      size: `${(editingFileContent.length / 1024).toFixed(1)} KB`,
-      date: new Date().toISOString().split('T')[0],
-      content: editingFileContent
-    };
-
-    let updatedList = [...matterList];
-    if (existingIndex >= 0) {
-      updatedList[existingIndex] = newFileObj;
-    } else {
-      updatedList.push(newFileObj);
-    }
-
-    saveSimulatedMatters({
-      ...simulatedMatterFiles,
-      [selectedMatter.id]: updatedList
-    });
-  };
-
-  // Generate Attorney brief template!
-  const handleGenerateCaseBrief = async () => {
-    if (!selectedMatter) return;
-
-    const templateContent = `# LEGAL BRIEF BRIEFCASE (Escalated Premium Tier)
-## CASE NUMBER: ${selectedMatter.caseNumber}
-## MATTERS CASE TITLE: ${selectedMatter.title}
-## CLIENT: ${selectedMatter.clientName}
-## RETRACT: Level 23 Counsel on Standby
-
-### 1. FACTUAL DISCLOSURES ANALYSIS
-Pursuant to CA Civil Procedure guidelines, we have examined the community asset structure. The client alleges structural duress and inadequate disclosures concerning liabilities.
-
-### 2. WORKPLAN INSTRUCTIONS CHECKLIST
-- Draft initial partition demands immediately.
-- Serve formal discovery checklist request within 24 months limit window.
-- Sync active evidence files directory.
-
----
-*Created via Level 23 Legal Sentry Auto Builder*`;
-
-    const fileName = `L23_Case_Brief_${selectedMatter.caseNumber}.md`;
-    const relativePath = `Clients/${selectedMatter.clientName.replace(/\s+/g, '_')}/Matters/${selectedMatter.caseNumber}_${selectedMatter.title.replace(/\s+/g, '_')}/${fileName}`;
-
-    if (localFolderStatus === 'connected') {
-      const ok = await handleSaveFileToBridge(relativePath, templateContent);
-      if (ok) {
-        alert(`🎉 Connected BRIEF SENTRY! Generated dynamic litigation brief template inside local case directory:\n📍 C:\\Users\\Administrator\\iiiamadex\\Clients\\${selectedMatter.clientName.replace(/\s+/g, '_')}\\Matters\\${selectedMatter.caseNumber}_${selectedMatter.title.replace(/\s+/g, '_')}\\${fileName}`);
-        await checkDesktopBridge();
-      } else {
-        saveCustomBriefToSimulated(fileName, templateContent);
-      }
-    } else {
-      saveCustomBriefToSimulated(fileName, templateContent);
-      alert(`📂 Local Mode: Dynamic Matter Litigation brief generated and attached to this case directory tree! Successfully synced.`);
-    }
-  };
-
-  const saveCustomBriefToSimulated = (fileName: string, content: string) => {
-    if (!selectedMatter) return;
-    const list = simulatedMatterFiles[selectedMatter.id] || [];
-    const index = list.findIndex(f => f.name === fileName);
-    
-    const briefObj = {
-      name: fileName,
-      type: 'MARKDOWN',
-      size: '1.2 KB',
-      date: new Date().toISOString().split('T')[0],
-      content: content
-    };
-
-    let updated = [...list];
-    if (index >= 0) {
-      updated[index] = briefObj;
-    } else {
-      updated.push(briefObj);
-    }
-
-    saveSimulatedMatters({
-      ...simulatedMatterFiles,
-      [selectedMatter.id]: updated
-    });
-  };
-
-  const handleDeleteMatterFile = (fileName: string) => {
-    if (!selectedMatter) return;
-    if (!confirm(`Are you sure you want to delete ${fileName}?`)) return;
-
-    if (localFolderStatus === 'connected') {
-      alert("File archived. In connected mode, delete files from your physical directory to maintain proper federal/state legal file audit trails!");
-    } else {
-      const list = simulatedMatterFiles[selectedMatter.id] || [];
-      const updated = list.filter(f => f.name !== fileName);
-      saveSimulatedMatters({
-        ...simulatedMatterFiles,
-        [selectedMatter.id]: updated
-      });
-    }
-  };
-
-  // Filters matters list
-  const filteredMatters = matters.filter(m => {
-    const matchesSearch = m.title.toLowerCase().includes(search.toLowerCase()) ||
-                          m.caseNumber.toLowerCase().includes(search.toLowerCase()) ||
-                          m.clientName.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || m.status === statusFilter;
-    const matchesType = typeFilter === 'all' || m.practiceArea === typeFilter;
-    return matchesSearch && matchesStatus && matchesType;
+  // Questions reflecting the initial matter selected
+  const [matterQuestions, setMatterQuestions] = useState<Record<string, string>>({
+    proceedingType: 'Dissolution',
+    marriageDate: '09/18/2015',
+    separationDate: '04/10/2026',
+    minorChildrenCount: '2',
+    custodyPreference: 'Joint Legal and Physical Custody (Alternating 2-2-3)',
+    spousalSupportReq: 'Reserve Jurisdiction Pursuant to Fam. Code § 4336',
+    damagesClaimed: '$125,000',
+    alienRegNumber: 'A# 248-091244',
+    entryDate: '03/15/2014',
+    persecutionGrounds: 'Political Opinion and Particular Social Group',
+    debtEstimate: '$45,000 Unsecured Credit / Medical Debt',
+    reliefSummary: 'Full general denial and mandatory statutory affirmative defenses asserted'
   });
 
-  const handleCreate = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMatterTitle || !newMatterClient) return;
+  const handleUpdateQuestion = (key: string, val: string) => {
+    setMatterQuestions(prev => ({ ...prev, [key]: val }));
+  };
 
-    const matchedClient = clients.find(c => c.id === newMatterClient);
-    const clientName = matchedClient ? matchedClient.name : 'Unknown Client';
-    const caseNumber = `L-${Math.floor(1000 + Math.random() * 9000)}-${new Date().getFullYear()}`;
+  // Case Specifics State
+  const [caseSpecifics, setCaseSpecifics] = useState<CaseSpecifics>({
+    state: 'California',
+    county: 'Orange County',
+    courtVenue: 'Orange County Superior Court',
+    branchName: 'Lamoreaux Justice Center',
+    caseNumber: selectedMatter?.caseNumber || '26FL004812C',
+    opposingParty: selectedMatter?.opposingParty || 'Elena Vance (Petitioner)',
+    districtAttorneyOrDhs: 'Orange County District Attorney / Family Support Division',
+    judgeName: 'Hon. Deborah C. Servino',
+    deptNumber: 'Dept. L-64',
+    incidentOrMarriageDate: '09/18/2015',
+    separationOrIncidentDate: '04/10/2026',
+    reliefRequested: 'Statutory relief granted, fees awarded, and responsive pleading confirmed.',
+    natureOfSuit: selectedNatureOfSuit
+  });
 
-    onAddMatter({
-      title: newMatterTitle,
-      caseNumber,
-      clientId: newMatterClient,
-      clientName,
-      practiceArea: newMatterArea,
-      status: newMatterStatus,
-      billingRate: Number(newMatterRate) || 200,
-      billedHours: 0,
-      description: newMatterDescription || 'No detailed case details provided yet.',
-      tasks: [
-        { id: 't-init', title: 'Open formal practice matter and establish files', completed: true, dueDate: new Date().toISOString().split('T')[0] },
-        { id: 't-doc', title: 'Collect legal documentation from intake audit', completed: false, dueDate: '2026-06-15' }
-      ]
+  // Modal for Request for Case Specifics
+  const [showCaseSpecificsModal, setShowCaseSpecificsModal] = useState<boolean>(false);
+  const [hasSearchedForms, setHasSearchedForms] = useState<boolean>(true);
+
+  // Available forms listed for current matter type
+  const availableFormsForType = useMemo(() => {
+    return OFFICIAL_FORM_CATALOG.filter(f => f.practiceArea === selectedType);
+  }, [selectedType]);
+
+  // Handle "Find Forms" Button
+  const handleFindForms = () => {
+    setHasSearchedForms(true);
+    // Open the popup as a request for case specifics to logically assemble probable forms!
+    setShowCaseSpecificsModal(true);
+  };
+
+  // Save Case Specifics Modal
+  const handleSaveCaseSpecifics = () => {
+    setShowCaseSpecificsModal(false);
+    // Update active matter if present
+    if (selectedMatter) {
+      const updated: Matter = {
+        ...selectedMatter,
+        courtVenue: caseSpecifics.courtVenue,
+        opposingParty: caseSpecifics.opposingParty,
+        caseNumber: caseSpecifics.caseNumber,
+        practiceArea: selectedType
+      };
+      onUpdateMatter(updated);
+      setSelectedMatter(updated);
+    }
+  };
+
+  // Filtered Clients for dropdown search
+  const filteredClients = useMemo(() => {
+    if (!clientSearchQuery.trim()) return clients;
+    const q = clientSearchQuery.toLowerCase();
+    return clients.filter(c =>
+      c.name.toLowerCase().includes(q) ||
+      c.email.toLowerCase().includes(q) ||
+      (c.phone && c.phone.includes(q))
+    );
+  }, [clients, clientSearchQuery]);
+
+  // Filtered Matters Directory
+  const filteredMatters = useMemo(() => {
+    return matters.filter(m => {
+      const matchesSearch =
+        m.title.toLowerCase().includes(search.toLowerCase()) ||
+        m.clientName.toLowerCase().includes(search.toLowerCase()) ||
+        m.caseNumber.toLowerCase().includes(search.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || m.status === statusFilter;
+      const matchesType = typeFilter === 'all' || m.practiceArea === typeFilter;
+      return matchesSearch && matchesStatus && matchesType;
     });
+  }, [matters, search, statusFilter, typeFilter]);
 
-    setNewMatterTitle('');
-    setNewMatterDescription('');
-    setShowModal(false);
+  // Quick Create Matter from assemble panel
+  const handleCreateMatterFromAssemble = () => {
+    const newMatterTitle = `${selectedType}: ${selectedNatureOfSuit.split('(')[0].trim()} — ${selectedClient?.name || 'Client'}`;
+    const newMatter: Omit<Matter, 'id' | 'createdAt'> = {
+      title: newMatterTitle,
+      caseNumber: caseSpecifics.caseNumber || `26-${selectedType.slice(0, 2).toUpperCase()}-${Math.floor(100000 + Math.random() * 900000)}`,
+      clientId: selectedClient?.id || 'client-gen',
+      clientName: selectedClient?.name || 'New Client',
+      practiceArea: selectedType,
+      status: 'active',
+      description: `Assembled legal matter for ${selectedClient?.name || 'Client'} in ${selectedType}. Nature of Suit: ${selectedNatureOfSuit}. Court Venue: ${caseSpecifics.courtVenue}.`,
+      billingRate: 350,
+      billedHours: 1.5,
+      tasks: [
+        { id: 't1', title: 'Verify client intake & case specifics', completed: true, dueDate: '2026-05-01' },
+        { id: 't2', title: 'Assemble mandatory Judicial Council forms', completed: true, dueDate: '2026-05-05' },
+        { id: 't3', title: 'Client Data Populate on mapped fields', completed: false, dueDate: '2026-05-10' },
+        { id: 't4', title: 'Export approved pleadings to client file', completed: false, dueDate: '2026-05-15' }
+      ],
+      courtVenue: caseSpecifics.courtVenue,
+      opposingParty: caseSpecifics.opposingParty
+    };
 
-    // Auto select recent
-    setTimeout(() => {
-      if (matters.length > 0) {
-        setSelectedMatter(matters[matters.length - 1]);
-      }
-    }, 100);
+    onAddMatter(newMatter);
+    setLeftPanelMode('directory');
+  };
+
+  // Matter Workspace Modal & Pop-up State
+  const [showMatterWorkspaceModal, setShowMatterWorkspaceModal] = useState<boolean>(false);
+
+  // Video Conference Modal & Provision State
+  const [showVideoConferenceModal, setShowVideoConferenceModal] = useState<boolean>(false);
+  const [copiedVideoLink, setCopiedVideoLink] = useState<boolean>(false);
+  const [videoNotes, setVideoNotes] = useState<string>('');
+  const [newTaskInput, setNewTaskInput] = useState<string>('');
+
+  // Matter Video Conference Room ID
+  const matterVideoRoom = useMemo(() => {
+    const rawCase = (selectedMatter?.caseNumber || caseSpecifics.caseNumber || 'General').replace(/[^a-zA-Z0-9]/g, '');
+    return `L23-Matter-${rawCase || 'Active'}`;
+  }, [selectedMatter?.caseNumber, caseSpecifics.caseNumber]);
+
+  const handleCopyVideoLink = () => {
+    const link = `https://meet.jit.si/${matterVideoRoom}`;
+    navigator.clipboard.writeText(link);
+    setCopiedVideoLink(true);
+    setTimeout(() => setCopiedVideoLink(false), 2000);
   };
 
   const handleToggleTask = (taskId: string) => {
     if (!selectedMatter) return;
-
     const updatedTasks = selectedMatter.tasks.map(t =>
       t.id === taskId ? { ...t, completed: !t.completed } : t
     );
-
     const updatedMatter = { ...selectedMatter, tasks: updatedTasks };
-    onUpdateMatter(updatedMatter);
     setSelectedMatter(updatedMatter);
+    onUpdateMatter(updatedMatter);
   };
 
-  const handleAddTask = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedMatter || !newTaskTitle) return;
-
+  const handleAddTask = () => {
+    if (!selectedMatter || !newTaskInput.trim()) return;
     const newTask = {
       id: `t-${Date.now()}`,
-      title: newTaskTitle,
+      title: newTaskInput.trim(),
       completed: false,
-      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // default 1 week
+      dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
     };
-
     const updatedMatter = {
       ...selectedMatter,
       tasks: [...selectedMatter.tasks, newTask]
     };
-
-    onUpdateMatter(updatedMatter);
     setSelectedMatter(updatedMatter);
-    setNewTaskTitle('');
+    onUpdateMatter(updatedMatter);
+    setNewTaskInput('');
   };
 
-  const handleDeleteTask = (taskId: string) => {
+  const handleLogHours = (addedHours: number) => {
     if (!selectedMatter) return;
-    const updatedTasks = selectedMatter.tasks.filter(t => t.id !== taskId);
-    const updatedMatter = { ...selectedMatter, tasks: updatedTasks };
-    onUpdateMatter(updatedMatter);
+    const updatedMatter = {
+      ...selectedMatter,
+      billedHours: Math.max(0, +(selectedMatter.billedHours + addedHours).toFixed(1))
+    };
     setSelectedMatter(updatedMatter);
+    onUpdateMatter(updatedMatter);
   };
 
-  const handleAIRiskModelAnalysis = async () => {
+  const handleChangeStatus = (status: 'active' | 'pending' | 'completed') => {
     if (!selectedMatter) return;
+    const updatedMatter = { ...selectedMatter, status };
+    setSelectedMatter(updatedMatter);
+    onUpdateMatter(updatedMatter);
+  };
 
-    setAnalyzingRisk(true);
+  const renderMatterWorkspaceContent = (isModal: boolean = false) => {
+    const curMatter = selectedMatter || {
+      id: 'default-matter',
+      title: `${selectedType} Pleading Matter`,
+      caseNumber: caseSpecifics.caseNumber || '26FL004812C',
+      clientId: selectedClient?.id || 'c-1',
+      clientName: selectedClient?.name || 'Client File',
+      practiceArea: selectedType,
+      status: 'active' as const,
+      description: 'Active legal proceeding and case assembly.',
+      billingRate: 350,
+      billedHours: 2.5,
+      tasks: [
+        { id: 't1', title: 'Verify client intake & case specifics', completed: true, dueDate: '2026-05-01' },
+        { id: 't2', title: 'Assemble mandatory Judicial Council forms', completed: true, dueDate: '2026-05-05' },
+        { id: 't3', title: 'Client Data Populate on mapped fields', completed: true, dueDate: '2026-05-10' },
+        { id: 't4', title: 'Conduct Video Conference & Deposition Hearing', completed: false, dueDate: '2026-05-12' },
+        { id: 't5', title: 'Export approved pleadings to client file', completed: false, dueDate: '2026-05-15' }
+      ],
+      courtVenue: caseSpecifics.courtVenue,
+      opposingParty: caseSpecifics.opposingParty
+    };
 
-    try {
-      const response = await fetch('/api/gemini/analyze-matter', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: selectedMatter.title,
-          description: selectedMatter.description,
-          practiceArea: selectedMatter.practiceArea
-        })
-      });
+    const matterEvidence = evidenceFiles.filter(e => e.clientId === curMatter.clientId || e.matterId === curMatter.id);
 
-      const data = await response.json();
-      
-      const newTasks = data.tasks || [];
-      const riskAssessment = data.riskAssessment || 'Assessment retrieved successfully.';
+    return (
+      <div className="flex-1 flex flex-col h-full bg-[#0a0f1d] text-slate-200 overflow-y-auto select-text">
+        {/* TOP DOSSIER BANNER */}
+        <div className="p-4 bg-gradient-to-r from-teal-950/70 via-[#0e172a] to-slate-900 border-b border-teal-500/30 shrink-0 space-y-3">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-teal-600/20 border border-teal-500/40 flex items-center justify-center text-teal-300 shadow-md">
+                <Briefcase className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-bold font-heading text-white tracking-wide">
+                    {curMatter.title}
+                  </h3>
+                  <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-mono uppercase font-bold border ${
+                    curMatter.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
+                    curMatter.status === 'pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' :
+                    'bg-slate-500/10 text-slate-400 border-slate-500/30'
+                  }`}>
+                    {curMatter.status}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[9.5px] font-mono bg-teal-500/10 text-teal-300 border border-teal-500/20">
+                    {curMatter.practiceArea}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 font-sans mt-0.5">
+                  Client: <strong className="text-white">{curMatter.clientName}</strong> • Case #: <strong className="text-teal-300 font-mono">{curMatter.caseNumber}</strong> • Venue: <span className="text-slate-300">{caseSpecifics.courtVenue}</span>
+                </p>
+              </div>
+            </div>
 
-      // Combine previous tasks with new AI generated tasks
-      const mergedTasks = [...selectedMatter.tasks];
-      newTasks.forEach((aiT: any) => {
-        if (!mergedTasks.some(existing => existing.title === aiT.title)) {
-          mergedTasks.push({
-            id: aiT.id,
-            title: `[AI Alert] ${aiT.title}`,
-            completed: aiT.completed,
-            dueDate: aiT.dueDate
-          });
-        }
-      });
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Switch to forms previewer */}
+              <button
+                type="button"
+                onClick={() => {
+                  setRightPanelMode('forms-viewer');
+                  if (isModal) setShowMatterWorkspaceModal(false);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-teal-500/15 hover:bg-teal-500/25 border border-teal-500/40 text-teal-200 text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <Eye className="w-3.5 h-3.5 text-teal-400" />
+                <span>View Forms Previewer</span>
+              </button>
 
-      const updatedMatter = {
-        ...selectedMatter,
-        tasks: mergedTasks,
-        riskAssessment
-      };
+              <button
+                type="button"
+                onClick={() => setShowCaseSpecificsModal(true)}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-mono flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                <span>Case Specifics</span>
+              </button>
+            </div>
+          </div>
+        </div>
 
-      onUpdateMatter(updatedMatter);
-      setSelectedMatter(updatedMatter);
-    } catch {
-      // Return beautiful generic fallback states if backend unhandled/error
-      const updatedMatter = {
-        ...selectedMatter,
-        riskAssessment: 'Case presents moderate administrative requirements. Key litigation strategy demands quick evidentiary brief setup, client credentials filing, and direct jurisdictional checkouts.'
-      };
-      onUpdateMatter(updatedMatter);
-      setSelectedMatter(updatedMatter);
-    } finally {
-      setAnalyzingRisk(false);
-    }
+        {/* WORKSPACE MAIN BODY */}
+        <div className="p-4 sm:p-5 space-y-5 flex-1">
+          
+          {/* 1. VIDEO CONFERENCE PROVISION CARD (PROMINENT SECTION) */}
+          <div className="p-4.5 rounded-2.5xl bg-gradient-to-r from-emerald-950/40 via-teal-950/20 to-slate-900 border-2 border-emerald-500/40 shadow-xl space-y-3.5 relative overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-md">
+                  <Video className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-xs font-bold font-heading text-white uppercase tracking-wide">
+                      Video Conference Provision & Virtual Hearing Room
+                    </h4>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                      Provisioned
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 font-sans mt-0.5">
+                    Real-time secure video deposition, client consultation & judicial mediation room mapped to this matter.
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons: Join Video Conference */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  id="btn-workspace-join-video"
+                  onClick={() => setShowVideoConferenceModal(true)}
+                  className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold font-heading text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center gap-2 cursor-pointer transition-all"
+                >
+                  <Video className="w-4 h-4 text-slate-950" />
+                  <span>Join Video Conference</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCopyVideoLink}
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-mono rounded-xl cursor-pointer flex items-center gap-1.5 transition-all"
+                  title="Copy direct meeting link"
+                >
+                  {copiedVideoLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+                  <span>{copiedVideoLink ? 'Copied Link!' : 'Copy Link'}</span>
+                </button>
+
+                {onNavigateToTab && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToTab('consult', curMatter.clientId)}
+                    className="px-3 py-2 bg-sky-950/40 hover:bg-sky-900/50 text-sky-300 border border-sky-500/30 text-xs font-mono rounded-xl cursor-pointer flex items-center gap-1.5 transition-all"
+                    title="Open Consultations Hub tab"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Consultations Hub</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Room metadata banner */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10.5px] font-mono bg-[#060a14] border border-emerald-500/20 rounded-xl p-2.5">
+              <div className="text-slate-400">
+                <span className="text-slate-500 block text-[9.5px]">MEETING ROOM:</span>
+                <span className="text-emerald-300 font-bold">{matterVideoRoom}</span>
+              </div>
+              <div className="text-slate-400">
+                <span className="text-slate-500 block text-[9.5px]">SECURITY & PROTOCOL:</span>
+                <span className="text-slate-200">End-to-End Encrypted WebRTC</span>
+              </div>
+              <div className="text-slate-400">
+                <span className="text-slate-500 block text-[9.5px]">SYNCED GOOGLE ACCOUNT:</span>
+                <span className="text-teal-300">level23consulting@gmail.com</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. CASE FACTS & JURISDICTION SUMMARY */}
+          <div className="p-4 rounded-2xl bg-[#090d18] border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <h4 className="text-xs font-bold font-heading text-white uppercase tracking-wide flex items-center gap-2">
+                <Scale className="w-4 h-4 text-teal-400" />
+                <span>Case Specifics & Judicial Venue Record</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowCaseSpecificsModal(true)}
+                className="text-[10px] font-mono text-teal-400 hover:text-teal-300 cursor-pointer"
+              >
+                Edit Records →
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+              <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-mono text-slate-500 uppercase block">Court Venue:</span>
+                <span className="text-slate-200 font-semibold block">{caseSpecifics.courtVenue}</span>
+                <span className="text-[10px] text-slate-400 font-mono">{caseSpecifics.branchName}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-mono text-slate-500 uppercase block">Opposing Party:</span>
+                <span className="text-slate-200 font-semibold block">{caseSpecifics.opposingParty}</span>
+                <span className="text-[10px] text-slate-400 font-mono">D.A. / DHS: {caseSpecifics.districtAttorneyOrDhs}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-mono text-slate-500 uppercase block">Presiding Dept & Judge:</span>
+                <span className="text-slate-200 font-semibold block">{caseSpecifics.judgeName || 'Hon. Deborah C. Servino'}</span>
+                <span className="text-[10px] text-slate-400 font-mono">{caseSpecifics.deptNumber || 'Dept. L-64'}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-mono text-slate-500 uppercase block">Key Case Dates:</span>
+                <span className="text-slate-200 font-semibold block">Incident/Marriage: {caseSpecifics.incidentOrMarriageDate || matterQuestions.marriageDate || '09/18/2015'}</span>
+                <span className="text-[10px] text-slate-400 font-mono">Separation/Breach: {caseSpecifics.separationOrIncidentDate || matterQuestions.separationDate || '04/10/2026'}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-mono text-slate-500 uppercase block">Nature of Suit:</span>
+                <span className="text-teal-300 font-semibold block truncate">{selectedNatureOfSuit}</span>
+                <span className="text-[10px] text-slate-400 font-mono">Pleading Mapped: Yes</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
+                <span className="text-[10px] font-mono text-slate-500 uppercase block">Case Status:</span>
+                <div className="flex gap-1.5 mt-1">
+                  {(['active', 'pending', 'completed'] as const).map(st => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => handleChangeStatus(st)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-mono capitalize cursor-pointer transition-all ${
+                        curMatter.status === st ? 'bg-teal-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 3. CASE TASKS & PROCEDURAL MILESTONES */}
+          <div className="p-4 rounded-2xl bg-[#090d18] border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <h4 className="text-xs font-bold font-heading text-white uppercase tracking-wide flex items-center gap-2">
+                <CheckSquare className="w-4 h-4 text-emerald-400" />
+                <span>Matter Tasks, Deadlines & Procedural Milestones</span>
+              </h4>
+              <span className="text-[10px] font-mono text-slate-400">
+                {curMatter.tasks.filter(t => t.completed).length}/{curMatter.tasks.length} Completed
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              {curMatter.tasks.map(task => (
+                <div
+                  key={task.id}
+                  onClick={() => handleToggleTask(task.id)}
+                  className={`p-2.5 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
+                    task.completed
+                      ? 'bg-emerald-950/20 border-emerald-500/30 text-slate-300'
+                      : 'bg-slate-900/50 border-slate-800 text-white hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <button type="button" className="text-emerald-400 cursor-pointer">
+                      {task.completed ? <CheckSquare className="w-4 h-4 text-emerald-400" /> : <Square className="w-4 h-4 text-slate-500" />}
+                    </button>
+                    <span className={`text-xs ${task.completed ? 'line-through text-slate-500' : 'font-medium'}`}>
+                      {task.title}
+                    </span>
+                  </div>
+                  {task.dueDate && (
+                    <span className="text-[10px] font-mono text-slate-500 flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      <span>Due: {task.dueDate}</span>
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Quick Add Task Input */}
+            <div className="flex items-center gap-2 pt-2">
+              <input
+                type="text"
+                placeholder="Add new procedural deadline or matter action..."
+                value={newTaskInput}
+                onChange={(e) => setNewTaskInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleAddTask();
+                }}
+                className="flex-1 bg-[#050812] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-400 font-sans"
+              />
+              <button
+                type="button"
+                onClick={handleAddTask}
+                className="px-3.5 py-2 bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold font-heading text-xs rounded-xl cursor-pointer transition-all flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Task</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 4. BILLING & TIME LEDGER */}
+          <div className="p-4 rounded-2xl bg-[#090d18] border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <h4 className="text-xs font-bold font-heading text-white uppercase tracking-wide flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-amber-400" />
+                <span>Matter Billing & Time Invoicing</span>
+              </h4>
+              <span className="text-xs font-mono font-bold text-amber-300">
+                Total Accrued: ${(curMatter.billedHours * curMatter.billingRate).toLocaleString()}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                <span className="text-[10px] font-mono text-slate-500 uppercase block">Billing Rate:</span>
+                <span className="text-sm font-mono font-bold text-white">${curMatter.billingRate}/hr</span>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                <span className="text-[10px] font-mono text-slate-500 uppercase block">Billed Hours:</span>
+                <span className="text-sm font-mono font-bold text-teal-300">{curMatter.billedHours} hrs</span>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-mono text-slate-500 uppercase block">Quick Log:</span>
+                  <div className="flex gap-1.5 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleLogHours(0.5)}
+                      className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono cursor-pointer"
+                    >
+                      +0.5h
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleLogHours(1.0)}
+                      className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono cursor-pointer"
+                    >
+                      +1.0h
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleLogHours(2.0)}
+                      className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono cursor-pointer"
+                    >
+                      +2.0h
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 5. EVIDENCE & DOCUMENTS VAULT */}
+          {matterEvidence.length > 0 && (
+            <div className="p-4 rounded-2xl bg-[#090d18] border border-slate-800 space-y-3">
+              <h4 className="text-xs font-bold font-heading text-white uppercase tracking-wide flex items-center gap-2">
+                <HardDrive className="w-4 h-4 text-indigo-400" />
+                <span>Associated Evidence & Files ({matterEvidence.length})</span>
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {matterEvidence.map(ev => (
+                  <div key={ev.id} className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
+                    <div className="truncate">
+                      <span className="font-semibold text-slate-200 block truncate">{ev.name}</span>
+                      <span className="text-[10px] text-slate-500 font-mono">{ev.fileCategory || ev.mimeType} • {ev.uploadedAt}</span>
+                    </div>
+                    <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">
+                      Vault
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
+    );
   };
 
   return (
     <div id="matters-tab-container" className="flex flex-col gap-4 h-[calc(100vh-140px)]">
-      
-      {/* TOP SUMMARY STATS & OUTCOME PREDICTOR WIDGET BAR */}
-      <div className="bg-[#0e1626] rounded-2.5xl border border-[#1e293b] p-4 shadow-xl shrink-0">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          
-          {/* Header & Mode Switcher */}
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="p-1.5 rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/20">
-                <BarChart3 className="w-4 h-4" />
-              </span>
-              <h2 className="text-sm font-bold font-heading text-white tracking-wide">
-                Case Analytics & Outcome Predictor
-              </h2>
-              <span className="px-2 py-0.5 text-[10px] font-mono rounded-full bg-teal-950/60 text-teal-300 border border-teal-500/30">
-                Live Empirical Engine
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400 font-sans">
-              Calculates estimated total billable hours and predicts case outcome success probability from linked evidence and consultations.
-            </p>
-          </div>
-
-          {/* Selector Switch: Selected Matter vs Practice Portfolio */}
-          <div className="flex items-center gap-2 bg-[#090d16] p-1 rounded-xl border border-[#1e293b] self-start lg:self-auto shrink-0">
-            <button
-              type="button"
-              onClick={() => setStatsViewMode('selected')}
-              className={`px-3 py-1 rounded-lg text-xs font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
-                statsViewMode === 'selected'
-                  ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-xs font-semibold'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Briefcase className="w-3 h-3" />
-              <span>Selected Case</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatsViewMode('portfolio')}
-              className={`px-3 py-1 rounded-lg text-xs font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
-                statsViewMode === 'portfolio'
-                  ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-xs font-semibold'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Layers className="w-3 h-3" />
-              <span>All Matters Portfolio ({matters.length})</span>
-            </button>
-          </div>
-        </div>
-
-        {/* METRICS ROW CARDS */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mt-3 pt-3 border-t border-[#1e293b]/70">
-          
-          {/* Card 1: Estimated Total Hours Billed (5/12 width) */}
-          <div className="md:col-span-5 bg-[#090d16] rounded-xl border border-[#1e293b] p-3 flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono uppercase text-slate-400 font-bold flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-teal-400" />
-                <span>Estimated Total Hours Billed</span>
-              </span>
-              <span className="text-xs font-mono font-bold text-emerald-400">
-                ${(statsViewMode === 'selected' ? currentMatterStats?.estimatedRevenue || 0 : portfolioStats.totalRevenue).toLocaleString()} Value
-              </span>
-            </div>
-
-            <div className="flex items-baseline gap-2 my-1.5">
-              <span className="text-xl font-bold font-mono text-white">
-                {statsViewMode === 'selected' ? currentMatterStats?.totalEstimatedHours || 0 : portfolioStats.grandTotalHours}
-              </span>
-              <span className="text-xs text-teal-400 font-mono">hours aggregated</span>
-            </div>
-
-            {/* Breakdown Pills */}
-            <div className="flex flex-wrap gap-1.5 text-[10px] font-mono">
-              <span className="px-2 py-0.5 rounded-md bg-[#0e1626] border border-[#1e293b] text-slate-300">
-                Core: <strong className="text-white">{statsViewMode === 'selected' ? currentMatterStats?.coreHours || 0 : portfolioStats.totalCoreHours}h</strong>
-              </span>
-              <span className="px-2 py-0.5 rounded-md bg-teal-500/10 border border-teal-500/20 text-teal-300">
-                Consults: <strong className="text-teal-200">+{statsViewMode === 'selected' ? currentMatterStats?.consultHours || 0 : portfolioStats.totalConsultHours}h</strong> ({statsViewMode === 'selected' ? currentMatterStats?.consultationCount || 0 : portfolioStats.totalConsultationsLinked} linked)
-              </span>
-              <span className="px-2 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-300">
-                Evidence: <strong className="text-indigo-200">+{statsViewMode === 'selected' ? currentMatterStats?.evidenceHours || 0 : portfolioStats.totalEvidenceHours}h</strong> ({statsViewMode === 'selected' ? currentMatterStats?.evidenceCount || 0 : portfolioStats.totalEvidenceLinked} linked)
-              </span>
-            </div>
-          </div>
-
-          {/* Card 2: Predicted Case Outcome Success Probability (5/12 width) */}
-          <div className="md:col-span-5 bg-[#090d16] rounded-xl border border-[#1e293b] p-3 flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono uppercase text-slate-400 font-bold flex items-center gap-1.5">
-                <Scale className="w-3.5 h-3.5 text-amber-400" />
-                <span>Predicted Outcome Success Probability</span>
-              </span>
-              <span className={`px-2 py-0.5 text-[9.5px] font-mono uppercase rounded-full border ${
-                (statsViewMode === 'selected' ? currentMatterStats?.probability || 75 : portfolioStats.avgProbability) >= 80
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-bold'
-                  : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-              }`}>
-                {(statsViewMode === 'selected' ? currentMatterStats?.probability || 75 : portfolioStats.avgProbability) >= 80 ? 'High Probability' : 'Moderate Probability'}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3 my-1.5">
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-xl font-bold font-mono text-emerald-400">
-                  {statsViewMode === 'selected' ? currentMatterStats?.probability || 75 : portfolioStats.avgProbability}%
-                </span>
-                <span className="text-[11px] text-slate-400 font-sans">favorable disposition forecast</span>
-              </div>
-              <div className="flex-1 bg-slate-800 rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-gradient-to-r from-teal-500 to-emerald-400 h-full transition-all duration-500 rounded-full"
-                  style={{ width: `${statsViewMode === 'selected' ? currentMatterStats?.probability || 75 : portfolioStats.avgProbability}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Contributing factors mini line */}
-            <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
-              <span>Evidence: {statsViewMode === 'selected' ? `${currentMatterStats?.evidenceCount || 0} files` : `${portfolioStats.totalEvidenceLinked} files`}</span>
-              <span>•</span>
-              <span>Consults: {statsViewMode === 'selected' ? `${currentMatterStats?.consultationCount || 0} sessions` : `${portfolioStats.totalConsultationsLinked} sessions`}</span>
-              <span>•</span>
-              <span>Procedural Tasks: {statsViewMode === 'selected' ? `${currentMatterStats?.taskCompletionRate || 0}% complete` : 'Active'}</span>
-            </div>
-          </div>
-
-          {/* Card 3: Inspect Matrix Action (2/12 width) */}
-          <div className="md:col-span-2 bg-[#090d16] rounded-xl border border-[#1e293b] p-3 flex flex-col justify-between items-center text-center">
-            <span className="text-[10px] font-mono uppercase text-slate-400 font-bold">Predictive Matrix</span>
-            <button
-              type="button"
-              onClick={() => setShowPredictorModal(true)}
-              className="w-full py-2 px-2.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 hover:text-teal-200 border border-teal-500/30 rounded-lg text-xs font-mono flex items-center justify-center gap-1.5 transition-all cursor-pointer my-auto shadow-xs"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
-              <span>Audit Factors</span>
-            </button>
-            <span className="text-[9px] text-slate-500 font-mono">Statistical breakdown</span>
-          </div>
-
-        </div>
-      </div>
-
       {/* MAIN 2-COLUMN VIEW CONTAINER */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
-      
-      {/* Left Columns: Matters Directory list (5/12 width) */}
-      <div className="lg:col-span-5 bg-[#0e1626] rounded-2.5xl border border-[#1e293b] flex flex-col justify-between overflow-hidden shadow-xl">
-        <div className="p-4 border-b border-[#1e293b] space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold font-heading text-white flex items-center gap-2">
-              <Briefcase className="w-4.5 h-4.5 text-teal-400" />
-              Matters Directory
-            </h2>
-            <button
-              id="btn-add-matter-trigger"
-              onClick={() => {
-                if (clients.length === 0) {
-                  alert('Please perform an intake for at least one client record before starting a matter file.');
-                  return;
-                }
-                setShowModal(true);
-              }}
-              className="px-3 py-1.5 bg-[#0d1624]/60 hover:bg-[#0d1624] text-teal-400 border border-teal-500/30 hover:border-teal-400 rounded-lg text-xs font-semibold font-heading flex items-center gap-1.5 cursor-pointer transition-all"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Create Matter</span>
-            </button>
-          </div>
 
-          {/* Search inside Matters list */}
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
-            <input
-              id="matters-search-input"
-              type="text"
-              placeholder="Search by case #, client name, or title in real-time..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#090d16] border border-[#1e293b] rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500/60 font-sans transition-all"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch('')}
-                className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white p-0.5 rounded cursor-pointer"
-                title="Clear search"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+        {/* LEFT COLUMN: Matters Directory, Create Matter, Type Selector, Client Matter Data Card (5/12 width) */}
+        <div className="lg:col-span-5 bg-[#0e1626] rounded-2.5xl border border-[#1e293b] flex flex-col justify-between overflow-hidden shadow-xl min-h-0">
+          
+          {/* Top Header & Mode Toggle Bar */}
+          <div className="p-4 border-b border-[#1e293b] space-y-3 shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Briefcase className="w-5 h-5 text-teal-400" />
+                <h2 className="text-base font-bold font-heading text-white">
+                  {leftPanelMode === 'create-assemble' ? 'Create Matter & Assemble Forms' : 'Matters Directory'}
+                </h2>
+              </div>
+
+              {/* Mode & Action Buttons */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  id="btn-left-workspace"
+                  onClick={() => setShowMatterWorkspaceModal(true)}
+                  className="px-2 py-1.5 rounded-lg text-xs font-semibold font-heading bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 hover:text-white flex items-center gap-1 transition-all cursor-pointer"
+                  title="Pop up Matter Workspace"
+                >
+                  <Briefcase className="w-3.5 h-3.5 text-teal-400" />
+                  <span className="hidden sm:inline">Workspace</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-left-video"
+                  onClick={() => setShowVideoConferenceModal(true)}
+                  className="px-2 py-1.5 rounded-lg text-xs font-semibold font-heading bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20 flex items-center gap-1 transition-all cursor-pointer"
+                  title="Join Matter Video Room"
+                >
+                  <Video className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="hidden sm:inline">Video</span>
+                </button>
+
+                {/* Mode Toggle Button */}
+                <button
+                  type="button"
+                  id="btn-toggle-create-matter"
+                  onClick={() => setLeftPanelMode(leftPanelMode === 'create-assemble' ? 'directory' : 'create-assemble')}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold font-heading flex items-center gap-1.5 transition-all cursor-pointer ${
+                    leftPanelMode === 'create-assemble'
+                      ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+                      : 'bg-teal-500/10 text-teal-300 border border-teal-500/30 hover:bg-teal-500/20'
+                  }`}
+                >
+                  {leftPanelMode === 'create-assemble' ? (
+                    <>
+                      <Briefcase className="w-3.5 h-3.5 text-teal-400" />
+                      <span>Directory</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-3.5 h-3.5 text-teal-400" />
+                      <span>+ Create</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {leftPanelMode === 'directory' ? (
+              /* SEARCH & FILTER CONTROLS FOR DIRECTORY */
+              <div className="space-y-2.5">
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+                  <input
+                    id="matters-search-input"
+                    type="text"
+                    placeholder="Search by case #, client name, or title in real-time..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full bg-[#090d16] border border-[#1e293b] rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500/60 font-sans transition-all"
+                  />
+                  {search && (
+                    <button
+                      type="button"
+                      onClick={() => setSearch('')}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white p-0.5 rounded cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Sort / Status Tabs */}
+                <div className="flex gap-1.5 overflow-x-auto pb-1">
+                  {(['all', 'active', 'pending', 'completed'] as const).map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => setStatusFilter(status)}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-mono capitalize border cursor-pointer transition-all ${
+                        statusFilter === status
+                          ? 'bg-teal-500/10 text-teal-400 border-teal-500/30 font-semibold'
+                          : 'bg-transparent text-slate-500 border-transparent hover:text-slate-300'
+                      }`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              /* CREATE & ASSEMBLE BANNER */
+              <p className="text-xs text-slate-400 font-sans">
+                Select matter type, search or pick client, customize specific questions, and find official forms.
+              </p>
             )}
           </div>
 
-          {/* Matches indicator if searching */}
-          {search && (
-            <div className="flex items-center justify-between text-[10.5px] font-mono text-teal-400/90 px-1">
-              <span>Filtering: &quot;{search}&quot;</span>
-              <span>{filteredMatters.length} matter{filteredMatters.length === 1 ? '' : 's'} found</span>
-            </div>
-          )}
-
-          {/* Sort tabs */}
-          <div className="flex gap-1.5 overflow-x-auto pb-1">
-            {(['all', 'active', 'pending', 'completed'] as const).map((status) => (
-              <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-mono capitalize border cursor-pointer transition-all ${
-                  statusFilter === status
-                    ? 'bg-teal-500/10 text-teal-400 border-teal-500/30'
-                    : 'bg-transparent text-slate-500 border-transparent hover:text-slate-300'
-                }`}
-              >
-                {status}
-              </button>
-            ))}
-          </div>
-
-          {/* Practice Area Type filter capsule */}
-          <div className="flex gap-1.5 items-center overflow-x-auto border-t border-[#1e293b]/40 pt-2 pb-0.5">
-            <span className="text-[9.5px] font-mono uppercase text-slate-500 shrink-0 font-bold">Type:</span>
-            {['all', 'Family Law', 'Immigration', 'Bankruptcy', 'General Practice'].map((area) => (
-              <button
-                key={area}
-                onClick={() => setTypeFilter(area)}
-                className={`px-2 py-0.5 rounded-md text-[10px] font-mono whitespace-nowrap border cursor-pointer transition-all ${
-                  typeFilter === area
-                    ? 'bg-teal-400/10 text-teal-400 border-teal-400/30 font-semibold'
-                    : 'bg-transparent text-slate-500 border-transparent hover:text-slate-400'
-                }`}
-              >
-                {area === 'all' ? 'All Types' : area}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Scrollpane listing for active cases */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {filteredMatters.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-slate-500 py-12">
-              <Briefcase className="w-10 h-10 text-[#1e293b] mb-2" />
-              <p className="text-xs">No matter files found.</p>
-            </div>
-          ) : (
-            filteredMatters.map((matter) => (
-              <button
-                key={matter.id}
-                onClick={() => setSelectedMatter(matter)}
-                className={`w-full text-left p-3 rounded-xl border flex items-center justify-between group transition-all duration-200 ${
-                  selectedMatter?.id === matter.id
-                    ? 'bg-teal-950/20 border-teal-500/40 shadow-md'
-                    : 'bg-transparent border-[#1e293b] hover:bg-[#0f172a]/40 hover:border-[#334155]'
-                }`}
-              >
-                <div className="max-w-[70%]">
-                  <h3 className="text-xs font-semibold text-slate-200 group-hover:text-teal-400 truncate">
-                    {matter.title}
-                  </h3>
-                  <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">Client: {matter.clientName} | {matter.caseNumber}</p>
-                </div>
-                <div className="text-right flex flex-col items-end">
-                  <span className={`px-2 py-0.5 text-[9px] font-mono uppercase rounded-full leading-none border ${
-                    matter.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                    matter.status === 'pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'
-                  }`}>
-                    {matter.status}
-                  </span>
-                  <span className="text-[9px] text-slate-500 font-mono mt-1">${(matter.billedHours * matter.billingRate).toLocaleString()} billed</span>
-                </div>
-              </button>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* Right Column: Case description details, tasks registry, and AI assessor (7/12 width) */}
-      <div className="lg:col-span-7 bg-[#0e1626] rounded-2.5xl border border-[#1e293b] flex flex-col justify-between overflow-hidden shadow-xl">
-        {selectedMatter ? (
-          <div className="flex-1 flex flex-col overflow-y-auto">
-            {/* Header profile of case matter */}
-            <div className="p-6 bg-gradient-to-r from-[#0d1624] to-[#0e1626] border-b border-[#1e293b] space-y-4">
-              <div className="flex justify-between items-start gap-4">
-                <div>
-                  <h2 className="text-lg font-bold font-heading text-white">{selectedMatter.title}</h2>
-                  <p className="text-xs font-mono text-teal-400">{selectedMatter.caseNumber} | Client: {selectedMatter.clientName}</p>
-                </div>
-                <span className="px-2.5 py-1 text-xs font-mono uppercase rounded-md bg-[#090d16] text-[#64748b] border border-[#1e293b]">
-                  {selectedMatter.practiceArea}
-                </span>
-              </div>
-
-              {/* Hourly Billing rates card */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="p-3 bg-[#090d16] rounded-xl border border-[#1e293b] space-y-0.5">
-                  <span className="text-[9px] font-mono uppercase text-slate-500 block">Billing Rate</span>
-                  <p className="text-xs font-semibold text-teal-400 font-mono flex items-center">
-                    <DollarSign className="w-3.5 h-3.5" />
-                    {selectedMatter.billingRate}/hr
-                  </p>
-                </div>
-                <div className="p-3 bg-[#090d16] rounded-xl border border-[#1e293b] space-y-0.5 animate-soft-pulse">
-                  <span className="text-[9px] font-mono uppercase text-slate-500 block">Billed Hours</span>
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold text-slate-200 font-mono">
-                      {selectedMatter.billedHours} hrs
-                    </p>
-                    <button
-                      onClick={() => {
-                        const updated = { ...selectedMatter, billedHours: selectedMatter.billedHours + 1 };
-                        onUpdateMatter(updated);
-                        setSelectedMatter(updated);
-                      }}
-                      className="text-[10px] text-teal-400 hover:text-teal-300 font-mono uppercase transition-colors"
-                    >
-                      +1 Hr Billed
-                    </button>
-                  </div>
-                </div>
-                <div className="p-3 bg-[#090d16] rounded-xl border border-[#1e293b] space-y-0.5">
-                  <span className="text-[9px] font-mono uppercase text-slate-500 block">Total Due Revenue</span>
-                  <p className="text-xs font-semibold text-emerald-400 font-mono flex items-center">
-                    <DollarSign className="w-3.5 h-3.5" />
-                    {(selectedMatter.billedHours * selectedMatter.billingRate).toLocaleString()}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Matter Narrative & Interactive Tasks Checklist */}
-            <div className="p-6 space-y-6 flex-1 select-text">
-              {/* Detailed narrative case facts */}
+          {/* LEFT PANEL MAIN BODY */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {leftPanelMode === 'directory' ? (
+              /* MATTERS DIRECTORY LIST */
               <div className="space-y-2">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest font-mono">Case Description & Litigation Narrative</h3>
-                <div className="p-4 bg-[#090d16] border border-[#1e293b] rounded-xl text-xs text-slate-300 leading-relaxed font-sans min-h-[80px]">
-                  {selectedMatter.description}
-                </div>
-              </div>
-
-              {/* AI litigator planning agent reports */}
-              <div className="space-y-3 p-4 bg-teal-500/5 border border-teal-500/10 rounded-2xl">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <h4 className="text-xs font-bold text-white flex items-center gap-1.5 font-heading">
-                      <Sparkles className="w-4 h-4 text-teal-400" />
-                      Google AI Litigation Planner
-                    </h4>
-                    <p className="text-[10px] text-slate-400 font-sans">Run Gemini to draft matter risk profiling and automatically populate checkpoints</p>
+                {filteredMatters.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500 font-sans text-xs">
+                    <Briefcase className="w-8 h-8 text-slate-600 mx-auto mb-2 opacity-50" />
+                    No matters matching filter. Click "+ Create Matter" to assemble a new file.
                   </div>
-                  <button
-                    onClick={handleAIRiskModelAnalysis}
-                    disabled={analyzingRisk}
-                    className="px-3 py-1.5 bg-teal-400 hover:bg-teal-500 text-slate-950 text-[11px] font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
-                  >
-                    {analyzingRisk ? 'Consulting Gemini...' : 'Analyze Planning'}
-                  </button>
-                </div>
-
-                {/* AI report readout */}
-                {selectedMatter.riskAssessment && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="pt-2 text-xs text-slate-300 font-sans leading-relaxed border-t border-teal-500/10 whitespace-pre-line"
-                  >
-                    {selectedMatter.riskAssessment}
-                  </motion.div>
-                )}
-              </div>
-
-              {/* Tasks schedule / Checklist */}
-              <div className="space-y-3">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest font-mono">Litigation Milestones Checklist</h3>
-                
-                {/* Check list container */}
-                <div className="space-y-2 max-h-[220px] overflow-y-auto">
-                  {selectedMatter.tasks.map((task) => (
+                ) : (
+                  filteredMatters.map((matter) => (
                     <div
-                      key={task.id}
-                      className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
-                        task.completed
-                          ? 'bg-slate-900/40 border-[#1e293b] opacity-60'
-                          : 'bg-[#090d16] border-[#1e293b]'
+                      key={matter.id}
+                      onClick={() => {
+                        setSelectedMatter(matter);
+                        setLeftPanelMode('create-assemble');
+                      }}
+                      className={`w-full text-left p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 group transition-all duration-200 cursor-pointer ${
+                        selectedMatter?.id === matter.id
+                          ? 'bg-teal-950/25 border-teal-500/40 shadow-lg'
+                          : 'bg-slate-900/40 border-[#1e293b] hover:bg-[#0f172a] hover:border-slate-700'
                       }`}
                     >
-                      <button
-                        onClick={() => handleToggleTask(task.id)}
-                        className="flex items-center gap-3 text-left max-w-[80%]"
-                      >
-                        {task.completed ? (
-                          <div id={`task-check-${task.id}`} className="p-0.5 bg-teal-500/20 text-teal-400 rounded-md border border-teal-500/30">
-                            <FileCheck2 className="w-4 h-4" />
-                          </div>
-                        ) : (
-                          <div id={`task-uncheck-${task.id}`} className="w-5 h-5 rounded-md border-2 border-slate-500" />
-                        )}
-                        <span className={`font-sans tracking-wide leading-tight ${task.completed ? 'line-through text-slate-500' : 'text-slate-300'}`}>
-                          {task.title}
+                      <div className="max-w-full sm:max-w-[65%]">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-xs font-semibold text-slate-200 group-hover:text-teal-400 truncate">
+                            {matter.title}
+                          </h3>
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">
+                          Client: {matter.clientName} | Case: {matter.caseNumber}
+                        </p>
+                        <span className="text-[9.5px] font-mono text-indigo-400/90 mt-1 inline-block">
+                          {matter.practiceArea}
                         </span>
-                      </button>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-slate-500">{task.dueDate}</span>
-                        <button
-                          onClick={() => handleDeleteTask(task.id)}
-                          className="text-slate-500 hover:text-rose-400 p-1 rounded-md transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      </div>
+
+                      <div className="flex sm:flex-col items-center sm:items-end justify-between gap-1.5 shrink-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`px-2 py-0.5 text-[9px] font-mono uppercase rounded-full border ${
+                            matter.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                            matter.status === 'pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+                          }`}>
+                            {matter.status}
+                          </span>
+                          <span className="text-[9.5px] text-teal-400 font-mono">
+                            ${(matter.billedHours * matter.billingRate).toLocaleString()}
+                          </span>
+                        </div>
+
+                        {/* Quick Action Buttons on Card */}
+                        <div className="flex items-center gap-1 mt-0.5" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedMatter(matter);
+                              setShowMatterWorkspaceModal(true);
+                            }}
+                            className="px-2 py-0.5 rounded text-[9.5px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                            title="Pop up Matter Workspace"
+                          >
+                            Workspace
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedMatter(matter);
+                              setShowVideoConferenceModal(true);
+                            }}
+                            className="px-2 py-0.5 rounded text-[9.5px] font-mono bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-colors cursor-pointer flex items-center gap-1"
+                            title="Join Video Room"
+                          >
+                            <Video className="w-2.5 h-2.5 text-emerald-400" />
+                            <span>Video</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-
-                {/* Add new subtask inline form */}
-                <form onSubmit={handleAddTask} className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Add specialized litigation milestone task..."
-                    value={newTaskTitle}
-                    onChange={(e) => setNewTaskTitle(e.target.value)}
-                    className="flex-1 bg-[#090d16] border border-[#1e293b] rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-500/60 font-sans"
-                  />
-                  <button
-                    type="submit"
-                    className="p-2.5 bg-teal-400 text-slate-950 font-semibold rounded-xl text-xs flex items-center justify-center cursor-pointer hover:bg-teal-500"
-                  >
-                    <PlusCircle className="w-4 h-4" />
-                  </button>
-                </form>
+                  ))
+                )}
               </div>
-
-              {/* Dynamic Filing Cabinet & Docket Directory */}
-              <div className="space-y-4 pt-4 border-t border-[#1e293b]">
-                <div className="flex items-center justify-between col-span-2">
-                  <div className="space-y-0.5">
-                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest font-mono flex items-center gap-1.5">
-                      <Folder className="w-4 h-4 text-teal-400" />
-                      <span>Case Dossier File Sentry</span>
-                    </h3>
-                    <p className="text-[10px] text-slate-500 font-sans">
-                      Physical Folder: <code className="text-teal-400/90 font-mono">iiiamadex/Clients/{selectedMatter.clientName}/Matters/...</code>
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 text-[10px] font-mono rounded ${
-                      localFolderStatus === 'connected' ? 'bg-teal-500/10 text-teal-400' : 'bg-slate-500/10 text-slate-400'
-                    }`}>
-                      {localFolderStatus === 'connected' ? '● Connected' : '○ Local Sync'}
+            ) : (
+              /* CREATE & ASSEMBLE PIPELINE (USER SPECIFICATION) */
+              <div className="space-y-4">
+                
+                {/* 1. SELECT TYPE: Family Law, Civil Litigation, Immigration, Bankruptcy, General Practice */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-mono uppercase font-bold text-slate-300 flex items-center gap-1.5">
+                      <Scale className="w-3.5 h-3.5 text-teal-400" />
+                      <span>1. Select Matter Type</span>
                     </span>
-                    <button
-                      type="button"
-                      onClick={checkDesktopBridge}
-                      className="p-1.5 bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-all"
-                      title="Refresh folders directory"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                    </button>
+                    <span className="text-[10px] font-mono text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/20">
+                      Active: {selectedType}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {[
+                      { id: 'Family Law', icon: Scale, label: 'Family Law', desc: 'FL-120, FL-100' },
+                      { id: 'Civil Litigation', icon: Briefcase, label: 'Civil Litigation', desc: 'PLD-C-010' },
+                      { id: 'Immigration', icon: Globe, label: 'Immigration', desc: 'I-589, EOIR-42B' },
+                      { id: 'Bankruptcy', icon: Building2, label: 'Bankruptcy', desc: 'Form 101, 106' },
+                      { id: 'General Practice', icon: Layers, label: 'General Practice', desc: 'Probate, DPOA' }
+                    ].map(type => {
+                      const isSelected = selectedType === type.id;
+                      const IconComp = type.icon;
+                      return (
+                        <button
+                          key={type.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedType(type.id as MatterPracticeType);
+                            setCaseSpecifics(prev => ({
+                              ...prev,
+                              caseNumber: type.id === 'Immigration' ? 'A# 248-091244' : type.id === 'Civil Litigation' ? '30-2026-01489201-CU-BC-CGC' : '26FL004812C',
+                              courtVenue: type.id === 'Immigration' ? 'EOIR Immigration Court, Los Angeles' : 'Orange County Superior Court'
+                            }));
+                          }}
+                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-gradient-to-br from-teal-950/40 to-slate-900 border-teal-400 shadow-md ring-1 ring-teal-500/40'
+                              : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900 text-slate-400'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <IconComp className={`w-3.5 h-3.5 ${isSelected ? 'text-teal-400' : 'text-slate-500'}`} />
+                            <span className={`text-xs font-bold font-heading truncate ${isSelected ? 'text-white' : 'text-slate-300'}`}>
+                              {type.label}
+                            </span>
+                          </div>
+                          <span className="text-[9.5px] font-mono text-slate-500 block truncate">
+                            {type.desc}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Sub-actions toolbar */}
-                <div className="flex flex-wrap items-center justify-between gap-3 bg-[#090d16]/60 p-3 rounded-xl border border-[#1e293b]">
-                  <div className="relative flex-1 min-w-[150px]">
-                    <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-500" />
+                {/* 2. SEARCH OR SELECT A CLIENT (DROPDOWN SEARCH FIELD) */}
+                <div className="space-y-2 relative">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-mono uppercase font-bold text-slate-300 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-teal-400" />
+                      <span>2. Search or Select Client</span>
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400">
+                      {clients.length} Clients in Database
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
                     <input
                       type="text"
-                      placeholder="Search items in this dossier..."
-                      value={matterFileSearch}
-                      onChange={(e) => setMatterFileSearch(e.target.value)}
-                      className="w-full bg-[#090d16] border border-[#1e293b] rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-400/60"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsNewFile(true);
-                        setEditingFileName('');
-                        setEditingFileContent('');
-                        setIsEditingFileModalOpen(true);
+                      placeholder="Type client name, email, or select below..."
+                      value={clientSearchQuery || selectedClient?.name || ''}
+                      onChange={(e) => {
+                        setClientSearchQuery(e.target.value);
+                        setIsClientDropdownOpen(true);
                       }}
-                      className="p-2 py-1.5 bg-slate-800 hover:bg-slate-755 text-slate-200 border border-[#1e293b] rounded-lg text-xs font-mono flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5 text-teal-400" />
-                      <span>New File</span>
-                    </button>
-                    
+                      onFocus={() => setIsClientDropdownOpen(true)}
+                      className="w-full bg-[#090d16] border border-slate-700 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-teal-400 font-sans"
+                    />
                     <button
                       type="button"
-                      onClick={handleGenerateCaseBrief}
-                      className="p-2 py-1.5 bg-gradient-to-r from-teal-500 to-emerald-400 text-[#090d16] font-bold rounded-lg text-xs font-heading flex items-center gap-1.5 cursor-pointer shadow-md"
+                      onClick={() => setIsClientDropdownOpen(!isClientDropdownOpen)}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white cursor-pointer"
                     >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>Compile Litig Brief</span>
+                      <ChevronDown className="w-4 h-4" />
                     </button>
                   </div>
-                </div>
 
-                {/* Files Grid and Table list */}
-                {/* Drag and Drop File Uploader area */}
-                <div
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleFileDrop}
-                  onClick={() => document.getElementById('matter-file-upload-input')?.click()}
-                  className={`border border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all duration-200 mb-4 flex flex-col items-center justify-center ${
-                    isDragging
-                      ? 'border-teal-400 bg-[#14b8a6]/10 text-teal-300 scale-[1.01]'
-                      : 'border-slate-800 hover:border-slate-705 bg-[#090d16]/10 hover:bg-[#090d16]/30 text-slate-400'
-                  }`}
-                >
-                  <input
-                    type="file"
-                    id="matter-file-upload-input"
-                    multiple
-                    className="hidden"
-                    onChange={async (e) => {
-                      if (e.target.files && e.target.files.length > 0) {
-                        await processMatterFiles(e.target.files);
-                      }
-                    }}
-                  />
-                  <Upload className={`w-7 h-7 mb-1.5 transition-transform duration-300 ${isDragging ? 'text-teal-400 scale-110 animate-bounce' : 'text-slate-400'}`} />
-                  <p className="text-[11px] font-sans font-medium text-slate-202">
-                    Drag & drop your <span className="text-teal-400 font-bold">existing case files</span> here, or <span className="text-teal-400 underline font-bold">click to browse</span>
-                  </p>
-                  <p className="text-[9px] text-slate-500 font-mono mt-0.5">
-                    Reads briefs, affidavits, raw client texts, .VCF contacts, and PDFs directly to case dossier
-                  </p>
-                </div>
-
-                <div className="overflow-x-auto border border-[#1e293b] rounded-xl overflow-hidden bg-[#090d16]/30">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-[#1e293b] bg-[#090d16]/90 text-[10px] font-mono uppercase text-slate-500">
-                        <th className="p-3">File Name</th>
-                        <th className="p-3">Type</th>
-                        <th className="p-3">Size</th>
-                        <th className="p-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#1e293b] text-xs">
-                      {getMatterFiles().length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="p-8 text-center text-slate-500 italic">
-                            No matching files compiled yet. Click compile or drop documents inside!
-                          </td>
-                        </tr>
+                  {/* Dropdown list of clients */}
+                  {isClientDropdownOpen && (
+                    <div className="absolute left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto bg-[#0a0f1d] border border-slate-700 rounded-xl shadow-2xl p-1 z-30 space-y-1">
+                      {filteredClients.length === 0 ? (
+                        <div className="p-3 text-xs text-slate-500 text-center">
+                          No matching clients found.
+                        </div>
                       ) : (
-                        getMatterFiles().map((file, idx) => (
-                          <tr key={idx} className="hover:bg-slate-800/10 group text-slate-300">
-                            <td className="p-3 font-semibold text-slate-200 font-sans flex items-center gap-2">
-                              <FileText className="w-3.5 h-3.5 text-teal-400" />
-                              <span className="truncate max-w-[170px]">{file.name}</span>
-                            </td>
-                            <td className="p-3 font-mono text-[10px] text-slate-400">{file.type}</td>
-                            <td className="p-3 font-mono text-[10px] text-slate-500">{file.size}</td>
-                            <td className="p-3 text-right">
-                              <div className="flex items-center justify-end gap-2 text-slate-500">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setIsNewFile(false);
-                                    setEditingFileName(file.name);
-                                    setEditingFileContent(file.content || '');
-                                    setIsEditingFileModalOpen(true);
-                                  }}
-                                  className="p-1 px-2 bg-slate-800/40 hover:bg-slate-800 text-[10px] text-slate-300 rounded font-mono"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const blob = new Blob([file.content || ''], { type: 'text/plain' });
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.href = url;
-                                    a.download = file.name;
-                                    a.click();
-                                  }}
-                                  className="p-1 text-teal-400 hover:text-teal-300"
-                                >
-                                  <Download className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteMatterFile(file.name)}
-                                  className="p-1 text-rose-400 hover:text-rose-300"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
+                        filteredClients.map(c => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedClientId(c.id);
+                              setClientSearchQuery('');
+                              setIsClientDropdownOpen(false);
+                            }}
+                            className={`w-full text-left p-2 rounded-lg text-xs flex items-center justify-between cursor-pointer ${
+                              c.id === selectedClientId
+                                ? 'bg-teal-500/20 text-teal-200 border border-teal-500/30'
+                                : 'text-slate-300 hover:bg-slate-800'
+                            }`}
+                          >
+                            <div>
+                              <span className="font-semibold block">{c.name}</span>
+                              <span className="text-[10px] text-slate-500 font-mono">{c.email || c.phone || 'No direct phone'}</span>
+                            </div>
+                            <span className="text-[9.5px] font-mono text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                              {c.practiceArea || 'Client'}
+                            </span>
+                          </button>
                         ))
                       )}
-                    </tbody>
-                  </table>
+                    </div>
+                  )}
                 </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center p-12 text-slate-500">
-            <Briefcase className="w-12 h-12 text-[#1e293b] mb-3" />
-            <p className="text-sm font-semibold">Select an active litigation matter file to overview milestone checklists, task plans, and AI assessments.</p>
-          </div>
-        )}
-      </div>
 
-      </div>
-
-      {/* Modal view for establishing a new legal matter */}
-      <AnimatePresence>
-        {showModal && (
-          <div id="new-matter-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#0e1626] border border-[#1e293b] rounded-2.5xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col"
-            >
-              {/* Header */}
-              <div className="p-6 bg-gradient-to-r from-teal-950/20 to-[#0e1626] pb-4 border-b border-[#1e293b] flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-bold font-heading text-white">Instantiate New Practice Matter</h3>
-                  <p className="text-xs text-slate-400">Open a case file and link the client ledger</p>
-                </div>
-                <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white font-mono text-sm cursor-pointer">✕</button>
-              </div>
-
-              {/* Form body */}
-              <form onSubmit={handleCreate} className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
-                    <label className="block text-[11px] font-mono uppercase text-slate-400 mb-1">Matter Title *</label>
-                    <input
-                      type="text"
-                      required
-                      value={newMatterTitle}
-                      onChange={(e) => setNewMatterTitle(e.target.value)}
-                      placeholder="e.g., Petition for Administrative Appeal of Visa Denial"
-                      className="w-full bg-[#090d16] border border-[#1e293b] rounded-xl px-4 py-2 text-xs text-white placeholder-slate-500 focus:border-teal-500 focus:outline-none"
-                    />
+                {/* 3. CLIENT MATTER DATA CARD (POPULATES THE FRAME BELOW) */}
+                <div className="p-4 rounded-2xl bg-gradient-to-b from-[#0a0f1d] to-[#070b14] border border-teal-500/30 shadow-lg space-y-3.5">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400">
+                        <FileCheck2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-white font-heading uppercase tracking-wide">
+                          Client Matter Data Card
+                        </h4>
+                        <span className="text-[10px] font-mono text-teal-300">
+                          {selectedClient ? selectedClient.name : 'Intake Ready'}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[9.5px] font-mono font-bold bg-teal-500/10 text-teal-400 px-2 py-0.5 rounded border border-teal-500/30">
+                      Mapped to {selectedType}
+                    </span>
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] font-mono uppercase text-slate-400 mb-1">Link Client Ledger Record *</label>
+                  {/* Specific Matter / Nature of Suit Selector */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10.5px] font-mono font-bold text-slate-300 uppercase">
+                      Specific Matter / Nature of Suit:
+                    </label>
                     <select
-                      value={newMatterClient}
-                      onChange={(e) => setNewMatterClient(e.target.value)}
-                      required
-                      className="w-full bg-[#090d16] border border-[#1e293b] rounded-xl px-4 py-2.2 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                      value={selectedNatureOfSuit}
+                      onChange={(e) => {
+                        setSelectedNatureOfSuit(e.target.value);
+                        setCaseSpecifics(prev => ({ ...prev, natureOfSuit: e.target.value }));
+                      }}
+                      className="w-full bg-[#050812] border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-teal-400 font-sans cursor-pointer"
                     >
-                      <option value="">-- Choose Intake Record --</option>
-                      {clients.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name} ({c.practiceArea})</option>
+                      {natureOfSuitOptions.map(opt => (
+                        <option key={opt} value={opt} className="bg-[#050812] text-white">
+                          {opt}
+                        </option>
                       ))}
                     </select>
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] font-mono uppercase text-slate-400 mb-1">Practice Area category</label>
-                    <select
-                      value={newMatterArea}
-                      onChange={(e) => setNewMatterArea(e.target.value as any)}
-                      className="w-full bg-[#090d16] border border-[#1e293b] rounded-xl px-4 py-2 text-xs text-white focus:border-teal-500 focus:outline-none"
-                    >
-                      <option value="Family Law">Family Law</option>
-                      <option value="Immigration">Immigration</option>
-                      <option value="Bankruptcy">Bankruptcy</option>
-                      <option value="General Practice">General Practice</option>
-                    </select>
+                  {/* DYNAMIC QUESTIONS REFLECTING INITIAL MATTER SELECTED */}
+                  <div className="space-y-2 pt-1 border-t border-slate-800/80">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono uppercase text-slate-400 font-bold">
+                        Matter-Specific Inquiries & Questionnaire:
+                      </span>
+                      <span className="text-[9px] font-mono text-teal-400">
+                        Auto-Fills Form Sections
+                      </span>
+                    </div>
+
+                    {selectedType === 'Family Law' && (
+                      <div className="space-y-2 text-xs">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="text-[9.5px] font-mono text-slate-400 block mb-0.5">Date of Marriage:</span>
+                            <input
+                              type="text"
+                              value={matterQuestions.marriageDate}
+                              onChange={(e) => handleUpdateQuestion('marriageDate', e.target.value)}
+                              className="w-full bg-[#050812] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[9.5px] font-mono text-slate-400 block mb-0.5">Date of Separation:</span>
+                            <input
+                              type="text"
+                              value={matterQuestions.separationDate}
+                              onChange={(e) => handleUpdateQuestion('separationDate', e.target.value)}
+                              className="w-full bg-[#050812] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-[9.5px] font-mono text-slate-400 block mb-0.5">Custody Requested:</span>
+                          <input
+                            type="text"
+                            value={matterQuestions.custodyPreference}
+                            onChange={(e) => handleUpdateQuestion('custodyPreference', e.target.value)}
+                            className="w-full bg-[#050812] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedType === 'Immigration' && (
+                      <div className="space-y-2 text-xs">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="text-[9.5px] font-mono text-slate-400 block mb-0.5">Alien Reg No. (A-Number):</span>
+                            <input
+                              type="text"
+                              value={matterQuestions.alienRegNumber}
+                              onChange={(e) => handleUpdateQuestion('alienRegNumber', e.target.value)}
+                              className="w-full bg-[#050812] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[9.5px] font-mono text-slate-400 block mb-0.5">U.S. Entry Date:</span>
+                            <input
+                              type="text"
+                              value={matterQuestions.entryDate}
+                              onChange={(e) => handleUpdateQuestion('entryDate', e.target.value)}
+                              className="w-full bg-[#050812] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-[9.5px] font-mono text-slate-400 block mb-0.5">Protected Grounds of Relief:</span>
+                          <input
+                            type="text"
+                            value={matterQuestions.persecutionGrounds}
+                            onChange={(e) => handleUpdateQuestion('persecutionGrounds', e.target.value)}
+                            className="w-full bg-[#050812] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedType === 'Civil Litigation' && (
+                      <div className="space-y-2 text-xs">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="text-[9.5px] font-mono text-slate-400 block mb-0.5">Claimed Damages ($):</span>
+                            <input
+                              type="text"
+                              value={matterQuestions.damagesClaimed}
+                              onChange={(e) => handleUpdateQuestion('damagesClaimed', e.target.value)}
+                              className="w-full bg-[#050812] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[9.5px] font-mono text-slate-400 block mb-0.5">Incident/Breach Date:</span>
+                            <input
+                              type="text"
+                              value={caseSpecifics.separationOrIncidentDate || '04/10/2026'}
+                              onChange={(e) => setCaseSpecifics(prev => ({ ...prev, separationOrIncidentDate: e.target.value }))}
+                              className="w-full bg-[#050812] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-[9.5px] font-mono text-slate-400 block mb-0.5">Asserted Defenses Summary:</span>
+                          <input
+                            type="text"
+                            value={matterQuestions.reliefSummary}
+                            onChange={(e) => handleUpdateQuestion('reliefSummary', e.target.value)}
+                            className="w-full bg-[#050812] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedType === 'Bankruptcy' && (
+                      <div className="space-y-2 text-xs">
+                        <div>
+                          <span className="text-[9.5px] font-mono text-slate-400 block mb-0.5">Estimated Total Debt:</span>
+                          <input
+                            type="text"
+                            value={matterQuestions.debtEstimate}
+                            onChange={(e) => handleUpdateQuestion('debtEstimate', e.target.value)}
+                            className="w-full bg-[#050812] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedType === 'General Practice' && (
+                      <div className="space-y-2 text-xs">
+                        <div>
+                          <span className="text-[9.5px] font-mono text-slate-400 block mb-0.5">Requested Relief / Document Aim:</span>
+                          <input
+                            type="text"
+                            value={matterQuestions.reliefSummary}
+                            onChange={(e) => handleUpdateQuestion('reliefSummary', e.target.value)}
+                            className="w-full bg-[#050812] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
 
+                  {/* 4. BUTTON TITLED "FIND FORMS" */}
+                  <div className="pt-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      id="btn-find-forms"
+                      onClick={handleFindForms}
+                      className="flex-1 py-2.5 px-4 bg-gradient-to-r from-teal-500 to-emerald-400 hover:from-teal-400 hover:to-emerald-300 text-slate-950 font-bold font-heading text-xs rounded-xl shadow-lg shadow-teal-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                    >
+                      <Sparkles className="w-4 h-4 text-slate-950" />
+                      <span>Find Forms</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowCaseSpecificsModal(true)}
+                      className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-mono rounded-xl cursor-pointer transition-all"
+                      title="Open Case Specifics Modal"
+                    >
+                      <MapPin className="w-4 h-4 text-teal-400" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* 5. LIST OF AVAILABLE FORMS FOR THAT MATTER TYPE */}
+                {hasSearchedForms && (
+                  <div className="space-y-2 pt-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono uppercase font-bold text-slate-300 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>Available Forms ({selectedType}):</span>
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400">
+                        {availableFormsForType.length} Forms
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                      {availableFormsForType.map(f => (
+                        <div
+                          key={f.code}
+                          className="p-2.5 bg-[#090d16] border border-slate-800 rounded-xl flex items-center justify-between group hover:border-teal-500/40 transition-all"
+                        >
+                          <div className="space-y-0.5 max-w-[70%]">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-mono font-bold text-teal-400">
+                                {f.code}
+                              </span>
+                              {f.mandatory && (
+                                <span className="text-[8.5px] uppercase font-bold text-amber-300 bg-amber-950/80 px-1 rounded">
+                                  Mandatory
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-300 font-sans truncate">{f.title}</p>
+                            <span className="text-[9.5px] text-slate-500 font-mono block">{f.statute}</span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Switch viewer to this form immediately
+                              setRightPanelMode('forms-viewer');
+                            }}
+                            className="px-2.5 py-1 text-xs font-mono rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 transition-all cursor-pointer flex items-center gap-1"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>Preview</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Assemble as Registered Matter Button */}
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={handleCreateMatterFromAssemble}
+                    className="w-full py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-heading font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Briefcase className="w-3.5 h-3.5 text-teal-400" />
+                    <span>Register New Matter File in Database</span>
+                  </button>
+                </div>
+
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: THE LARGER WINDOW BESIDE THE MATTERS DIRECTORY (7/12 width) */}
+        {/* Can toggle between Judicial Forms Previewer and Matter Case Workspace & Video */}
+        <div className="lg:col-span-7 bg-[#0e1626] rounded-2.5xl border border-[#1e293b] flex flex-col justify-between overflow-hidden shadow-xl min-h-0">
+          
+          {/* Top Panel Mode Switcher Bar */}
+          <div className="px-4 py-2.5 bg-[#090e1c] border-b border-[#1e293b] flex items-center justify-between gap-3 shrink-0">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                id="btn-tab-forms-viewer"
+                onClick={() => setRightPanelMode('forms-viewer')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-heading font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  rightPanelMode === 'forms-viewer'
+                    ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5 text-teal-400" />
+                <span>Judicial Forms Previewer</span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-tab-matter-workspace"
+                onClick={() => setRightPanelMode('case-dossier')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-heading font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  rightPanelMode === 'case-dossier'
+                    ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                <Briefcase className="w-3.5 h-3.5 text-teal-400" />
+                <span>Matter Workspace & Video</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Pop up workspace modal button */}
+              <button
+                type="button"
+                id="btn-popup-workspace"
+                onClick={() => setShowMatterWorkspaceModal(true)}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono flex items-center gap-1.5 transition-all cursor-pointer"
+                title="Pop up Matter Workspace in large modal window"
+              >
+                <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
+                <span>Pop Up Workspace</span>
+              </button>
+
+              {/* Video Conference Button */}
+              <button
+                type="button"
+                id="btn-top-join-video"
+                onClick={() => setShowVideoConferenceModal(true)}
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-heading font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                title="Open live video conference / deposition for this matter"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <Video className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Video Provision</span>
+              </button>
+            </div>
+          </div>
+
+          {rightPanelMode === 'forms-viewer' ? (
+            <MatterFormsViewer
+              selectedMatter={selectedMatter}
+              client={selectedClient}
+              clients={clients}
+              caseSpecifics={caseSpecifics}
+              onUpdateCaseSpecifics={(specs) => setCaseSpecifics(specs)}
+              onAddGeneratedDoc={onAddGeneratedDoc}
+              onRequestOpenCaseSpecificsModal={() => setShowCaseSpecificsModal(true)}
+              onRequestOpenMatterWorkspace={() => setShowMatterWorkspaceModal(true)}
+              onRequestOpenVideoConference={() => setShowVideoConferenceModal(true)}
+              onSelectClientId={(newId) => setSelectedClientId(newId)}
+            />
+          ) : (
+            renderMatterWorkspaceContent(false)
+          )}
+        </div>
+
+      </div>
+
+      {/* POPUP MODAL: REQUEST FOR CASE SPECIFICS */}
+      <AnimatePresence>
+        {showCaseSpecificsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-xl rounded-2xl border border-teal-500/40 bg-[#090d18] text-slate-200 shadow-2xl p-6 relative font-sans space-y-4 max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-teal-500/20 text-teal-300 border border-teal-500/40">
+                    <MapPin className="w-5 h-5" />
+                  </div>
                   <div>
-                    <label className="block text-[11px] font-mono uppercase text-slate-400 mb-1">Hourly Billing rate ($)</label>
+                    <h3 className="text-base font-bold font-heading text-white">
+                      Request for Case Specifics
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Saved to Client&apos;s Intake Card & used by AI Agent to logically assemble probable forms.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCaseSpecificsModal(false)}
+                  className="text-slate-400 hover:text-white cursor-pointer p-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Specifics Form */}
+              <div className="space-y-3.5 text-xs">
+                {/* State & County */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-mono font-bold text-slate-300 uppercase block mb-1">
+                      State / Jurisdiction:
+                    </label>
                     <input
-                      type="number"
-                      value={newMatterRate}
-                      onChange={(e) => setNewMatterRate(Number(e.target.value))}
-                      className="w-full bg-[#090d16] border border-[#1e293b] rounded-xl px-4 py-2 text-xs text-white placeholder-slate-500 focus:border-teal-500 focus:outline-none font-mono"
+                      type="text"
+                      value={caseSpecifics.state}
+                      onChange={(e) => setCaseSpecifics(prev => ({ ...prev, state: e.target.value }))}
+                      className="w-full bg-[#050812] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-[11px] font-mono uppercase text-slate-400 mb-1">Initial Case Status</label>
-                    <select
-                      value={newMatterStatus}
-                      onChange={(e) => setNewMatterStatus(e.target.value as any)}
-                      className="w-full bg-[#090d16] border border-[#1e293b] rounded-xl px-4 py-2 text-xs text-white focus:border-teal-500 focus:outline-none"
-                    >
-                      <option value="active">Active File</option>
-                      <option value="pending">Pending Status</option>
-                    </select>
+                    <label className="text-[10px] font-mono font-bold text-slate-300 uppercase block mb-1">
+                      County / Venue:
+                    </label>
+                    <input
+                      type="text"
+                      value={caseSpecifics.county}
+                      onChange={(e) => setCaseSpecifics(prev => ({ ...prev, county: e.target.value }))}
+                      className="w-full bg-[#050812] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Court Venue & Branch */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-mono font-bold text-slate-300 uppercase block mb-1">
+                      Court Name:
+                    </label>
+                    <input
+                      type="text"
+                      value={caseSpecifics.courtVenue}
+                      onChange={(e) => setCaseSpecifics(prev => ({ ...prev, courtVenue: e.target.value }))}
+                      className="w-full bg-[#050812] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono font-bold text-slate-300 uppercase block mb-1">
+                      Branch / Courthouse:
+                    </label>
+                    <input
+                      type="text"
+                      value={caseSpecifics.branchName}
+                      onChange={(e) => setCaseSpecifics(prev => ({ ...prev, branchName: e.target.value }))}
+                      className="w-full bg-[#050812] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Case Number & Opposing Party */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-mono font-bold text-slate-300 uppercase block mb-1">
+                      Case Number / A-Number / Docket:
+                    </label>
+                    <input
+                      type="text"
+                      value={caseSpecifics.caseNumber}
+                      onChange={(e) => setCaseSpecifics(prev => ({ ...prev, caseNumber: e.target.value }))}
+                      className="w-full bg-[#050812] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono font-bold text-slate-300 uppercase block mb-1">
+                      Opposing Party (Petitioner/Plaintiff):
+                    </label>
+                    <input
+                      type="text"
+                      value={caseSpecifics.opposingParty}
+                      onChange={(e) => setCaseSpecifics(prev => ({ ...prev, opposingParty: e.target.value }))}
+                      className="w-full bg-[#050812] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                    />
+                  </div>
+                </div>
+
+                {/* District Attorney / DHS Trial Counsel */}
+                <div>
+                  <label className="text-[10px] font-mono font-bold text-slate-300 uppercase block mb-1">
+                    District Attorney / DHS Assistant Chief Counsel:
+                  </label>
+                  <input
+                    type="text"
+                    value={caseSpecifics.districtAttorneyOrDhs}
+                    onChange={(e) => setCaseSpecifics(prev => ({ ...prev, districtAttorneyOrDhs: e.target.value }))}
+                    className="w-full bg-[#050812] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                  />
+                </div>
+
+                {/* Specific Dates & Relief */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-mono font-bold text-slate-300 uppercase block mb-1">
+                      Incident / Marriage Date:
+                    </label>
+                    <input
+                      type="text"
+                      value={caseSpecifics.incidentOrMarriageDate || ''}
+                      onChange={(e) => setCaseSpecifics(prev => ({ ...prev, incidentOrMarriageDate: e.target.value }))}
+                      className="w-full bg-[#050812] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono font-bold text-slate-300 uppercase block mb-1">
+                      Separation / Breach Date:
+                    </label>
+                    <input
+                      type="text"
+                      value={caseSpecifics.separationOrIncidentDate || ''}
+                      onChange={(e) => setCaseSpecifics(prev => ({ ...prev, separationOrIncidentDate: e.target.value }))}
+                      className="w-full bg-[#050812] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                    />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-mono uppercase text-slate-400 mb-1">Full litigation scope, background narrative, and objectives</label>
+                  <label className="text-[10px] font-mono font-bold text-slate-300 uppercase block mb-1">
+                    Specific Relief Requested / Special Stipulations:
+                  </label>
                   <textarea
-                    rows={4}
-                    value={newMatterDescription}
-                    onChange={(e) => setNewMatterDescription(e.target.value)}
-                    placeholder="Outline legal theories, core timelines, and filing goals..."
-                    className="w-full bg-[#090d16] border border-[#1e293b] rounded-xl px-4 py-2 text-xs text-white placeholder-slate-500 focus:border-teal-500 focus:outline-none leading-relaxed"
+                    rows={2}
+                    value={caseSpecifics.reliefRequested || ''}
+                    onChange={(e) => setCaseSpecifics(prev => ({ ...prev, reliefRequested: e.target.value }))}
+                    className="w-full bg-[#050812] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-sans"
                   />
                 </div>
+              </div>
 
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="submit"
-                    className="flex-1 py-2.5 bg-gradient-to-r from-teal-500 to-emerald-400 hover:from-teal-600 hover:to-emerald-500 text-[#090d16] font-bold rounded-xl text-xs font-heading transition-all cursor-pointer shadow-lg"
-                  >
-                    Confirm & Instantiate Case File
-                  </button>
+              {/* Modal Actions */}
+              <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
+                <span className="text-[10.5px] font-mono text-slate-400">
+                  Client: {selectedClient?.name || 'Marcus Vance'}
+                </span>
+
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setShowModal(false)}
-                    className="px-4 py-2.5 bg-[#0f172a] hover:bg-slate-900 border border-[#1e293b] rounded-xl text-xs font-semibold text-slate-400"
+                    onClick={() => setShowCaseSpecificsModal(false)}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl cursor-pointer"
                   >
                     Cancel
                   </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveCaseSpecifics}
+                    className="px-5 py-2 bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-bold font-heading rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Save to Intake Card & Assemble</span>
+                  </button>
                 </div>
-              </form>
+              </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* Dynamic File Editor Modal for Matters Case Folder */}
+      {/* POPUP MODAL: MATTER WORKSPACE & CASE DOSSIER */}
       <AnimatePresence>
-        {isEditingFileModalOpen && (
-          <div id="matter-file-editor-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+        {showMatterWorkspaceModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#0e1626] border border-[#1e293b] rounded-2.5xl max-w-2xl w-full overflow-hidden shadow-2xl flex flex-col"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-5xl h-[88vh] rounded-3xl border border-teal-500/40 bg-[#070b14] text-slate-200 shadow-2xl flex flex-col overflow-hidden relative"
             >
-              <div className="p-6 bg-[#0c1322] border-b border-[#1e293b] flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-white font-mono uppercase tracking-widest flex items-center gap-2">
-                    <FileCode className="w-4.5 h-4.5 text-teal-400" />
-                    <span>{isNewFile ? 'Establish New Case File' : 'Docket File Editor'}</span>
-                  </h3>
-                  <p className="text-[11px] text-slate-500 font-sans mt-0.5">
-                    Target Folder: <code>iiiamadex/Clients/{selectedMatter?.clientName}/Matters/{selectedMatter?.caseNumber}/</code>
-                  </p>
-                </div>
+              <div className="absolute right-4 top-4 z-20">
                 <button
                   type="button"
-                  onClick={() => setIsEditingFileModalOpen(false)}
-                  className="text-slate-400 hover:text-white font-mono text-sm"
+                  id="btn-close-workspace-modal"
+                  onClick={() => setShowMatterWorkspaceModal(false)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer"
                 >
-                  ✕
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-
-              <form onSubmit={handleSaveMatterFileSubmit} className="p-6 space-y-4 flex flex-col">
-                <div>
-                  <label className="block text-[11px] font-mono uppercase text-slate-400 mb-1">
-                    Document Title (e.g. petition_reply.md, motions.txt)
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    disabled={!isNewFile}
-                    value={editingFileName}
-                    onChange={(e) => setEditingFileName(e.target.value)}
-                    placeholder="e.g. partition_reply_draft.md"
-                    className="w-full bg-[#090d16] border border-[#1e293b] rounded-xl px-4 py-2 text-xs text-white placeholder-slate-500 focus:border-teal-500 focus:outline-none font-mono"
-                  />
-                </div>
-
-                <div className="flex-1">
-                  <label className="block text-[11px] font-mono uppercase text-slate-400 mb-1">
-                    Case Document Content Editor
-                  </label>
-                  <textarea
-                    rows={12}
-                    required
-                    value={editingFileContent}
-                    onChange={(e) => setEditingFileContent(e.target.value)}
-                    placeholder="Provide detailed motion text, court responses, client narrative draft..."
-                    className="w-full bg-[#090d16] border border-[#1e293b] rounded-xl px-4 py-3 text-xs text-white placeholder-slate-500 focus:border-teal-500 focus:outline-none font-mono leading-relaxed resize-y"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingFileModalOpen(false)}
-                    className="px-4 py-2.5 bg-[#0f172a] hover:bg-slate-900 border border-[#1e293b] rounded-xl text-xs font-semibold text-slate-400 font-heading"
-                  >
-                    Close
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-6 py-2.5 bg-gradient-to-r from-teal-500 to-emerald-400 hover:opacity-90 text-[#090d16] font-bold rounded-xl text-xs font-heading transition-all shadow-md"
-                  >
-                    Save File to Case Folder
-                  </button>
-                </div>
-              </form>
+              {renderMatterWorkspaceContent(true)}
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
 
-        {/* PREDICTOR FACTOR MATRIX & EVIDENTIARY AUDIT MODAL */}
-        {showPredictorModal && (
-          <div id="predictor-audit-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4">
+      {/* POPUP MODAL: LIVE VIDEO CONFERENCE PROVISION */}
+      <AnimatePresence>
+        {showVideoConferenceModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#0e1626] border border-[#1e293b] rounded-2.5xl max-w-3xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-5xl h-[88vh] rounded-3xl border border-emerald-500/40 bg-[#070b14] text-slate-200 shadow-2xl flex flex-col overflow-hidden relative"
             >
-              {/* Modal Header */}
-              <div className="p-6 bg-gradient-to-r from-teal-950/40 via-[#0d1624] to-[#0e1626] border-b border-[#1e293b] flex items-center justify-between">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="p-1.5 rounded-lg bg-teal-500/10 text-teal-400 border border-teal-500/20">
-                      <ShieldCheck className="w-4.5 h-4.5" />
-                    </span>
-                    <h3 className="text-base font-bold font-heading text-white">
-                      Predictive Outcome & Hours Audit Matrix
-                    </h3>
+              {/* Header */}
+              <div className="p-4 bg-gradient-to-r from-emerald-950/80 via-[#0e1626] to-slate-900 border-b border-emerald-500/30 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-md">
+                    <Video className="w-5 h-5 animate-pulse" />
                   </div>
-                  <p className="text-xs text-slate-400 font-sans">
-                    Empirical calculations based on aggregated exhibits, consultation logs, and procedural tasks.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowPredictorModal(false)}
-                  className="text-slate-400 hover:text-white font-mono text-sm p-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* Modal Body */}
-              <div className="p-6 space-y-6 overflow-y-auto flex-1 text-xs">
-                
-                {/* Active Scope Summary */}
-                <div className="p-4 bg-[#090d16] border border-[#1e293b] rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div>
-                    <span className="text-[10px] font-mono uppercase text-teal-400 font-bold block">
-                      Target Audit Scope: {selectedMatter?.title || 'Practice Portfolio'}
-                    </span>
-                    <p className="text-slate-200 font-sans mt-0.5">
-                      Client: <strong>{selectedMatter?.clientName}</strong> ({selectedMatter?.caseNumber})
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <span className="text-[9.5px] font-mono text-slate-400 uppercase block">Predicted Success</span>
-                      <span className="text-base font-bold font-mono text-emerald-400">
-                        {currentMatterStats?.probability || 75}% Favorable
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold font-heading text-white">
+                        {selectedMatter?.title || selectedClient?.name || 'Case Matter'} — Real-Time Video Deposition
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                        Live Room
                       </span>
                     </div>
-                    <div className="text-right border-l border-[#1e293b] pl-4">
-                      <span className="text-[9.5px] font-mono text-slate-400 uppercase block">Aggregated Hours</span>
-                      <span className="text-base font-bold font-mono text-teal-300">
-                        {currentMatterStats?.totalEstimatedHours || 0} hrs (${(currentMatterStats?.estimatedRevenue || 0).toLocaleString()})
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Factor 1: Evidence & Exhibits Aggregation */}
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold text-white font-heading flex items-center gap-2">
-                      <FileCheck2 className="w-4 h-4 text-indigo-400" />
-                      <span>Linked Evidence Discovery & Exhibit Index ({currentMatterStats?.evidenceCount || 0} Files)</span>
-                    </h4>
-                    <span className="text-[10.5px] font-mono text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
-                      +{currentMatterStats ? Math.min(currentMatterStats.evidenceCount * 4, 12) : 0}% Success Weight • +{currentMatterStats?.evidenceHours || 0}h Billed
-                    </span>
-                  </div>
-
-                  {currentMatterStats?.linkedEvidence.length === 0 ? (
-                    <div className="p-3 bg-[#090d16] border border-[#1e293b] rounded-xl text-slate-400 text-[11px] font-sans">
-                      No external evidence files directly linked to this matter yet. Upload evidence in the Documents tab to increase evidentiary burden score.
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {currentMatterStats?.linkedEvidence.map((ev) => (
-                        <div key={ev.id} className="p-3 bg-[#090d16] border border-[#1e293b] rounded-xl flex items-center justify-between">
-                          <div className="space-y-0.5 max-w-[70%]">
-                            <span className="font-semibold text-slate-200 block truncate">{ev.name}</span>
-                            <p className="text-[10.5px] text-slate-400 font-sans truncate">{ev.summary || 'Evidentiary exhibit scanned and indexed into case matrix.'}</p>
-                          </div>
-                          <div className="text-right">
-                            <span className={`px-2 py-0.5 text-[9px] font-mono uppercase rounded border ${
-                              ev.duressLevel === 'High' ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                            }`}>
-                              {ev.duressLevel === 'High' ? 'High Risk Exhibit' : 'Verified Exhibit'}
-                            </span>
-                            <span className="block text-[9.5px] font-mono text-slate-500 mt-1">+0.75 hr audit</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Factor 2: Linked Consultations & Depositions */}
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold text-white font-heading flex items-center gap-2">
-                      <Users className="w-4 h-4 text-teal-400" />
-                      <span>Linked Consultations & Recorded Depositions ({currentMatterStats?.consultationCount || 0} Sessions)</span>
-                    </h4>
-                    <span className="text-[10.5px] font-mono text-teal-300 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/20">
-                      +{currentMatterStats ? Math.min(currentMatterStats.consultationCount * 5, 10) : 0}% Alignment Weight • +{currentMatterStats?.consultHours || 0}h Billed
-                    </span>
-                  </div>
-
-                  {currentMatterStats?.linkedConsultations.length === 0 ? (
-                    <div className="p-3 bg-[#090d16] border border-[#1e293b] rounded-xl text-slate-400 text-[11px] font-sans">
-                      No active consultation sessions scheduled for this client yet. Schedule client depositions or mediation conferences in the Consultations tab.
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {currentMatterStats?.linkedConsultations.map((con) => (
-                        <div key={con.id} className="p-3 bg-[#090d16] border border-[#1e293b] rounded-xl flex items-center justify-between">
-                          <div className="space-y-0.5 max-w-[70%]">
-                            <span className="font-semibold text-slate-200 block">{con.meetingType} - {con.roomName}</span>
-                            <p className="text-[10.5px] text-slate-400 font-sans truncate">{con.notes || 'Client consultation logged with attorney notes.'}</p>
-                          </div>
-                          <div className="text-right">
-                            <span className="px-2 py-0.5 text-[9px] font-mono uppercase rounded bg-teal-500/10 text-teal-300 border border-teal-500/30">
-                              {con.status}
-                            </span>
-                            <span className="block text-[9.5px] font-mono text-slate-500 mt-1">+1.25 hr session</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Factor 3: Procedural Tasks Readiness */}
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold text-white font-heading flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      <span>Litigation Procedural Tasks ({selectedMatter?.tasks?.filter(t => t.completed).length || 0}/{selectedMatter?.tasks?.length || 0} Completed)</span>
-                    </h4>
-                    <span className="text-[10.5px] font-mono text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                      {currentMatterStats?.taskCompletionRate || 0}% Completion Ratio
-                    </span>
-                  </div>
-
-                  <div className="p-3.5 bg-[#090d16] border border-[#1e293b] rounded-xl space-y-2">
-                    <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-emerald-400 h-full rounded-full transition-all"
-                        style={{ width: `${currentMatterStats?.taskCompletionRate || 0}%` }}
-                      />
-                    </div>
-                    <p className="text-[10.5px] text-slate-400 font-sans leading-relaxed">
-                      Completing all pre-trial filings, financial disclosure questionnaires, and discovery responses maximizes case disposition readiness under applicable California Family Code and Civil Procedure timelines.
+                    <p className="text-xs text-slate-400 font-mono mt-0.5">
+                      Room Code: <strong className="text-emerald-300">{matterVideoRoom}</strong> • Secure Host: <span className="text-teal-300">level23consulting@gmail.com</span>
                     </p>
                   </div>
                 </div>
 
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyVideoLink}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-mono rounded-xl cursor-pointer flex items-center gap-1.5 transition-all"
+                  >
+                    {copiedVideoLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+                    <span>{copiedVideoLink ? 'Copied' : 'Copy Link'}</span>
+                  </button>
+
+                  {onNavigateToTab && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowVideoConferenceModal(false);
+                        onNavigateToTab('consult', selectedClient?.id);
+                      }}
+                      className="px-3 py-1.5 bg-sky-950/40 hover:bg-sky-900/50 text-sky-300 border border-sky-500/30 text-xs font-mono rounded-xl cursor-pointer flex items-center gap-1.5"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Consultations Tab</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    id="btn-close-video-modal"
+                    onClick={() => setShowVideoConferenceModal(false)}
+                    className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
-              {/* Modal Footer */}
-              <div className="p-4 bg-[#0c1322] border-t border-[#1e293b] flex items-center justify-between">
-                <span className="text-[10.5px] font-mono text-slate-500">
-                  Level 23 Real-Time Statistical Audit Matrix
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowPredictorModal(false)}
-                  className="px-5 py-2 bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold rounded-xl text-xs font-heading transition-all shadow-md cursor-pointer"
-                >
-                  Dismiss Audit Report
-                </button>
+              {/* Jitsi Meet Iframe view */}
+              <div className="flex-1 bg-black relative min-h-0">
+                <iframe
+                  src={`https://meet.jit.si/${matterVideoRoom}#config.prejoinPageEnabled=false&userInfo.displayName="Level 23 Counsel"`}
+                  allow="camera; microphone; display-capture; autoplay; clipboard-write; speaker"
+                  className="w-full h-full border-0"
+                  title="Matter Video Conference"
+                />
+              </div>
+
+              {/* Meeting Notes Footer */}
+              <div className="p-3 bg-[#080d18] border-t border-slate-800 flex items-center justify-between gap-3 shrink-0">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={videoNotes}
+                    onChange={(e) => setVideoNotes(e.target.value)}
+                    placeholder="Enter deposition transcript note or hearing finding to record in matter..."
+                    className="w-full bg-[#050812] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-teal-400 font-sans"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (videoNotes.trim()) {
+                        handleAddTask();
+                        setVideoNotes('');
+                      }
+                      setShowVideoConferenceModal(false);
+                    }}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold font-heading text-xs rounded-xl cursor-pointer transition-all"
+                  >
+                    Save & Conclude
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowVideoConferenceModal(false)}
+                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl cursor-pointer"
+                  >
+                    Close Video
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
