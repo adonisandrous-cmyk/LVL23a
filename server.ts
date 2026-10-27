@@ -9738,18 +9738,31 @@ async function startServer() {
     });
     console.log(`📦 Production static assets loaded from: ${distPath}`);
   }
+import express, { Request, Response } from "express";
+import path from "path";
 
-  if (!process.env.VERCEL) {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`🌐 Server running at http://0.0.0.0:${PORT} (listening on port ${PORT})`);
-      console.log(`💡 Local access: http://localhost:${PORT}`);
-    });
-  }
-}
+const app = express();
 
-if (!process.env.VERCEL) {
-  startServer();
-}
+// 1. API routes must come first
+// app.use("/api", apiRoutes);
+
+// 2. Serve Vite production build static assets
+const distPath = path.resolve(__dirname, "../dist"); // verify this points to your client dist
+app.use(express.static(distPath));
+
+// 3. Catch-all: serve index.html for client-side routing
+app.get("*", (req: Request, res: Response) => {
+  res.sendFile(path.join(distPath, "index.html"));
+});
+
+// 4. Listen on Cloud Run's port (0.0.0.0 is mandatory)
+const PORT = Number(process.env.PORT) || 8080;
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🌐 Server running on http://0.0.0.0:${PORT}`);
+});
 
 export { app };
 export default app;
+
+
