@@ -1,0 +1,11 @@
+{
+  "template": "templates/I-589.pdf",
+  "fields": {
+    "client_first_name": "ApplicantFirstName",
+    "client_last_name": "ApplicantLastName",
+    "client_DOB": "ApplicantDateOfBirth",
+    "client_A_number": "AlienRegistrationNumber",
+    "client_address": "ResidenceStreetAddress",
+    "case_number": "AlienCaseNumber"
+  }
+}

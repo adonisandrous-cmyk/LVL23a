@@ -1,0 +1,46 @@
+{
+  "form_id": "EOIR-33",
+  "jurisdiction": "Executive Office for Immigration Review (EOIR) / DOJ",
+  "title": "Alien's Change of Address Form / Notice of Entry of Appearance",
+  "revision": "Rev. December 2021",
+  "description": "Declarative mapping dictionary linking Universal Legal DB schema to official EOIR-33 immigration court form targets, enforcing strict atomic field placement (first name vs last name).",
+  "fields": {
+    "form1[0].#subform[0].A_Number[0]": {
+      "type": "format_string",
+      "source": "client.a_number",
+      "case": "upper"
+    },
+    "form1[0].#subform[0].Alien_First_Name[0]": {
+      "type": "direct",
+      "source": "client.first_name"
+    },
+    "form1[0].#subform[0].Alien_Middle_Name[0]": {
+      "type": "direct",
+      "source": "client.middle_name",
+      "default": ""
+    },
+    "form1[0].#subform[0].Alien_Last_Name[0]": {
+      "type": "direct",
+      "source": "client.last_name"
+    },
+    "form1[0].#subform[0].Street_Address[0]": "client.street",
+    "form1[0].#subform[0].Apt_Suite[0]": {
+      "type": "direct",
+      "source": "client.apt_suite",
+      "default": ""
+    },
+    "form1[0].#subform[0].City[0]": "client.city",
+    "form1[0].#subform[0].State[0]": {
+      "type": "format_string",
+      "source": "client.state",
+      "case": "upper"
+    },
+    "form1[0].#subform[0].Zip_Code[0]": "client.zip",
+    "form1[0].#subform[0].Phone_Number[0]": "client.phone",
+    "form1[0].#subform[0].Email_Address[0]": "client.email",
+    "form1[0].#subform[0].Court_Location[0]": "court.name",
+    "form1[0].#subform[0].Signature_Date[0]": "signature.date",
+    "form1[0].#subform[0].Representative_Name[0]": "attorney.name",
+    "form1[0].#subform[0].EOIR_ID_Number[0]": "attorney.eoir_id"
+  }
+}

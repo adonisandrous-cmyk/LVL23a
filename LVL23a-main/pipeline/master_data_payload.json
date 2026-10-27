@@ -1,0 +1,87 @@
+{
+  "client": {
+    "id": "",
+    "first_name": "",
+    "middle_name": "",
+    "last_name": "",
+    "full_name": "",
+    "role": "",
+    "phone": "",
+    "email": "",
+    "address": {
+      "street": "",
+      "city": "",
+      "state": "CA",
+      "zip": ""
+    }
+  },
+  "opposing_party": {
+    "first_name": "",
+    "middle_name": "",
+    "last_name": "",
+    "full_name": "",
+    "role": "",
+    "phone": "",
+    "email": "",
+    "address": {
+      "street": "",
+      "city": "",
+      "state": "CA",
+      "zip": ""
+    }
+  },
+  "attorney": {
+    "name": "",
+    "firm_name": "",
+    "bar_number": "",
+    "street": "",
+    "city": "",
+    "state": "CA",
+    "zip": "",
+    "phone": "",
+    "fax": "",
+    "email": "",
+    "representing": ""
+  },
+  "case": {
+    "number": "",
+    "county": "",
+    "court_name": "",
+    "branch_name": "",
+    "court_street": "",
+    "court_mailing": "",
+    "court_city_zip": "",
+    "title_petitioner": "",
+    "title_respondent": ""
+  },
+  "proceeding": {
+    "type": "Dissolution of Marriage",
+    "date_of_marriage": "",
+    "date_of_separation": "",
+    "filing_party": "Petitioner",
+    "responsive_party": "Respondent"
+  },
+  "request_for_order": {
+    "requested_by": "",
+    "hearing": {
+      "date": "",
+      "time": "",
+      "dept": "",
+      "address": ""
+    },
+    "orders_requested": {
+      "child_custody": false,
+      "child_visitation": false,
+      "child_support": false,
+      "spousal_support": false,
+      "property_control": false,
+      "attorney_fees": false,
+      "other": false
+    },
+    "temporary_emergency_orders_requested": false,
+    "facts_in_support": "",
+    "custody_details": "",
+    "property_details": ""
+  },
+  "children": []
+}

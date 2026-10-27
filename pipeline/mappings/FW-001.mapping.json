@@ -1,0 +1,93 @@
+{
+  "form_id": "FW-001",
+  "jurisdiction": "California Judicial Council",
+  "title": "Request to Waive Court Fees",
+  "revision": "Rev. January 1, 2023",
+  "description": "Declarative mapping dictionary linking 4-Part Intake / Master Standardized JSON schema to California Judicial Council FW-001 (Fee Waiver) AcroForm targets.",
+  "fields": {
+    "FW-001[0].Page1[0].CourtInfo[0].CrtCounty_ft[0]": {
+      "type": "format_string",
+      "source": "case.county",
+      "case": "upper"
+    },
+    "FW-001[0].Page1[0].CourtInfo[0].Street_ft[0]": "case.court_street",
+    "FW-001[0].Page1[0].CourtInfo[0].CityZip_ft[0]": "case.court_city_zip",
+    "FW-001[0].Page1[0].CourtInfo[0].Branch_ft[0]": "case.branch_name",
+
+    "FW-001[0].Page1[0].PersonAsking[0].Name_ft[0]": "client.full_name",
+    "FW-001[0].Page1[0].PersonAsking[0].Street_ft[0]": "client.street",
+    "FW-001[0].Page1[0].PersonAsking[0].City_ft[0]": "client.city",
+    "FW-001[0].Page1[0].PersonAsking[0].State_ft[0]": "client.state",
+    "FW-001[0].Page1[0].PersonAsking[0].Zip_ft[0]": "client.zip",
+    "FW-001[0].Page1[0].PersonAsking[0].Phone_ft[0]": "client.phone",
+    "FW-001[0].Page1[0].PersonAsking[0].JobTitle_ft[0]": "client.occupation",
+    "FW-001[0].Page1[0].PersonAsking[0].Employer_ft[0]": "client.employer",
+
+    "FW-001[0].Page1[0].LawyerInfo[0].Name_ft[0]": "attorney.name",
+    "FW-001[0].Page1[0].LawyerInfo[0].Firm_ft[0]": "attorney.firm_name",
+    "FW-001[0].Page1[0].LawyerInfo[0].Phone_ft[0]": "attorney.phone",
+    "FW-001[0].Page1[0].LawyerInfo[0].BarNo_ft[0]": "attorney.bar_number",
+
+    "FW-001[0].Page1[0].CaseInfo[0].CaseName_ft[0]": {
+      "type": "template",
+      "template": "{petitioner} v. {respondent}",
+      "variables": {
+        "petitioner": "client.full_name",
+        "respondent": "opposing_party.full_name"
+      }
+    },
+    "FW-001[0].Page1[0].CaseInfo[0].CaseNumber_ft[0]": "case.case_number",
+
+    "FW-001[0].Page1[0].WaiverBasis[0].PublicBenefits_cb[0]": {
+      "type": "checkbox",
+      "source": "fee_waiver.basis_public_assistance",
+      "checked_value": "/Yes"
+    },
+    "FW-001[0].Page1[0].WaiverBasis[0].MediCal_cb[0]": {
+      "type": "checkbox",
+      "source": "fee_waiver.benefits.medi_cal",
+      "checked_value": "/Yes"
+    },
+    "FW-001[0].Page1[0].WaiverBasis[0].FoodStamps_cb[0]": {
+      "type": "checkbox",
+      "source": "fee_waiver.benefits.food_stamps",
+      "checked_value": "/Yes"
+    },
+    "FW-001[0].Page1[0].WaiverBasis[0].SSI_cb[0]": {
+      "type": "checkbox",
+      "source": "fee_waiver.benefits.ssi",
+      "checked_value": "/Yes"
+    },
+    "FW-001[0].Page1[0].WaiverBasis[0].CalWORKS_cb[0]": {
+      "type": "checkbox",
+      "source": "fee_waiver.benefits.calworks",
+      "checked_value": "/Yes"
+    },
+
+    "FW-001[0].Page1[0].WaiverBasis[0].LowIncome_cb[0]": {
+      "type": "checkbox",
+      "source": "fee_waiver.basis_low_income",
+      "checked_value": "/Yes"
+    },
+    "FW-001[0].Page1[0].WaiverBasis[0].HouseholdSize_ft[0]": "client.household_size",
+    "FW-001[0].Page1[0].WaiverBasis[0].GrossMonthlyIncome_ft[0]": "client.gross_monthly_income",
+
+    "FW-001[0].Page1[0].WaiverBasis[0].Hardship_cb[0]": {
+      "type": "checkbox",
+      "source": "fee_waiver.basis_hardship",
+      "checked_value": "/Yes"
+    },
+
+    "FW-001[0].Page2[0].CaseNumber[0].CaseNumber_ft[0]": "case.case_number",
+    "FW-001[0].Page2[0].FinancialStatement[0].GrossMonthlyPay_ft[0]": "fee_waiver.financials.gross_pay",
+    "FW-001[0].Page2[0].FinancialStatement[0].PayrollDeductions_ft[0]": "fee_waiver.financials.payroll_deductions",
+    "FW-001[0].Page2[0].FinancialStatement[0].NetTakeHome_ft[0]": "fee_waiver.financials.net_pay",
+    "FW-001[0].Page2[0].FinancialStatement[0].RentMortgage_ft[0]": "fee_waiver.financials.rent_mortgage",
+    "FW-001[0].Page2[0].FinancialStatement[0].Food_ft[0]": "fee_waiver.financials.food",
+    "FW-001[0].Page2[0].FinancialStatement[0].Utilities_ft[0]": "fee_waiver.financials.utilities",
+    "FW-001[0].Page2[0].FinancialStatement[0].Transportation_ft[0]": "fee_waiver.financials.transportation",
+    "FW-001[0].Page2[0].FinancialStatement[0].TotalExpenses_ft[0]": "fee_waiver.financials.total_expenses",
+    "FW-001[0].Page2[0].SignatureDate_dt[0]": "fee_waiver.filing_date",
+    "FW-001[0].Page2[0].Signature_ft[0]": "client.full_name"
+  }
+}

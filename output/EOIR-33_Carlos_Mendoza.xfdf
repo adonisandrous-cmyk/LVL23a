@@ -1,0 +1,2 @@
+<?xml version='1.0' encoding='utf-8'?>
+<xfdf xmlns="http://ns.adobe.com/xfdf/" xml:space="preserve"><fields><field name="ImmigrationCourtDocketNumber"><value>A098765432-EOIR</value></field><field name="AlienRegistrationNumber"><value>A-204-589-123</value></field><field name="AlienDOB"><value>1988-11-20</value></field><field name="AlienNewAddress"><value>742 Broadway, San Diego, CA 92101</value></field><field name="AlienFirstName"><value>Carlos</value></field><field name="AlienLastName"><value>Mendoza</value></field></fields><f href="templates/EOIR-33.pdf" /></xfdf>

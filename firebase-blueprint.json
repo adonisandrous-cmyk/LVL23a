@@ -1,0 +1,118 @@
+{
+  "entities": {
+    "client": {
+      "title": "Client",
+      "description": "Represents a client file in the legal suite.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the client." },
+        "name": { "type": "string", "description": "Full name of the client." },
+        "email": { "type": "string", "format": "email", "description": "Email address." },
+        "phone": { "type": "string", "description": "Phone number." },
+        "status": { "type": "string", "enum": ["active", "pending", "archived"], "description": "Lifecycle status." },
+        "intakeNotes": { "type": "string", "description": "Core descriptive intake and factual narratives." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." },
+        "practiceArea": { "type": "string", "description": "Primary practice area." }
+      },
+      "required": ["id", "name", "email", "status"]
+    },
+    "matter": {
+      "title": "Matter",
+      "description": "Represents an active legal matter or case file.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier." },
+        "title": { "type": "string", "description": "Descriptive case/matter title." },
+        "caseNumber": { "type": "string", "description": "Court case number or internal tracking number." },
+        "clientId": { "type": "string", "description": "Reference to parent client ID." },
+        "clientName": { "type": "string", "description": "De-normalized client name." },
+        "practiceArea": { "type": "string", "description": "Practice area designation." },
+        "status": { "type": "string", "enum": ["active", "pending", "closed"], "description": "Matter status." },
+        "billingRate": { "type": "integer", "description": "Hourly billable rate in USD." },
+        "billedHours": { "type": "integer", "description": "Total accrued billable hours." },
+        "description": { "type": "string", "description": "Brief description of case scope." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp." },
+        "tasks": {
+          "type": "array",
+          "description": "Tasks associated with this matter."
+        },
+        "riskAssessment": { "type": "string", "description": "AI compiled case assessment." }
+      },
+      "required": ["id", "title", "clientId", "status"]
+    },
+    "generatedDoc": {
+      "title": "GeneratedDocument",
+      "description": "Represents an AI drafted legal brief or form.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier." },
+        "title": { "type": "string", "description": "Document title." },
+        "docType": { "type": "string", "description": "Document type." },
+        "clientId": { "type": "string", "description": "Associated client." },
+        "clientName": { "type": "string", "description": "Client name." },
+        "content": { "type": "string", "description": "Draft content in markdown." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Date of generation." }
+      },
+      "required": ["id", "title", "content"]
+    },
+    "evidenceFile": {
+      "title": "EvidenceFile",
+      "description": "Represents an uploaded evidence file with extracted OCR details.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "size": { "type": "string" },
+        "mimeType": { "type": "string" },
+        "uploadedAt": { "type": "string", "format": "date-time" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "matterId": { "type": "string" },
+        "matterTitle": { "type": "string" },
+        "fileCategory": { "type": "string" },
+        "extractedClientName": { "type": "string" },
+        "duressLevel": { "type": "string" },
+        "summary": { "type": "string" },
+        "extractedFacts": { "type": "array" },
+        "rawTextSimulated": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "legalMessage": {
+      "title": "LegalMessage",
+      "description": "Represents a message in an AI conversation thread.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sender": { "type": "string", "enum": ["user", "assistant"] },
+        "agentName": { "type": "string" },
+        "content": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "sender", "content"]
+    }
+  },
+  "firestore": {
+    "/clients/{clientId}": {
+      "schema": "client",
+      "description": "Clients registry"
+    },
+    "/matters/{matterId}": {
+      "schema": "matter",
+      "description": "Matters and cases details"
+    },
+    "/generatedDocs/{docId}": {
+      "schema": "generatedDoc",
+      "description": "AI drafted court pleadings and briefs"
+    },
+    "/evidenceFiles/{fileId}": {
+      "schema": "evidenceFile",
+      "description": "Scanned evidence pieces"
+    },
+    "/chatThread/{msgId}": {
+      "schema": "legalMessage",
+      "description": "Interactive workspace staff advisory chat logs"
+    }
+  }
+}

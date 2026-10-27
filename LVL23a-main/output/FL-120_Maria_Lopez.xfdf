@@ -1,0 +1,2 @@
+<?xml version='1.0' encoding='utf-8'?>
+<xfdf xmlns="http://ns.adobe.com/xfdf/" xml:space="preserve"><fields><field name="CaseNumber"><value>23-12345</value></field><field name="ClientDOB"><value>1990-05-12</value></field><field name="ClientAddress"><value>123 Main St, Las Vegas, NV 89101</value></field><field name="ClientFirstName"><value>Maria Elena</value></field><field name="ClientLastName"><value>Lopez</value></field></fields><f href="templates/FL-120.pdf" /></xfdf>

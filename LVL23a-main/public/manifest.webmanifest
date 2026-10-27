@@ -1,0 +1,66 @@
+{
+  "name": "LEVEL 23 Legal AI Suite",
+  "short_name": "Level 23",
+  "description": "Enterprise AI Legal Practice Management with Gemini 3.7 Intelligence, Real-Time Case Analytics, and Automated Litigation Drafting",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#060a12",
+  "theme_color": "#090d16",
+  "lang": "en-US",
+  "dir": "ltr",
+  "categories": ["productivity", "business", "legal", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Practice Dashboard",
+      "short_name": "Dashboard",
+      "description": "View active legal matters, metrics, and calendar deadlines",
+      "url": "/?tab=dashboard",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Client Ledger",
+      "short_name": "Clients",
+      "description": "Manage verified client records and billing retainers",
+      "url": "/?tab=clients",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Legal Case Matters",
+      "short_name": "Matters",
+      "description": "Track active litigation cases and filings",
+      "url": "/?tab=matters",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Document Generator",
+      "short_name": "Drafting",
+      "description": "Draft automated legal pleadings, petitions, and motions",
+      "url": "/?tab=documents",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "AI Legal Staff",
+      "short_name": "AI Staff",
+      "description": "Consult specialized legal AI assistants and advisors",
+      "url": "/?tab=staff",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+    }
+  ],
+  "prefer_related_applications": false
+}

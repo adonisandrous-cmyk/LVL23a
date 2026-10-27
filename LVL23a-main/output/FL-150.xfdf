@@ -1,0 +1,2 @@
+<?xml version='1.0' encoding='utf-8'?>
+<xfdf xmlns="http://ns.adobe.com/xfdf/" xml:space="preserve"><fields><field name="FL150CaseNumber"><value>23-12345</value></field><field name="FL150DOB"><value>1990-05-12</value></field><field name="FL150Address"><value>123 Main St, Las Vegas, NV 89101</value></field><field name="FL150FirstName"><value>Maria</value></field><field name="FL150LastName"><value>Lopez</value></field></fields><f href="templates/FL-150.pdf" /></xfdf>

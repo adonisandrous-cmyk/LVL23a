@@ -1,0 +1,111 @@
+{
+  "form_id": "FL-141",
+  "jurisdiction": "California Judicial Council",
+  "title": "Declaration Regarding Service of Declaration of Disclosure and Income and Expense Declaration",
+  "statutory_authority": "California Family Code §§ 2104, 2105, 2106, 2112",
+  "revision": "Rev. July 1, 2013",
+  "description": "Declarative mapping dictionary linking client/matter disclosure records to California Judicial Council FL-141 AcroForm targets.",
+  "fields": {
+    "FL-141[0].Page1[0].AttyInfo[0].AttyName_ft[0]": "attorney.name",
+    "FL-141[0].Page1[0].AttyInfo[0].BarNo_ft[0]": "attorney.bar_number",
+    "FL-141[0].Page1[0].AttyInfo[0].AttyFirm_ft[0]": "attorney.firm_name",
+    "FL-141[0].Page1[0].AttyInfo[0].AttyStreet_ft[0]": "attorney.street",
+    "FL-141[0].Page1[0].AttyInfo[0].AttyCity_ft[0]": "attorney.city",
+    "FL-141[0].Page1[0].AttyInfo[0].AttyState_ft[0]": "attorney.state",
+    "FL-141[0].Page1[0].AttyInfo[0].AttyZip_ft[0]": "attorney.zip",
+    "FL-141[0].Page1[0].AttyInfo[0].Phone_ft[0]": "attorney.phone",
+    "FL-141[0].Page1[0].AttyInfo[0].Fax_ft[0]": "attorney.fax",
+    "FL-141[0].Page1[0].AttyInfo[0].Email_ft[0]": "attorney.email",
+    "FL-141[0].Page1[0].AttyInfo[0].AttyFor_ft[0]": "attorney.representing",
+
+    "FL-141[0].Page1[0].CourtInfo[0].CrtCounty_ft[0]": {
+      "type": "format_string",
+      "source": "case.county",
+      "case": "upper"
+    },
+    "FL-141[0].Page1[0].CourtInfo[0].Street_ft[0]": "case.court_street",
+    "FL-141[0].Page1[0].CourtInfo[0].MailingAdd_ft[0]": "case.court_mailing",
+    "FL-141[0].Page1[0].CourtInfo[0].CityZip_ft[0]": "case.court_city_zip",
+    "FL-141[0].Page1[0].CourtInfo[0].Branch_ft[0]": "case.branch_name",
+
+    "FL-141[0].Page1[0].TitlePartyName[0].Petitioner_1_ft[0]": "case.title_petitioner",
+    "FL-141[0].Page1[0].TitlePartyName[0].Respondent_ft[0]": "case.title_respondent",
+    "FL-141[0].Page1[0].CaseNumber[0].CaseNumber_ft[0]": "case.number",
+
+    "FL-141[0].Page1[0].Declarant[0].Petitioner_cb[0]": {
+      "type": "checkbox",
+      "source": "disclosure.declarant_role",
+      "equals": "Petitioner"
+    },
+    "FL-141[0].Page1[0].Declarant[0].Respondent_cb[0]": {
+      "type": "checkbox",
+      "source": "disclosure.declarant_role",
+      "equals": "Respondent"
+    },
+
+    "FL-141[0].Page1[0].Disclosures[0].Preliminary_cb[0]": {
+      "type": "checkbox",
+      "source": "disclosure.preliminary_served",
+      "checked_value": "/Yes"
+    },
+    "FL-141[0].Page1[0].Disclosures[0].PrelimDate_dt[0]": "disclosure.preliminary_date",
+
+    "FL-141[0].Page1[0].Disclosures[0].Final_cb[0]": {
+      "type": "checkbox",
+      "source": "disclosure.final_served",
+      "checked_value": "/Yes"
+    },
+    "FL-141[0].Page1[0].Disclosures[0].FinalDate_dt[0]": "disclosure.final_date",
+
+    "FL-141[0].Page1[0].Disclosures[0].IncomeExpense_cb[0]": {
+      "type": "checkbox",
+      "source": "disclosure.income_expense_served",
+      "checked_value": "/Yes"
+    },
+    "FL-141[0].Page1[0].Disclosures[0].ScheduleAssets_cb[0]": {
+      "type": "checkbox",
+      "source": "disclosure.schedule_assets_debts_served",
+      "checked_value": "/Yes"
+    },
+    "FL-141[0].Page1[0].Disclosures[0].TaxReturns_cb[0]": {
+      "type": "checkbox",
+      "source": "disclosure.tax_returns_served",
+      "checked_value": "/Yes"
+    },
+    "FL-141[0].Page1[0].Disclosures[0].FinalWaived_cb[0]": {
+      "type": "checkbox",
+      "source": "disclosure.final_waived",
+      "checked_value": "/Yes"
+    },
+
+    "FL-141[0].Page1[0].Service[0].Personal_cb[0]": {
+      "type": "checkbox",
+      "source": "disclosure.service_method",
+      "equals": "Personal Delivery"
+    },
+    "FL-141[0].Page1[0].Service[0].Mail_cb[0]": {
+      "type": "checkbox",
+      "source": "disclosure.service_method",
+      "equals": "First-Class Mail"
+    },
+    "FL-141[0].Page1[0].Service[0].Overnight_cb[0]": {
+      "type": "checkbox",
+      "source": "disclosure.service_method",
+      "equals": "Overnight Delivery"
+    },
+    "FL-141[0].Page1[0].Service[0].Electronic_cb[0]": {
+      "type": "checkbox",
+      "source": "disclosure.service_method",
+      "equals": "Electronic Service"
+    },
+
+    "FL-141[0].Page1[0].Service[0].ServedOnName_ft[0]": "disclosure.person_served_name",
+    "FL-141[0].Page1[0].Service[0].ServedAddress_ft[0]": "disclosure.served_address",
+    "FL-141[0].Page1[0].Service[0].ServiceDate_dt[0]": "disclosure.service_date",
+
+    "FL-141[0].Page1[0].SignatureDate_dt[0]": "disclosure.signature_date",
+    "FL-141[0].Page1[0].SignaturePlace_ft[0]": "disclosure.signature_city",
+    "FL-141[0].Page1[0].DeclarantName_ft[0]": "disclosure.declarant_name",
+    "FL-141[0].Page1[0].Signature_ft[0]": "disclosure.declarant_name"
+  }
+}
